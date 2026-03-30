@@ -130,7 +130,25 @@ export default function ChatPage() {
             <strong>{message.role === "user" ? "You" : "Zyrro"}:</strong>
             <div style={{ marginTop: "6px" }}>
               {message.role === "assistant" ? (
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+<ReactMarkdown
+  components={{
+    p: ({ children }) => (
+      <p style={{ margin: "0 0 12px 0", lineHeight: "1.5" }}>{children}</p>
+    ),
+    ul: ({ children }) => (
+      <ul style={{ margin: "0 0 12px 20px", padding: 0 }}>{children}</ul>
+    ),
+    ol: ({ children }) => (
+      <ol style={{ margin: "0 0 12px 20px", padding: 0 }}>{children}</ol>
+    ),
+    li: ({ children }) => (
+      <li style={{ marginBottom: "6px" }}>{children}</li>
+    ),
+    strong: ({ children }) => <strong>{children}</strong>,
+  }}
+>
+  {message.content}
+</ReactMarkdown>
               ) : (
                 <div style={{ whiteSpace: "pre-wrap" }}>{message.content}</div>
               )}
