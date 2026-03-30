@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -123,11 +124,17 @@ export default function ChatPage() {
     <main style={{ padding: "20px", maxWidth: "700px" }}>
       <h1>Zyrro</h1>
 
-      <div style={{ marginBottom: "20px", whiteSpace: "pre-wrap" }}>
+      <div style={{ marginBottom: "20px" }}>
         {messages.map((message, index) => (
-          <div key={index} style={{ marginBottom: "12px" }}>
-            <strong>{message.role === "user" ? "You" : "Zyrro"}:</strong>{" "}
-            {message.content}
+          <div key={index} style={{ marginBottom: "16px" }}>
+            <strong>{message.role === "user" ? "You" : "Zyrro"}:</strong>
+            <div style={{ marginTop: "6px" }}>
+              {message.role === "assistant" ? (
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              ) : (
+                <div style={{ whiteSpace: "pre-wrap" }}>{message.content}</div>
+              )}
+            </div>
           </div>
         ))}
 
