@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -11,16 +11,67 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    async function startConversation() {
+      setLoading(true);
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "user",
+                content: "Start",
+              },
+            ],
+          }),
+        });
+
+        const data: { reply?: string; error?: string } = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Request failed");
+        }
+
+        setMessages([
+          {
+            role: "assistant",
+            content: data.reply || "No response.",
+          },
+        ]);
+      } catch {
+        setMessages([
+          {
+            role: "assistant",
+            content: "Demo mode: waiting for API activation.",
+          },
+        ]);
+      } finally {
+        setLoading(false);
+        inputRef.current?.focus();
+      }
+    }
+
+    startConversation();
+  }, []);
 
   async function handleSend() {
     if (!input.trim() || loading) return;
 
     const userMessage: ChatMessage = {
       role: "user",
-      content: input,
+      content: input.trim(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
 
@@ -31,11 +82,11 @@ export default function ChatPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: userMessage.content,
+          messages: updatedMessages,
         }),
       });
 
-      const data = await res.json();
+      const data: { reply?: string; error?: string } = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error || "Request failed");
@@ -43,13 +94,13 @@ export default function ChatPage() {
 
       const assistantMessage: ChatMessage = {
         role: "assistant",
-        content: data.reply,
+        content: data.reply || "No response.",
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
+      setMessages([...updatedMessages, assistantMessage]);
+    } catch {
+      setMessages([
+        ...updatedMessages,
         {
           role: "assistant",
           content: "Error: could not get response.",
@@ -57,14 +108,22 @@ export default function ChatPage() {
       ]);
     } finally {
       setLoading(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSend();
     }
   }
 
   return (
     <main style={{ padding: "20px", maxWidth: "700px" }}>
-      <h1>Zyrro Chat Test</h1>
+      <h1>Zyrro</h1>
 
-      <div style={{ marginBottom: "20px" }}>
+      <div style={{ marginBottom: "20px", whiteSpace: "pre-wrap" }}>
         {messages.map((message, index) => (
           <div key={index} style={{ marginBottom: "12px" }}>
             <strong>{message.role === "user" ? "You" : "Zyrro"}:</strong>{" "}
@@ -81,10 +140,12 @@ export default function ChatPage() {
 
       <div>
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message"
+          onKeyDown={handleKeyDown}
+          placeholder="Type your answer"
           style={{ width: "70%", marginRight: "10px", padding: "8px" }}
         />
         <button onClick={handleSend} disabled={loading}>
