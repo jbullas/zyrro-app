@@ -1,4 +1,6 @@
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/utils/supabase/client'
+
+const supabase = createClient()
 
 type MessageRole = 'user' | 'assistant'
 
