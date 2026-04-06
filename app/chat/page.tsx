@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { createConversation } from "@/lib/conversations";
+import { saveMessage } from "@/lib/messages";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -12,6 +14,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -19,8 +22,12 @@ export default function ChatPage() {
       setLoading(true);
 
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
+		const conversation = await createConversation();
+		setConversationId(conversation.id);
+		console.log("Chat page conversation created:", conversation);
+
+	  const res = await fetch("/api/chat", {
+	  method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
@@ -39,14 +46,25 @@ export default function ChatPage() {
         if (!res.ok) {
           throw new Error(data.error || "Request failed");
         }
+		
+		const firstAssistantReply = data.reply || "No response.";
 
-        setMessages([
-          {
-            role: "assistant",
-            content: data.reply || "No response.",
-          },
-        ]);
-      } catch {
+		await saveMessage({
+		  conversationId: conversation.id,
+		  role: "assistant",
+		  content: firstAssistantReply,
+		});
+
+		setMessages([
+		  {
+			role: "assistant",
+			content: firstAssistantReply,
+		  },
+		]);
+
+      } catch (error) {
+        console.error("startConversation failed:", error);
+
         setMessages([
           {
             role: "assistant",
@@ -63,7 +81,7 @@ export default function ChatPage() {
   }, []);
 
   async function handleSend() {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !conversationId) return;
 
     const userMessage: ChatMessage = {
       role: "user",
@@ -75,6 +93,12 @@ export default function ChatPage() {
     setMessages(updatedMessages);
     setInput("");
     setLoading(true);
+	
+	await saveMessage({
+	  conversationId,
+	  role: "user",
+	  content: userMessage.content,
+	});
 
     try {
       const res = await fetch("/api/chat", {
@@ -93,12 +117,18 @@ export default function ChatPage() {
         throw new Error(data.error || "Request failed");
       }
 
-      const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: data.reply || "No response.",
-      };
+		const assistantMessage: ChatMessage = {
+		  role: "assistant",
+		  content: data.reply || "No response.",
+		};
 
-      setMessages([...updatedMessages, assistantMessage]);
+		await saveMessage({
+		  conversationId,
+		  role: "assistant",
+		  content: assistantMessage.content,
+		});
+
+		setMessages([...updatedMessages, assistantMessage]);
     } catch {
       setMessages([
         ...updatedMessages,
@@ -162,6 +192,12 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+	  
+	  {conversationId && (
+		  <p style={{ marginBottom: "12px", fontSize: "14px", color: "#666" }}>
+			<strong>Conversation ID:</strong> {conversationId}
+		  </p>
+		)}
 
       <div>
         <input
