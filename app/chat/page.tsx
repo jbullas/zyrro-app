@@ -214,7 +214,6 @@ export default function ChatPage() {
     if (!isAuthenticated) return;
     if (layerUpgradeChecked) return;
     if (messages.length === 0) return;
-    if (!conversationId) return;
 
     const alreadyHasLayer2 = messages.some(
       (message) =>
@@ -240,6 +239,14 @@ export default function ChatPage() {
       try {
         setLoading(true);
 
+        let activeConversationId = conversationId;
+
+        if (!activeConversationId) {
+          const conversation = await createConversation();
+          setConversationId(conversation.id);
+          activeConversationId = conversation.id;
+        }
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: {
@@ -263,7 +270,7 @@ export default function ChatPage() {
         };
 
         await saveMessage({
-          conversationId,
+          conversationId: activeConversationId,
           role: "assistant",
           content: assistantMessage.content,
         });
