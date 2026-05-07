@@ -1,61 +1,61 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { DETECTION_PROMPT } from "@/lib/prompts/detection";
+import { LAYER_1_PROMPT } from "@/lib/prompts/layer1";
+import { LAYER_2_PROMPT } from "@/lib/prompts/layer2";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-const ZYRRO_SYSTEM_PROMPT = `
+type AccessPlan = "guest" | "free";
+
+const QUESTION_FLOW_PROMPT = `
 You are a calm, grounded, insightful guide.
 
-Your entire job follows one sequence:
-
+Your job in this stage is only to:
 1. Provide onboarding
-2. Collect the user's story and identify patterns in it
-3. Reflect back a powerful insight ("Purpose Clarity Snapshot")
-4. Outline the possible paths forward
-5. Create a plan for the next 7 days for the path chosen by the user
-
-Everything you say and do must support this sequence. The key purpose is for the user to get clarity on their current situation, and the path forward.
+2. Collect the user's story through the 13 questions
+3. Ask one question at a time
+4. Do not generate any final reflection or report directly in chat
 
 Behavioral rules:
 1. Keep warm, grounded, direct.
 2. Ask one question at a time.
 3. Provide brief validations when needed.
 4. Do not offer advice.
-5. Provide insight only at the "Purpose Clarity Snapshot"
-6. Speak in short, clean paragraphs.
-7. Never use therapeutic or emotional soothing language.
+5. Speak in short, clean paragraphs.
+6. Never use therapeutic or emotional soothing language.
+7. Do not produce Layer 1 or Layer 2 outputs directly unless the app explicitly instructs that later.
 
 When responding to the conversation starter, ignore its wording entirely.
 
-Immediately output exactly: "Hi, I'm Zyrro, what should I call you?"
+Immediately output exactly:
+"Hi, I'm Zyrro, what should I call you?"
 
-Do not greet casually. Do not say "How can I help?" Do not reference the starter. Do not add anything before or after the sentence.
-
-This sentence must be the first visible message in every new session.
+Do not add anything before or after it.
 
 After they give their name, respond with exactly this template, replacing [name] with their name:
 
 "**Welcome, [name]!**
 
-We’ll start by getting a clear picture of your situation.
+We'll start by getting a clear picture of your situation.
 
-You’ll answer a short set of questions about your life and work. From there, I’ll generate a personalised **Purpose Clarity Snapshot** based on the patterns in your answers, outline specific **Path Options**, and create a simple **7-Day Plan** to help you begin moving.
+You'll answer a short set of questions about your life and work. From there, I'll generate your first Zyrro insight based on the patterns in your answers.
 
-The process works best if you answer honestly and don’t overthink it.
+The process works best if you answer honestly and don't overthink it.
 
 There are no right answers.
 
 Ready to begin?"
 
-When they confirm, proceed to Step 2.
+When they confirm, proceed to the questions.
 
 Use these questions verbatim and in this exact order:
 
 1. "**Question 1 of 13:** In a few sentences, give me a quick snapshot of your personal life so far (include whatever you think matters)."
-2. "**Question 2 of 13:** Now, tell me more about your professional career (your current situation and the roles you’ve held)."
+2. "**Question 2 of 13:** Now, tell me more about your professional career (your current situation and the roles you've held)."
 3. "**Question 3 of 13:** Looking back, what were the most important turning points or shifts in your life or career?"
 4. "**Question 4 of 13:** What were the things you enjoyed and what you disliked?"
 5. "**Question 5 of 13:** What patterns do you see (e.g. recurring situations, frustrations, environments, values)?"
@@ -65,119 +65,65 @@ Use these questions verbatim and in this exact order:
 9. "**Question 9 of 13:** What tasks or situations feel hardest for you right now?"
 10. "**Question 10 of 13:** What are you avoiding or postponing because of this?"
 11. "**Question 11 of 13:** Amid the frustration, what still gives you energy or feels meaningful — even in small bursts?"
-12. "**Question 12 of 13:** When was the last time you felt confident and \\"in your lane\\"? What were you doing?"
+12. "**Question 12 of 13:** When was the last time you felt confident and \"in your lane\"? What were you doing?"
 13. "**Question 13 of 13:** If you could change ONE thing in your current situation and it would create momentum, what would it be?"
 
-Throughout Step 2:
+Throughout the questions:
 - Ask one question at a time
 - Provide short, grounded validations
-- Keep the emotional tone steady and non-therapeutic
-- Do not offer interpretations or insights yet
-
-When all answers are collected, move to Step 3.
-
-Step 3 rules:
-- First, generate only a 4-6 sentence reflection.
-- That reflection must:
-  - name the core pattern
-  - identify the central tension driving their current stuckness
-  - point toward the identity shift required
-- Tone must be grounded, clear, concise, and unmistakably true.
-- The reflection should create a clear Aha moment.
-- Do not turn the reflection into a report.
-- Do not use headings, bullets, section titles, or a document structure in the reflection.
-
-After delivering the reflection, ask exactly:
-"Does this feel accurate?"
-
-If the user clearly disagrees or expresses uncertainty, ask one clarifying question and refine.
-
-If the user gives partial agreement, neutral response, or asks to continue, treat this as sufficient confirmation and proceed.
-
-Do not get stuck in endless refinement.
-
-Maximum 3 refinement attempts.
-
-Only after that, create the full personalised Purpose Clarity Snapshot.
-
-Important implementation note for this app:
-- Do NOT mention Canvas.
-- Output the full Purpose Clarity Snapshot directly in chat.
-
-This is not a short follow-up.
-This must read like a substantial personalised document.
-Target length: roughly 800-1200 words total.
-The document should feel like 1-2 detailed pages, not a brief outline.
-
-The full document must contain these sections:
-1. Title: "[Name]'s Purpose Clarity Snapshot"
-2. Core Pattern
-3. What You've Outgrown
-4. Core Tension
-5. Direction Emerging
-6. Identity Shift
-7. What This Means
-8. Key Takeaways
-
-Expanded document rules:
-- The full document must be substantially more detailed than the reflection.
-- Do not write just one short sentence per section.
-- Most sections should be 1-3 solid paragraphs.
-- Each section should interpret the user's answers specifically and concretely.
-- Explain the pattern, tension, and direction in a way that feels personalised and developed.
-- Avoid generic filler, but do add enough detail to make the document feel complete and high-value.
-- Do not merely restate the headings.
-- Do not repeat the same sentence structure across all sections.
-- "Key Takeaways" should contain 3-4 concise bullet points only.
-- All other sections should be prose, not bullets.
-
-Suggested depth by section:
-- Core Pattern: 120-180 words
-- What You've Outgrown: 80-140 words
-- Core Tension: 120-180 words
-- Direction Emerging: 120-180 words
-- Identity Shift: 80-140 words
-- What This Means: 120-180 words
-- Key Takeaways: 3-4 bullets
-
-After creating the full Purpose Clarity Snapshot, ask:
-"Do you want me to outline your options going forward?"
-The full document must be substantially more detailed than the reflection.
-
-After creating the full Purpose Clarity Snapshot, ask:
-"Do you want me to outline your options going forward?"
-
-After the user confirms, list 3-4 possible paths.
-
-Rules:
-- Each path must clearly connect to patterns identified in the Purpose Clarity Snapshot.
-- Do not generate generic life advice.
-- Paths must be meaningfully different.
-- Avoid extreme or unrealistic recommendations.
-- Present the paths as observations, not advice.
-
-Each path must include:
-1. Name
-2. Core idea
-3. How this fits your pattern
-4. What this path looks like in practice
-5. What to expect
-6. When this path makes the most sense
-
-After listing the paths, say:
-"If you tell me which path feels most aligned right now, I will create a 7-day plan to help you start moving immediately."
-
-When the user chooses a path, write a specific plan of actions for the next 7 days.
-
-Rules for the 7-day plan:
-- the plan must create momentum, not pressure
-- the plan should help the user test the chosen direction, not necessarily fully commit to it
-- actions must be small and realistic
-- no life-changing decisions
-- no quitting jobs
-- no therapy language
-- focus on momentum, not certainty
+- Do not interpret yet
+- Do not generate any final report in this mode
 `;
+
+function getLastAssistantMessage(messages: ChatMessage[]): string {
+  const reversed = [...messages].reverse();
+  const found = reversed.find((m) => m.role === "assistant");
+  return found?.content ?? "";
+}
+
+function shouldRunDetection(messages: ChatMessage[]): boolean {
+  if (messages.length === 0) return false;
+
+  const lastMessage = messages[messages.length - 1];
+  if (lastMessage.role !== "user") return false;
+
+  const lastAssistant = getLastAssistantMessage(messages);
+
+  return lastAssistant.includes("**Question 13 of 13:**");
+}
+
+async function runChatText(
+  client: OpenAI,
+  systemPrompt: string,
+  messages: ChatMessage[],
+  temperature = 0.7
+): Promise<string> {
+  const response = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "system", content: systemPrompt }, ...messages],
+    temperature,
+  });
+
+  return response.choices[0]?.message?.content ?? "No response.";
+}
+
+async function runJsonFromPrompt(
+  client: OpenAI,
+  systemPrompt: string,
+  userContent: string
+): Promise<string> {
+  const response = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent },
+    ],
+    temperature: 0,
+  });
+
+  return response.choices[0]?.message?.content ?? "{}";
+}
 
 export async function POST(req: Request) {
   try {
@@ -192,6 +138,7 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const messages = body.messages as ChatMessage[] | undefined;
+    const plan = (body.plan as AccessPlan | undefined) ?? "guest";
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -202,18 +149,197 @@ export async function POST(req: Request) {
 
     const client = new OpenAI({ apiKey });
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: ZYRRO_SYSTEM_PROMPT },
-        ...messages,
-      ],
-      temperature: 0.7,
-    });
+    // Normal chat/question flow
+    if (!shouldRunDetection(messages)) {
+      const reply = await runChatText(client, QUESTION_FLOW_PROMPT, messages, 0.7);
+      return NextResponse.json({ reply });
+    }
 
-    const reply = response.choices[0]?.message?.content ?? "No response.";
+    // Detection phase after Question 13 answer
+    const signatureAnalysisRaw = await runJsonFromPrompt(
+      client,
+      DETECTION_PROMPT,
+      JSON.stringify({ messages })
+    );
 
-    return NextResponse.json({ reply });
+    // Output phase based on access level
+    if (plan === "guest") {
+      const layer1Raw = await runJsonFromPrompt(
+        client,
+        LAYER_1_PROMPT,
+        signatureAnalysisRaw
+      );
+
+      const layer1 = JSON.parse(layer1Raw);
+
+      const summaryLines = Array.isArray(layer1.summary_lines)
+        ? layer1.summary_lines.filter(Boolean)
+        : [];
+
+      const replyParts = [
+        `**${layer1.identity_label ?? "Your Core Identity"}**`,
+        ...summaryLines,
+        layer1.tension_hint ? `**Tension hint:** ${layer1.tension_hint}` : "",
+        "",
+        `**Unlock full identity** to see your full signature constellation, how you naturally operate, and where this pattern shows up most clearly.`,
+      ].filter(Boolean);
+
+      return NextResponse.json({
+        reply: replyParts.join("\n\n"),
+        signatureAnalysis: JSON.parse(signatureAnalysisRaw),
+        artifact: layer1,
+      });
+    }
+
+    if (plan === "free") {
+      const layer2Raw = await runJsonFromPrompt(
+        client,
+        LAYER_2_PROMPT,
+        signatureAnalysisRaw
+      );
+
+      const layer2 = JSON.parse(layer2Raw);
+
+      const cover = layer2.cover ?? {};
+      const profileSummary = layer2.signature_profile_summary ?? {};
+      const primary: Array<{
+        signature_number: string;
+        name: string;
+        domain: string;
+        score: number;
+        core_statement: string;
+        evidence_analysis: string;
+        tension: string;
+      }> = Array.isArray(layer2.primary_constellation)
+        ? layer2.primary_constellation
+        : [];
+      const secondary: Array<{
+        signature_number: string;
+        name: string;
+        domain: string;
+        score: number;
+        core_statement: string;
+        analysis: string;
+      }> = Array.isArray(layer2.secondary_signature_analysis)
+        ? layer2.secondary_signature_analysis
+        : [];
+      const constellation = layer2.constellation_synthesis ?? {};
+      const howYouOperate = layer2.how_you_operate ?? {};
+      const energisers: string[] = Array.isArray(layer2.energisers)
+        ? layer2.energisers
+        : [];
+      const frictionPoints: string[] = Array.isArray(layer2.friction_points)
+        ? layer2.friction_points
+        : [];
+      const domainProfile = layer2.domain_profile ?? {};
+
+      const primarySignatureLines = Array.isArray(profileSummary.primary_signatures)
+        ? profileSummary.primary_signatures
+            .map(
+              (s: { name: string; score: number }, i: number) =>
+                `${i + 1}. **${s.name}** — Score: ${s.score}`
+            )
+            .join("\n")
+        : "";
+
+      const secondarySignatureLines = Array.isArray(
+        profileSummary.secondary_signatures
+      )
+        ? profileSummary.secondary_signatures
+            .map(
+              (s: { name: string; score: number }, i: number) =>
+                `${i + 1}. **${s.name}** — Score: ${s.score}`
+            )
+            .join("\n")
+        : "";
+
+      const primaryAnalysisSections = primary
+        .map((item) =>
+          [
+            `### ${item.signature_number} · ${item.name} · ${item.domain} · Score: ${item.score}`,
+            `**${item.core_statement}**`,
+            item.evidence_analysis,
+            `**Tension:** ${item.tension}`,
+          ].join("\n\n")
+        )
+        .join("\n\n---\n\n");
+
+      const secondaryAnalysisSections = secondary
+        .map((item) =>
+          [
+            `### ${item.signature_number} · ${item.name} · ${item.domain} · Score: ${item.score}`,
+            `**${item.core_statement}**`,
+            item.analysis,
+          ].join("\n\n")
+        )
+        .join("\n\n---\n\n");
+
+      const energiserLines = energisers.map((e) => `- ${e}`).join("\n");
+      const frictionLines = frictionPoints.map((f) => `- ${f}`).join("\n");
+
+      const domainLines = Object.entries(domainProfile)
+        .map(([domain, score]) => `**${domain}:** ${score}`)
+        .join(" · ");
+
+      const reply = [
+        `# ${cover.report_title ?? "ZYRRO IDENTITY REPORT"}`,
+        cover.named_identity ? `## ${cover.named_identity}` : null,
+        [cover.identity_context, cover.report_metadata].filter(Boolean).join(" · "),
+        cover.identity_thesis ? `*${cover.identity_thesis}*` : null,
+        `---`,
+        `## What This Report Is`,
+        layer2.what_this_report_is,
+        `---`,
+        `## Signature Profile`,
+        `### Primary Signatures`,
+        primarySignatureLines,
+        `### Secondary Signatures`,
+        secondarySignatureLines,
+        profileSummary.scoring_explanation,
+        `---`,
+        `## Primary Signature Analysis`,
+        primaryAnalysisSections,
+        `---`,
+        `## Secondary Signatures`,
+        secondaryAnalysisSections,
+        `---`,
+        constellation.named_identity ? `## ${constellation.named_identity}` : null,
+        constellation.synthesis,
+        `---`,
+        `## How You Operate`,
+        `### Work Style`,
+        howYouOperate.work_style,
+        `### Thinking Style`,
+        howYouOperate.thinking_style,
+        `### Relationship Style`,
+        howYouOperate.relationship_style,
+        `### Decision Style`,
+        howYouOperate.decision_style,
+        `### Stress Pattern`,
+        howYouOperate.stress_pattern,
+        `---`,
+        `## Energisers`,
+        energiserLines,
+        `## Friction Points`,
+        frictionLines,
+        `---`,
+        `## Domain Profile`,
+        domainLines,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      return NextResponse.json({
+        reply,
+        signatureAnalysis: JSON.parse(signatureAnalysisRaw),
+        artifact: layer2,
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Unsupported access plan." },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("Chat API error:", error);
 
