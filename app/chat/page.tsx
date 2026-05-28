@@ -374,6 +374,20 @@ export default function ChatPage() {
   const showUnlockButton =
     !isAuthenticated && lastAssistantContent.includes("Unlock full identity");
 
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="flow-container gated-container">
+        <p className="eyebrow">ZYRRO MENTOR</p>
+        <h2>The Zyrro mentor is ready when you are.</h2>
+        <p>Complete your Identity Report to unlock the mentor.</p>
+        <div className="gated-actions">
+          <a href="/login" className="btn-secondary btn-secondary-fill">Log in</a>
+          <a href="/start" className="btn-secondary btn-secondary-fill">Start the questionnaire</a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main style={{ padding: "20px", maxWidth: "700px" }}>
       <h1>Zyrro</h1>

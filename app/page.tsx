@@ -1,65 +1,157 @@
-import Image from "next/image";
+import { redirect } from 'next/navigation';
+import { createClient } from '@/utils/supabase/server';
+import Link from 'next/link';
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+
+  if (data?.user) {
+    redirect('/dashboard');
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+      {/* HERO — self-contained gradient with nav */}
+      <div className="hero-section">
+
+        {/* Nav */}
+        <div className="nav-spacer" />
+        <div className="nav-bar" style={{ padding: '8px 16px 0' }}>
+          <div />
+          <div className="nav-center">
+            <a href="/">
+              <img src="https://zyrro.ai/images/logo_300px.png" alt="Zyrro" className="nav-logo" />
+            </a>
+          </div>
+          <div className="nav-end">
+            <a href="/login" className="nav-icon-link" aria-label="Log in">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                <path d="M15 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2" />
+                <path d="M21 12h-13" />
+                <path d="M18 9l3 3l-3 3" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        {/* Hero content */}
+        <div className="hero-content">
+          <h1 style={{ fontSize: 'clamp(30px, 6vw, 44px)', fontWeight: 700, color: '#fff', lineHeight: 1.15, margin: 0, letterSpacing: '-0.02em' }}>
+            Successful. Empty. Stuck.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p style={{ fontSize: 'clamp(20px, 3.5vw, 26px)', fontWeight: 400, color: 'rgba(255,255,255,0.88)', lineHeight: 1.35, margin: 0, maxWidth: '480px' }}>
+            Your story holds the answers.
+          </p>
+          <p style={{ fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 400, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5, margin: 0, maxWidth: '440px' }}>
+            In under 12 minutes, Zyrro finds the patterns in your life and shows you exactly who you are and what you are naturally meant to do next.
+          </p>
+          <Link href="/start" className="btn-cta">
+            Discover Who You Are. It's Free.
+          </Link>
+          <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
+            No credit card. No sign-up required to start.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+
+      {/* PROBLEM */}
+      <section className="page-section">
+      <div className="page-container">
+        <h2 className="section-title">
+          You've built a great life. So why doesn't it feel like enough?
+        </h2>
+        <p className="section-body" style={{ marginBottom: '20px' }}>
+          You're accomplished. Experienced. Respected. And yet something feels hollow. The goals that once drove you no longer excite you. The life that looks right from the outside doesn't feel right on the inside.
+        </p>
+        <ul className="bullet-list">
+          {[
+            'You have everything and still feel something is missing',
+            "The drive is there but you don't know where to point it",
+            "You've outgrown the life you built but can't see what's next",
+            "You can't explain it to others because you can barely explain it to yourself",
+          ].map((item) => (
+            <li key={item} className="bullet-item">
+              <span className="bullet-dot" />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <p className="section-body">
+          This isn't a crisis. It's a signal. Your patterns are pointing somewhere. You just need someone to show you where.
+        </p>
+      </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section className="page-section-alt">
+        <div className="page-container">
+          <h2 className="section-title" style={{ marginBottom: '32px', textAlign: 'center' }}>
+            Simple. Structured. Surprisingly revealing.
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {[
+              { n: '1', text: 'Answer 13 questions about your life and work' },
+              { n: '2', text: 'Zyrro detects patterns across your answers' },
+              { n: '3', text: 'Receive your Identity Signature, precise and personal' },
+              { n: '4', text: 'Unlock your Paths, Plan and Mentor as you grow' },
+            ].map((step) => (
+              <div key={step.n} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                <div className="step-number">
+                  {step.n}
+                </div>
+                <p style={{ color: '#1E1E1E', lineHeight: 1.6, margin: 0, paddingTop: '6px', fontSize: '16px' }}>
+                  {step.text}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* WHAT YOU GET */}
+      <section className="page-section">
+        <div className="page-container">
+          <h2 className="section-title" style={{ marginBottom: '8px', textAlign: 'center' }}>
+            Four layers of insight. One clear direction.
+          </h2>
+          <p style={{ textAlign: 'center', marginBottom: '32px' }}>
+            Each layer builds on the last, from self-knowledge to action.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {[
+              { label: 'Identity', q: 'Who are you?', desc: 'Your named identity, signature patterns, and a precise picture of how you operate, based on your actual life story. Delivered in your first session.' },
+              { label: 'Paths', q: 'Why are you here?', desc: 'A set of realistic directions forward, based on your patterns. Unlocked after your Identity report.' },
+              { label: 'Plan', q: 'How do you get there?', desc: 'A structured plan from 7 days to 5 years, built around who you actually are. Unlocked alongside Paths.' },
+              { label: 'Mentor', q: 'How do you stay on track?', desc: 'Access to your personal AI mentor, keeping you accountable, focused and moving forward. Available after your plan is set.' },
+            ].map((item) => (
+              <div key={item.label} className="card">
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#FE5618' }}>{item.label}</span>
+                  <span style={{ fontSize: '16px', fontWeight: 700, color: '#1E1E1E' }}>{item.q}</span>
+                </div>
+                <p style={{ fontSize: '14px' }}>{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CLOSING CTA */}
+      <section className="section-cta">
+        <h2 style={{ fontSize: 'clamp(22px, 5vw, 32px)', color: '#fff', lineHeight: 1.25, margin: 0, maxWidth: '480px' }}>
+          Your story holds the answers.
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,0.75)', lineHeight: 1.55, margin: 0, maxWidth: '400px' }}>
+          Zyrro finds them, in under 12 minutes. No sign-up required to start.
+        </p>
+        <Link href="/start" className="btn-cta">
+          Start Now. It's Free.
+        </Link>
+      </section>
+
     </div>
   );
 }
