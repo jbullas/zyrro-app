@@ -1,26 +1,39 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
-  IconHome,
+  IconLayoutDashboard,
   IconShield,
   IconArrowFork,
   IconCalendar,
   IconMessages,
 } from '@tabler/icons-react';
+import { createClient } from '@/utils/supabase/client';
 
 const NAV_ITEMS = [
-  { label: 'Home',     href: '/dashboard', icon: IconHome },
-  { label: 'Identity', href: '/identity',  icon: IconShield },
-  { label: 'Paths',    href: '/paths',     icon: IconArrowFork },
-  { label: 'Plan',     href: '/plan',      icon: IconCalendar },
-  { label: 'Chat',     href: '/chat',      icon: IconMessages },
+  { label: 'Dashboard', href: '/dashboard', icon: IconLayoutDashboard },
+  { label: 'Identity',  href: '/identity',  icon: IconShield },
+  { label: 'Paths',     href: '/paths',     icon: IconArrowFork },
+  { label: 'Plan',      href: '/plan',      icon: IconCalendar },
+  { label: 'Chat',      href: '/chat',      icon: IconMessages },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setIsAuthenticated(!!data?.user);
+      setAuthChecked(true);
+    });
+  }, []);
 
   if (pathname === '/') return null;
+  if (pathname === '/start' && (!authChecked || !isAuthenticated)) return null;
 
   return (
     <nav className="w-full flex-shrink-0 sticky bottom-0 z-50 bottom-nav">

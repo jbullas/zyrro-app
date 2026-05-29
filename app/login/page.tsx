@@ -2,23 +2,24 @@
 
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const supabase = createClient()
-  const router = useRouter()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
+  const [sent, setSent] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + '/auth/callback' },
+    })
     if (error) {
       setMessage(error.message)
       return
     }
-    router.push('/dashboard')
+    setSent(true)
   }
 
   return (
@@ -26,36 +27,36 @@ export default function LoginPage() {
       <form onSubmit={handleLogin} className="page-form">
 
         <div>
-          <h1 className="page-title">Log in</h1>
-          <p className="page-subtitle">Enter your details to continue your journey</p>
+          <h1 className="page-title">Log in to Zyrro</h1>
         </div>
 
-        <input
-          className="form-input"
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        {sent ? (
+          <p className="form-helper">Check your inbox for your sign in link.</p>
+        ) : (
+          <>
+            <input
+              className="form-input"
+              type="email"
+              placeholder="Your email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-        <input
-          className="form-input"
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+            <p className="form-helper">
+              We&apos;ll send you a magic link to sign in. No password needed.
+            </p>
 
-        {message && <p className="form-error">{message}</p>}
+            {message && <p className="form-error">{message}</p>}
 
-        <button type="submit" className="btn-transactional">
-          Log in
-        </button>
+            <button type="submit" className="btn-primary">
+              Send me a link
+            </button>
+          </>
+        )}
 
         <p className="form-helper">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <a href="/signup">Sign up</a>
         </p>
 

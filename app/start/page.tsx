@@ -3,74 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react';
-
-const QUESTIONS: Array<{ n: number; text: string; hint: string | null }> = [
-  {
-    n: 1,
-    text: 'In a few sentences, give me a quick snapshot of your personal life so far.',
-    hint: 'Include whatever you think matters.',
-  },
-  {
-    n: 2,
-    text: 'Now, tell me more about your professional career.',
-    hint: "Your current situation and the roles you've held.",
-  },
-  {
-    n: 3,
-    text: 'Looking back, what were the most important turning points or shifts in your life or career?',
-    hint: null,
-  },
-  {
-    n: 4,
-    text: 'What were the things you enjoyed and what you disliked?',
-    hint: null,
-  },
-  {
-    n: 5,
-    text: 'What patterns do you see?',
-    hint: 'e.g. recurring situations, frustrations, environments, values',
-  },
-  {
-    n: 6,
-    text: 'What part of your life or work no longer fits and feels out of alignment?',
-    hint: null,
-  },
-  {
-    n: 7,
-    text: 'What are the signs it is not sustainable?',
-    hint: 'e.g. your behaviour, mood, motivation, or performance',
-  },
-  {
-    n: 8,
-    text: 'How long has this feeling been building up?',
-    hint: null,
-  },
-  {
-    n: 9,
-    text: 'What tasks or situations feel hardest for you right now?',
-    hint: null,
-  },
-  {
-    n: 10,
-    text: 'What are you avoiding or postponing because of this?',
-    hint: null,
-  },
-  {
-    n: 11,
-    text: 'Amid the frustration, what still gives you energy or feels meaningful, even in small bursts?',
-    hint: null,
-  },
-  {
-    n: 12,
-    text: 'When was the last time you felt confident and "in your lane"? What were you doing?',
-    hint: null,
-  },
-  {
-    n: 13,
-    text: 'If you could change ONE thing in your current situation and it would create momentum, what would it be?',
-    hint: null,
-  },
-];
+import { QUESTIONS } from '@/lib/questions';
+import { createClient } from '@/utils/supabase/client';
 
 const GENERATING_STEPS = [
   'Detecting your signatures',
@@ -86,15 +20,21 @@ const DELIVERABLES = [
   'What energises you, and what drains you',
 ];
 
-type Screen = 'intro' | 'question' | 'generating';
+type Screen = 'intro' | 'question' | 'generating' | 'contact' | 'check-email';
 
 export default function StartPage() {
   const router = useRouter();
+  const supabase = createClient();
 
   const [screen, setScreen] = useState<Screen>('intro');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>(Array(13).fill(''));
   const [generatingStep, setGeneratingStep] = useState(0);
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [contactError, setContactError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('zyrro_discovery_answers');
@@ -118,8 +58,8 @@ export default function StartPage() {
     if (screen !== 'generating') return;
 
     const data = QUESTIONS.map((q, i) => ({
-      question_number: q.n,
-      question_text: q.text,
+      question_number: q.number,
+      question_text: q.question,
       answer_text: answers[i] || '',
     }));
     localStorage.setItem('zyrro_discovery_answers', JSON.stringify(data));
@@ -130,7 +70,7 @@ export default function StartPage() {
       setTimeout(() => setGeneratingStep(2), 1900),
       setTimeout(() => setGeneratingStep(3), 3100),
       setTimeout(() => setGeneratingStep(4), 4300),
-      setTimeout(() => router.push('/identity'), 5500),
+      setTimeout(() => setScreen('contact'), 5500),
     ];
 
     return () => timers.forEach(clearTimeout);
@@ -149,8 +89,8 @@ export default function StartPage() {
 
   function saveToStorage(currentAnswers: string[]) {
     const data = QUESTIONS.map((q, i) => ({
-      question_number: q.n,
-      question_text: q.text,
+      question_number: q.number,
+      question_text: q.question,
       answer_text: currentAnswers[i] || '',
     }));
     localStorage.setItem('zyrro_discovery_answers', JSON.stringify(data));
@@ -172,6 +112,35 @@ export default function StartPage() {
     } else {
       setQuestionIndex(qi => qi + 1);
     }
+  }
+
+  async function handleContactSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setContactError('');
+    setSubmitting(true);
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + '/auth/callback' },
+    });
+
+    if (error) {
+      setContactError(error.message);
+      setSubmitting(false);
+      return;
+    }
+
+    localStorage.setItem('zyrro_user_name', name);
+
+    setSubmitting(false);
+    setScreen('check-email');
+  }
+
+  async function handleResend() {
+    await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + '/auth/callback' },
+    });
   }
 
   // ── GENERATING ─────────────────────────────────────────────────────
@@ -235,6 +204,70 @@ export default function StartPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── CONTACT COLLECTION ─────────────────────────────────────────────
+  if (screen === 'contact') {
+    return (
+      <div className="flow-container">
+        <div className="scroll-area" style={{ padding: '48px 24px 32px' }}>
+          <p className="eyebrow">YOUR IDENTITY REPORT IS READY</p>
+
+          <h1>Create your free account to see your report</h1>
+
+          <p>Your Named Identity and full Signature Report are waiting.</p>
+
+          <form onSubmit={handleContactSubmit} className="page-form" style={{ maxWidth: '100%' }}>
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Your first name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+            />
+
+            <input
+              className="form-input"
+              type="email"
+              placeholder="Your email address"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+
+            {contactError && <p className="form-error">{contactError}</p>}
+
+            <button type="submit" className="btn-primary" disabled={submitting}>
+              {submitting ? 'Sending…' : 'Get my Identity Report'}
+            </button>
+
+            <p className="form-helper">Free. No credit card required.</p>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CHECK YOUR EMAIL ───────────────────────────────────────────────
+  if (screen === 'check-email') {
+    return (
+      <div className="flow-container">
+        <div className="scroll-area" style={{ padding: '48px 24px 32px' }}>
+          <p className="eyebrow">ONE MORE STEP</p>
+
+          <h1>Check your inbox</h1>
+
+          <p>We sent a confirmation link to {email}. Click it to access your report.</p>
+
+          <p className="form-helper">Can&rsquo;t find it? Check your spam folder.</p>
+
+          <button onClick={handleResend} className="btn-link">
+            Resend the link
+          </button>
         </div>
       </div>
     );
@@ -318,20 +351,15 @@ export default function StartPage() {
         {/* Question header */}
         <div className="flex-start-row" style={{ gap: '14px' }}>
           <div className="question-number">
-            {currentQuestion.n}
+            {currentQuestion.number}
           </div>
           <div style={{ flex: 1 }}>
-            <p
-              className="question-text"
-              style={{ margin: currentQuestion.hint ? '0 0 5px' : '0' }}
-            >
-              {currentQuestion.text}
+            <p className="question-text" style={{ margin: '0 0 5px' }}>
+              {currentQuestion.question}
             </p>
-            {currentQuestion.hint && (
-              <p className="question-hint">
-                {currentQuestion.hint}
-              </p>
-            )}
+            <p className="question-hint">
+              {currentQuestion.hint}
+            </p>
           </div>
         </div>
 

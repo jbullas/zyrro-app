@@ -5,6 +5,14 @@ Always read docs/standards/branding-guidelines.md
 before writing any code, creating any component, 
 or modifying any styles.
 
+## Git
+- Always work on the dev branch
+- Never commit or push to main directly
+- Verify current branch with git branch before 
+  starting any work
+- If not on dev, run git checkout dev before 
+  proceeding
+
 ## Styling
 - globals.css is the single source of truth 
   for all styles
