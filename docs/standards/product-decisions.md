@@ -30,7 +30,7 @@ Anonymous:
 
 Registered:
 - Identity Signature Report on /identity
-- Spec: docs/standards/deliverables/identity-signature-report.md
+- Spec: docs/standards/identity-signature-report.md
 
 Paid:
 - Everything above included
@@ -80,7 +80,7 @@ Subscriber:
 ## /identity Page States
 State 1 — Anonymous:
 - Gated, no report content
-- "Log in" and "Start the questionnaire" buttons
+- Single CTA: "Start the questionnaire" → /start
 
 State 2 — Registered, questionnaire complete:
 - Full Identity Signature Report
@@ -123,6 +123,7 @@ artifacts table (type: identity_report).
 - docs/standards/branding-guidelines.md
 - docs/standards/identity-questions.md
 - docs/standards/product-decisions.md
+- docs/standards/identity-signature-report.md
 
 ---
 
@@ -132,4 +133,4 @@ artifacts table (type: identity_report).
 - main branch = live site at zyrro.ai
 - Never commit directly to main
 - Merge dev to main only when ready to go live
-- Commit and push to dev at end of every sessions
+- Commit and push to dev at end of every session
