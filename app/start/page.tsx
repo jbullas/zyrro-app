@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react';
-import { QUESTIONS } from '@/lib/questions';
+import { QUESTIONS } from '@/lib/identity-questions';
 import { createClient } from '@/utils/supabase/client';
 
 const GENERATING_STEPS = [

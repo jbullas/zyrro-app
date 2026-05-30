@@ -12,7 +12,6 @@
   --color-grad-3:           #510085;
   --color-nav-active:       #1E1E1E;
   --color-nav-inactive:     #CCCCCC;
-  --color-nav-locked:       #DDDDDD;
   --font-sans:              -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-weight-regular:    400;
   --font-weight-medium:     500;
@@ -34,7 +33,6 @@
   --radius-pill:            999px;
   --shadow-card:            0 1px 4px rgba(0,0,0,0.04);
   --shadow-orb:             0 4px 24px rgba(254,86,24,0.28);
-  --opacity-locked:         0.4;
 }
 
 :root {
@@ -91,11 +89,6 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-.is-locked {
-  opacity: 0.4;
-  pointer-events: none;
 }
 
 .text-eyebrow {
@@ -377,11 +370,6 @@ p {
   border: 1.5px solid #FE5618;
   padding: 18px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-}
-
-.card-locked {
-  opacity: 0.4;
-  pointer-events: none;
 }
 
 /* ── IDENTITY BADGE ── */

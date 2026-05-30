@@ -127,7 +127,7 @@ Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 
 * Background: \#FFFFFF  
 * Border radius: 14px Border: 0.5px solid rgba(0,0,0,0.07) Shadow: 0 1px 4px rgba(0,0,0,0.04)   
-* Active state: gradient outline border, 1.5px, no padding loss (use inner wrapper) 
+* Active state: 1.5px solid #FE5618 border, no padding loss (use inner wrapper) 
 
 ## Identity Badge
 
@@ -150,13 +150,13 @@ Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 * Background: rgba(0,0,0,0.06) (light grey)  
 * Border: 1px solid rgba(0,0,0,0.10)  
 * Border radius: 12px (soft corners, not pill)  
-* Text: \#1E1E1E, 14px, 600  
+* Text: \#1E1E1E, 16px, 600  
 * Use: actions that confirm progress (e.g. Continue, Next, Login, Signup, Submit)
 
 # Spacing & Layout
 
 * Base grid: 8px   
-* Screen padding: 16–18px horizontal   
+* Screen padding: 16–18px horizontal on mobile, 24px on desktop   
 * Card gap: 8px   
 * Section gap: 14px   
 * Border radius scale: 10px (small), 12–13px (card), 14px (card standard), 18px (badge), 999px (pill/button)

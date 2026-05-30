@@ -1,8 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { DETECTION_PROMPT } from "@/lib/prompts/detection";
-import { LAYER_1_PROMPT } from "@/lib/prompts/layer1";
-import { LAYER_2_PROMPT } from "@/lib/prompts/layer2";
+import { DETECTION_PROMPT } from "@/lib/prompts/identity-analysis";
+import { LAYER_2_PROMPT } from "@/lib/prompts/identity-report";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -163,34 +162,6 @@ export async function POST(req: Request) {
     );
 
     // Output phase based on access level
-    if (plan === "guest") {
-      const layer1Raw = await runJsonFromPrompt(
-        client,
-        LAYER_1_PROMPT,
-        signatureAnalysisRaw
-      );
-
-      const layer1 = JSON.parse(layer1Raw);
-
-      const summaryLines = Array.isArray(layer1.summary_lines)
-        ? layer1.summary_lines.filter(Boolean)
-        : [];
-
-      const replyParts = [
-        `**${layer1.identity_label ?? "Your Core Identity"}**`,
-        ...summaryLines,
-        layer1.tension_hint ? `**Tension hint:** ${layer1.tension_hint}` : "",
-        "",
-        `**Unlock full identity** to see your full signature constellation, how you naturally operate, and where this pattern shows up most clearly.`,
-      ].filter(Boolean);
-
-      return NextResponse.json({
-        reply: replyParts.join("\n\n"),
-        signatureAnalysis: JSON.parse(signatureAnalysisRaw),
-        artifact: layer1,
-      });
-    }
-
     if (plan === "free") {
       const layer2Raw = await runJsonFromPrompt(
         client,
