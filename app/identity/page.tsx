@@ -302,36 +302,6 @@ export default function IdentityPage() {
         return;
       }
 
-      // Migrate localStorage discovery answers on first visit after magic link
-      const stored = localStorage.getItem('zyrro_discovery_answers');
-      if (stored) {
-        try {
-          const answers = JSON.parse(stored) as Array<{
-            question_number: number;
-            question_text: string;
-            answer_text: string;
-          }>;
-          if (Array.isArray(answers) && answers.length > 0) {
-            const { error } = await supabase.from('discovery_answers').insert(
-              answers.map(a => ({
-                user_id:         user.id,
-                question_number: a.question_number,
-                question_text:   a.question_text,
-                answer_text:     a.answer_text,
-              }))
-            );
-            if (!error) {
-              localStorage.removeItem('zyrro_discovery_answers');
-              const name = localStorage.getItem('zyrro_user_name');
-              if (name) {
-                await supabase.auth.updateUser({ data: { display_name: name } });
-                localStorage.removeItem('zyrro_user_name');
-              }
-            }
-          }
-        } catch {}
-      }
-
       if (cancelled) return;
 
       const { count } = await supabase
