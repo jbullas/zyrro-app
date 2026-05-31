@@ -3,6 +3,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
+import {
+  IconTelescope, IconBuildingSkyscraper, IconSparkles, IconFlask, IconCirclesRelation,
+  IconChartDots, IconArrowBarDown, IconLayersIntersect, IconSwords, IconRocket,
+  IconBolt, IconWaveSine, IconSpeakerphone, IconBuildingBridge, IconBulb,
+  IconPlayerPlay, IconCompass, IconHammer, IconAdjustments, IconFlag,
+  IconAnchor, IconEye, IconHeart, IconHandStop, IconShieldLock,
+  IconShield,
+} from '@tabler/icons-react';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'generating' | 'failed' | 'ready';
 
@@ -63,7 +71,7 @@ interface IdentityReport {
 const TOC_ITEMS = [
   { num: '01', title: 'What this report is',   id: 'section-2' },
   { num: '02', title: 'Signature profile',      id: 'section-3' },
-  { num: '03', title: 'Primary constellation',  id: 'section-4' },
+  { num: '03', title: 'Primary signatures',     id: 'section-4' },
   { num: '04', title: 'Secondary signatures',   id: 'section-5' },
   { num: '05', title: 'Constellation synthesis',id: 'section-6' },
   { num: '06', title: 'How you operate',        id: 'section-7' },
@@ -107,10 +115,39 @@ const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label:
   { key: 'stress_pattern',     label: 'STRESS PATTERN' },
 ];
 
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return (words[0][0] ?? '?').toUpperCase();
-  return ((words[0][0] ?? '') + (words[words.length - 1][0] ?? '')).toUpperCase();
+const SIGNATURE_ICONS: Record<string, typeof IconShield> = {
+  'Visionary':     IconTelescope,
+  'Architect':     IconBuildingSkyscraper,
+  'Originator':    IconSparkles,
+  'Alchemist':     IconFlask,
+  'Synthesizer':   IconCirclesRelation,
+  'Pattern Seeker':IconChartDots,
+  'Depth Diver':   IconArrowBarDown,
+  'Contextualiser':IconLayersIntersect,
+  'Contrarian':    IconSwords,
+  'Futurist':      IconRocket,
+  'Catalyst':      IconBolt,
+  'Resonator':     IconWaveSine,
+  'Amplifier':     IconSpeakerphone,
+  'Bridge':        IconBuildingBridge,
+  'Illuminator':   IconBulb,
+  'Activator':     IconPlayerPlay,
+  'Pioneer':       IconCompass,
+  'Builder':       IconHammer,
+  'Optimizer':     IconAdjustments,
+  'Finisher':      IconFlag,
+  'Meaning Maker': IconAnchor,
+  'Truth Seeker':  IconEye,
+  'Empath':        IconHeart,
+  'Intuitive':     IconHandStop,
+  'Guardian':      IconShieldLock,
+};
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function splitNamedIdentity(namedIdentity: string): [string, string] {
@@ -142,6 +179,7 @@ function scrollTo(id: string) {
 export default function IdentityPage() {
   const [pageState, setPageState] = useState<PageState>('loading');
   const [report, setReport]       = useState<IdentityReport | null>(null);
+  const [reportDate, setReportDate] = useState<string>('');
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const chartRef        = useRef<HTMLCanvasElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -224,7 +262,7 @@ export default function IdentityPage() {
     async function loadArtifact(userId: string) {
       const { data } = await supabase
         .from('artifacts')
-        .select('id, status, content')
+        .select('id, status, content, created_at')
         .eq('user_id', userId)
         .eq('type', 'identity_report')
         .order('created_at', { ascending: false })
@@ -240,6 +278,7 @@ export default function IdentityPage() {
 
       if (data.status === 'ready' && data.content) {
         setReport(data.content as IdentityReport);
+        setReportDate((data.created_at as string) ?? '');
         setPageState('ready');
         stopPolling();
       } else if (data.status === 'failed') {
@@ -384,9 +423,7 @@ export default function IdentityPage() {
   } = report;
 
   const [nameLine1, nameLine2] = splitNamedIdentity(cover.named_identity);
-  const initials     = getInitials(cover.prepared_for);
-  const year         = new Date().getFullYear();
-  const metadataLine = cover.report_metadata || `Zyrro Identity Report · Version 1.0 · ${year}`;
+  const SignatureIcon = SIGNATURE_ICONS[primary_constellation[0]?.name ?? ''] ?? IconShield;
 
   return (
     <div className="flow-container">
@@ -394,15 +431,28 @@ export default function IdentityPage() {
 
         {/* ── Section 0: Cover ─────────────────────────────── */}
         <div className="report-cover">
-          <p className="eyebrow">{metadataLine}</p>
-          <div className="identity-circle">{initials}</div>
-          <p className="eyebrow">Your Named Identity</p>
+          <p className="eyebrow">Identity Signature Report</p>
+          <div style={{ position: 'relative', width: '80px', height: '88px', margin: '0 auto' }}>
+            <svg width="80" height="88" viewBox="0 0 80 88">
+              <defs>
+                <linearGradient id="shield-grad" x1="24" y1="4" x2="56" y2="84" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#FE5618" />
+                  <stop offset="50%" stopColor="#C60567" />
+                  <stop offset="100%" stopColor="#510085" />
+                </linearGradient>
+              </defs>
+              <path d="M40 4 L72 16 L72 48 Q72 72 40 84 Q8 72 8 48 L8 16 Z" fill="url(#shield-grad)" />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <SignatureIcon size={28} color="rgba(255,255,255,0.95)" stroke={1.5} />
+            </div>
+          </div>
           <h1>
             {nameLine2 ? <>{nameLine1}<br />{nameLine2}</> : nameLine1}
           </h1>
-          <p className="identity-thesis-line">{cover.identity_thesis}</p>
-          <p className="cover-context-line">{cover.identity_context}</p>
-          <p className="prepared-for-line">Prepared for {cover.prepared_for}</p>
+          <p className="identity-thesis">{cover.identity_thesis}</p>
+          <p className="cover-context-line">{cover.prepared_for} · {cover.identity_context}</p>
+          <p className="prepared-for-line">{reportDate ? formatDate(reportDate) : ''}</p>
         </div>
 
         {/* ── Sections 1–10 ────────────────────────────────── */}
@@ -441,19 +491,14 @@ export default function IdentityPage() {
             <p className="eyebrow">SIGNATURE PROFILE</p>
 
             <div className="card">
-              <p className="card-sub-label">Primary constellation — Top 5</p>
+              <p className="card-sub-label">Primary Signatures</p>
               {primary_constellation.map((sig, i) => (
                 <div key={sig.name} className="sig-row">
                   <div className="sig-num-circle">{i + 1}</div>
                   <div className="sig-info">
                     <div className="sig-name-meta">
                       <span className="sig-name">{sig.name}</span>
-                      <span className="sig-breakdown">
-                        {sig.domain}
-                        {sig.frequency && sig.intensity
-                          ? ` · ${sig.frequency}×${sig.intensity}`
-                          : ` · ${sig.score}/25`}
-                      </span>
+                      <span className="sig-breakdown">{sig.domain}</span>
                     </div>
                     <div className="sig-bar-track">
                       <div className="sig-bar-fill" style={{ width: `${(sig.score / 25) * 100}%` }} />
@@ -465,14 +510,14 @@ export default function IdentityPage() {
             </div>
 
             <div className="card">
-              <p className="card-sub-label">Secondary signatures — next 3</p>
+              <p className="card-sub-label">Secondary Signatures</p>
               {secondary_signature_analysis.map((sig, i) => (
                 <div key={sig.name} className="sig-row">
                   <div className="sig-num-circle-muted">{i + 6}</div>
                   <div className="sig-info">
                     <div className="sig-name-meta">
                       <span className="sig-name">{sig.name}</span>
-                      <span className="sig-breakdown">{sig.domain} · {sig.score}/25</span>
+                      <span className="sig-breakdown">{sig.domain}</span>
                     </div>
                     <div className="sig-bar-track">
                       <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
@@ -484,7 +529,7 @@ export default function IdentityPage() {
             </div>
 
             <div className="card">
-              <p className="card-sub-label">Domain profile</p>
+              <p className="card-sub-label">Identity Profile</p>
               <canvas ref={chartRef} style={{ width: '100%', maxHeight: '260px' }} />
             </div>
           </div>
@@ -542,7 +587,7 @@ export default function IdentityPage() {
                   <div className="constellation-badge-muted">{i + 6}</div>
                   <div className="constellation-header-info">
                     <div className="constellation-sig-name">{sig.name}</div>
-                    <div className="constellation-sig-meta">{sig.domain} · {sig.score}/25</div>
+                    <div className="constellation-sig-meta">{sig.domain} · {sig.score}</div>
                   </div>
                 </div>
                 <p className="core-statement">{sig.core_statement}</p>
@@ -612,7 +657,7 @@ export default function IdentityPage() {
         <div id="section-11" className="limits-block">
           <p className="limits-eyebrow">LIMITS OF THIS REPORT</p>
           <h2 className="limits-heading">
-            This report shows you how you operate. It doesn&rsquo;t show you why you feel stuck.
+            This report shows you how you operate. It doesn't show you why you feel stuck.
           </h2>
           <p className="limits-body">
             You now have a precise picture of your identity patterns. But knowing how you operate

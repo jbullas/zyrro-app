@@ -92,6 +92,10 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-seri
 
 # Iconography
 
+## Identity Badge
+
+Identity badge: gradient shield 80x88px, brand gradient fill, Tabler icon 28px white centred inside, icon determined by user's #1 primary signature.
+
 ## Icons
 
 Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.

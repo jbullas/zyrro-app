@@ -84,17 +84,22 @@ Background: off-white (#F7F6F3)
 Layout: centred
 
 Elements:
-- Report metadata: eyebrow style, centred
-- Identity badge: gradient circle with user
-  initials, centred
+- Report metadata: "Identity Signature Report",
+  eyebrow style, centred
+- Identity badge: gradient shield badge,
+  80x88px, SVG shield path with brand gradient
+  fill, Tabler icon centred inside based on #1
+  primary signature. See
+  identity-signature-icons.md for mapping.
 - Label: "Your Named Identity"
 - Named Identity: display heading, centred,
   line break between modifier and core word
-- Identity Thesis: italic, muted, centred,
-  8-18 words
-- Context line: role · industry · phase,
-  centred
-- "Prepared for [first name]"
+- Identity Thesis: 15px italic, #1E1E1E,
+  no borders, 16px padding top and bottom
+- Context line: [name] · [role] · [industry]
+  · [phase], centred
+- Date only — DD Month YYYY format,
+  read from artifact created_at
 
 Named Identity format: THE [Modifier] [Core]
 Examples: The Awakening Architect,
