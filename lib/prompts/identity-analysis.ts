@@ -270,7 +270,7 @@ Use this exact structure:
   "low", "medium", "high"
 - "primary_constellation" must contain exactly 5 signature names unless there is insufficient evidence
 - "secondary_signatures" should contain up to 3 signature names
-- "domain_profile" values should reflect relative strength across the 5 domains
+- "domain_profile" MUST contain exactly 5 entries. All five domains must always be present: Visioning, Thinking, Connecting, Driving, Sensing. Values represent relative strength 0-100. A domain with no primary or secondary signatures detected should still appear with a minimum value of 10 to reflect indirect evidence from adjacent signatures. Only return 0 if there is absolutely zero evidence across all 5 signatures in that domain throughout the entire narrative.
 
 ## INSUFFICIENT EVIDENCE RULE
 

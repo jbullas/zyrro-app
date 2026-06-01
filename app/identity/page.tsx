@@ -180,6 +180,7 @@ export default function IdentityPage() {
   const [pageState, setPageState] = useState<PageState>('loading');
   const [report, setReport]       = useState<IdentityReport | null>(null);
   const [reportDate, setReportDate] = useState<string>('');
+  const [userId, setUserId] = useState<string | null>(null);
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const chartRef        = useRef<HTMLCanvasElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -191,6 +192,68 @@ export default function IdentityPage() {
       pollRef.current = null;
     }
   }, []);
+
+  // DEV ONLY — remove before go-live
+  const handleRegenerate = useCallback(async () => {
+    console.log('[regenerate] clicked, userId:', userId);
+    if (!userId) return;
+    const supabase = createClient();
+
+    const [
+      { data: answersData, error: answersError },
+      { data: profileData, error: profileError },
+    ] = await Promise.all([
+      supabase
+        .from('discovery_answers')
+        .select('question_number, question_text, answer_text')
+        .eq('user_id', userId),
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ]);
+
+    console.log('[regenerate] answers:', answersData, answersError);
+    console.log('[regenerate] name:', profileData, profileError);
+
+    if (!answersData?.length) return;
+
+    const name = profileData?.name || 'You';
+    const answers = answersData;
+
+    setPageState('generating');
+    stopPolling();
+
+    console.log('[regenerate] calling API with:', { userId, name, answerCount: answers.length });
+    const res = await fetch('/api/generate-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, name, answers }),
+    });
+    console.log('[regenerate] API response status:', res.status);
+
+    pollRef.current = setInterval(async () => {
+      const { data } = await supabase
+        .from('artifacts')
+        .select('id, status, content, created_at')
+        .eq('user_id', userId)
+        .eq('type', 'identity_report')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.status === 'ready' && data.content) {
+        setReport(data.content as IdentityReport);
+        setReportDate((data.created_at as string) ?? '');
+        setPageState('ready');
+        stopPolling();
+      } else if (data?.status === 'failed') {
+        setPageState('failed');
+        stopPolling();
+      }
+    }, 3000);
+  }, [userId, stopPolling]);
 
   // Chart.js init when report is ready
   useEffect(() => {
@@ -302,6 +365,7 @@ export default function IdentityPage() {
         return;
       }
 
+      if (!cancelled) setUserId(user.id);
       if (cancelled) return;
 
       const { count } = await supabase
@@ -570,7 +634,7 @@ export default function IdentityPage() {
           <div id="section-6" className="report-section">
             <p className="eyebrow">CONSTELLATION SYNTHESIS</p>
             <div className="card">
-              <h3 style={{ marginBottom: '12px' }}>{constellation_synthesis.named_identity}</h3>
+              <h3 className="named-identity" style={{ marginBottom: '12px' }}>{constellation_synthesis.named_identity}</h3>
               <p>{constellation_synthesis.synthesis}</p>
             </div>
           </div>
@@ -622,6 +686,16 @@ export default function IdentityPage() {
           </div>
 
         </div>{/* end .report-sections */}
+
+        {/* DEV ONLY — remove before go-live */}
+        <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
+          <button
+            onClick={handleRegenerate}
+            style={{ background: 'none', border: 'none', color: '#999', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}
+          >
+            Regenerate report
+          </button>
+        </div>
 
         {/* Section 11: Limits of This Report */}
         <div id="section-11" className="limits-block">

@@ -19,8 +19,8 @@ Recognition.
 ## GLOBAL STANDARDS
 
 ### Total Length
-Target: 2,500–4,500 words across all text fields combined.
-Minimum: 2,000 words.
+Total report must exceed 3,000 words across all text fields combined. Do not truncate any section.
+Target: 3,000–4,500 words.
 
 ### Tone
 Must be: precise, intelligent, grounded, emotionally accurate, direct, calm, honest.
@@ -121,7 +121,7 @@ The report must feel earned. Not complimentary.
 The Named Identity must be derived from the Top 5 primary signatures only.
 
 Formula: Modifier + Core Identity — 2–4 words.
-Format: THE [Identity Name]
+Format: The [Modifier] [Core]
 
 Examples: The Awakening Architect, The Pattern Catalyst, The Strategic Builder.
 
@@ -192,6 +192,9 @@ Use this exact structure:
       "name": "",
       "domain": "",
       "score": 0,
+      "frequency": 0,
+      "intensity": 0,
+      "confidence": "",
       "core_statement": "",
       "evidence_analysis": "",
       "tension": ""
@@ -230,13 +233,20 @@ Use this exact structure:
   "derived_from_signature_analysis": true
 }
 
+Before returning the JSON, verify:
+- domain_profile has exactly 5 keys
+- primary_constellation has exactly 5 entries
+- each primary_constellation entry has frequency, intensity, score, and confidence
+- secondary_signature_analysis has exactly 3 entries
+If any check fails, complete the missing fields before returning.
+
 ## FIELD REQUIREMENTS
 
 ### cover.prepared_for
-Extract the user's first name from the conversation. If unknown, use "You".
+Use the user name provided in the message. Never use 'You' as the value.
 
 ### cover.named_identity
-Format: THE [Identity Name]. 2–4 words. Derived from Top 5 only.
+Format: The [Modifier] [Core]. 2–4 words. Derived from Top 5 only.
 
 ### cover.identity_context
 Format: [current role] · [industry] · [career phase]
@@ -273,8 +283,11 @@ signature_number: "01" through "05"
 name: must match the official 25-signature framework exactly
 domain: one of Visioning, Thinking, Connecting, Driving, Sensing
 score: integer 1–25
+frequency: integer 1–5 — copy exactly from detection JSON, do not recalculate.
+intensity: integer 1–5 — copy exactly from detection JSON, do not recalculate.
+confidence: "Low" | "Mid" | "High" — copy exactly from detection JSON, do not recalculate.
 core_statement: 8–20 words. Define the signature operationally.
-evidence_analysis: 150–250 words.
+evidence_analysis: minimum 200 words, target 250 words.
   Must follow Pattern → Evidence → Meaning in this order.
   Pattern: what the signature fundamentally does, stated operationally.
   Evidence: anchor in the user's actual story. Minimum 2 real story details — career events, transitions, frustrations, choices. Not generic. Not hypothetical.
@@ -295,15 +308,15 @@ core_statement: 8–20 words
 analysis: 80–150 words. Must include where this signature appears, supporting evidence from the user's story, and why it matters as a latent capacity.
 
 ### constellation_synthesis
-named_identity: THE [Identity Name] — identical to cover.named_identity
-synthesis: 200–350 words.
+named_identity: The [Modifier] [Core] — identical to cover.named_identity
+synthesis: minimum 300 words, target 350 words.
 Must explain how the Top 5 signatures interact as one integrated operating system.
 Must describe: operating style, decision style, energy style, leadership style, relational style.
 This is not five separate summaries. It is one coherent identity picture.
 Must NOT be generic. Must be earned through evidence.
 
 ### how_you_operate
-Five fields. Each 80–150 words. Each grounded in the user's actual patterns.
+Five fields. Each minimum 120 words. Each grounded in the user's actual patterns.
 
 work_style: how they actually work — pace, structure preferences, environment needs.
 thinking_style: how they process information and form conclusions.
@@ -322,8 +335,7 @@ Each: specific, behavioural, pattern-based constraint this identity creates.
 Must be honest. Friction increases recognition more than flattery does.
 
 ### domain_profile
-Values 0–100 representing relative percentage strength across the 5 domains.
-Must reflect the actual detection scores from the input.
+domain_profile MUST contain exactly 5 entries — Visioning, Thinking, Connecting, Driving, Sensing — all present in every response. Copy values exactly from the detection JSON domain_profile field. Never omit a domain. Never return fewer than 5 entries. If a domain is missing from the detection input, use 10 as the default value.
 
 ## STRUCTURAL CONSTRAINTS
 
@@ -332,8 +344,8 @@ Must always produce:
 - Exactly 3 secondary_signature_analysis entries
 - 1 named_identity consistent across cover and constellation_synthesis
 - 1 identity_thesis of 8–18 words
-- 1 constellation_synthesis of 200–350 words
-- 5 how_you_operate fields each of 80–150 words
+- 1 constellation_synthesis of minimum 300 words
+- 5 how_you_operate fields each of minimum 120 words
 - 6–10 energisers
 - 6–10 friction_points
 

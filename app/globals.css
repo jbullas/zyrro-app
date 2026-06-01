@@ -1098,6 +1098,8 @@ p {
 .band-moderate { background: rgba(0,0,0,0.07);    color: #6E6E6E; }
 .band-weak     { background: rgba(0,0,0,0.05);    color: #999999; }
 
+.named-identity { text-transform: uppercase; }
+
 .core-statement {
   margin: 14px 16px 0;
   padding: 12px 14px;

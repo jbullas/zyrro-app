@@ -21,7 +21,7 @@ console.log('[generate-report] SUPABASE_SERVICE_ROLE_KEY length:', process.env.S
 console.log('[generate-report] OPENAI_API_KEY length:', process.env.OPENAI_API_KEY?.length ?? 0);
 console.log('[generate-report] OPENAI_API_KEY prefix:', process.env.OPENAI_API_KEY?.slice(0, 5) ?? 'undefined');
 
-async function runGeneration(artifactId: string, answers: DiscoveryAnswer[]) {
+async function runGeneration(artifactId: string, answers: DiscoveryAnswer[], name: string) {
   const supabase = createServiceClient();
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -48,7 +48,7 @@ async function runGeneration(artifactId: string, answers: DiscoveryAnswer[]) {
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: LAYER_2_PROMPT },
-        { role: 'user', content: JSON.stringify(analysis) },
+        { role: 'user', content: `User name: ${name}\nAnalysis: ${JSON.stringify(analysis)}` },
       ],
       max_tokens: 8000,
       temperature: 0,
@@ -76,6 +76,7 @@ async function runGeneration(artifactId: string, answers: DiscoveryAnswer[]) {
 export async function POST(req: NextRequest) {
   const body = await req.json() as { user_id: string; name: string; answers: DiscoveryAnswer[] };
   const { user_id, name, answers } = body;
+  console.log('[generate-report] received name:', name);
 
   if (!user_id || !name || !Array.isArray(answers)) {
     return NextResponse.json({ error: 'Missing user_id, name, or answers' }, { status: 400 });
@@ -84,10 +85,10 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient();
 
   // Insert profile row
-  const profileResult = await supabase
+  const profileInsertResult = await supabase
     .from('profiles')
-    .insert({ user_id, name });
-  console.log('[generate-report] profiles insert:', profileResult.error ?? 'ok');
+    .upsert({ user_id, name }, { onConflict: 'user_id' });
+  console.log('[generate-report] profiles insert:', profileInsertResult);
 
   // Insert discovery answers
   const answersResult = await supabase
@@ -95,25 +96,43 @@ export async function POST(req: NextRequest) {
     .insert(answers.map(a => ({ ...a, user_id })));
   console.log('[generate-report] discovery_answers insert:', answersResult.error ?? 'ok');
 
-  const { data: artifact, error: insertError } = await supabase
+  const { data: existing } = await supabase
     .from('artifacts')
-    .insert({
-      user_id,
-      type: 'identity_report',
-      access_level: 'free',
-      status: 'generating',
-      content: {},
-    })
     .select('id')
-    .single();
+    .eq('user_id', user_id)
+    .eq('type', 'identity_report')
+    .maybeSingle();
 
-  if (insertError || !artifact) {
-    console.error('Artifact insert error:', insertError);
-    return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
+  let artifactId: string;
+
+  if (existing) {
+    await supabase
+      .from('artifacts')
+      .update({ status: 'generating', content: {} })
+      .eq('id', existing.id);
+    artifactId = existing.id;
+  } else {
+    const { data: artifact, error: insertError } = await supabase
+      .from('artifacts')
+      .insert({
+        user_id,
+        type: 'identity_report',
+        access_level: 'free',
+        status: 'generating',
+        content: {},
+      })
+      .select('id')
+      .single();
+
+    if (insertError || !artifact) {
+      console.error('Artifact insert error:', insertError);
+      return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
+    }
+    artifactId = artifact.id;
   }
 
   // Fire and forget — returns 200 immediately, generation runs in background
-  void runGeneration(artifact.id, answers);
+  void runGeneration(artifactId, answers, name);
 
-  return NextResponse.json({ artifact_id: artifact.id });
+  return NextResponse.json({ artifact_id: artifactId });
 }

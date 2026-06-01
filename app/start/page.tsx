@@ -176,6 +176,7 @@ export default function StartPage() {
 
     if (discoveryAnswers.length > 0) {
       // 3. API route handles profiles insert, discovery_answers insert, and generation
+      console.log('[signup] name being sent:', name);
       fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
