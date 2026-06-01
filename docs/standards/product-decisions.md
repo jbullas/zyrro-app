@@ -9,10 +9,12 @@ All coding rules: docs/standards/coding-standards.md
 - / — homepage (marketing)
 - /start — questionnaire
 - /identity — Identity Signature Report
-- /paths — path options (not yet built)
-- /plan — action plan (not yet built)
-- /chat — mentor chat (not yet built)
-- /dashboard — logged-in home (not yet built)
+- /paths — path options (gated; placeholder content for authenticated users)
+- /plan — action plan (gated; placeholder content for authenticated users)
+- /chat — mentor chat (gated; working chat UI with guest/free plan and conversation persistence)
+- /dashboard — logged-in home (gated; placeholder content for authenticated users)
+- /login — magic link login
+- /signup — magic link signup
 
 ---
 
@@ -26,19 +28,18 @@ The page handles gating, not the nav.
 ## User States and Deliverables
 Anonymous:
 - Gated state on all app pages
-- Single CTA button: "Start the questionnaire" → /start
+- /identity: single CTA "Start the questionnaire" → /start
+- /dashboard, /paths, /plan, /chat: two CTAs —
+  "Log in" → /login and "Start the questionnaire" → /start
 
-Registered:
+Registered (all authenticated users, no tier enforcement yet):
 - Identity Signature Report on /identity
-- Spec: docs/standards/identity-signature-report.md
+  Spec: docs/standards/identity-signature-report.md
+- /paths, /plan, /dashboard: placeholder "coming soon" content
+- /chat: working mentor chat (guest history handed off on sign-in)
 
-Paid:
-- Everything above included
-- Access to /paths and /plan (deliverables TBD)
-
-Subscriber:
-- Everything above included
-- Mentor chat on /chat
+Note: paid/subscriber tier enforcement is not yet implemented
+in the code. All authenticated users reach the same content.
 
 ---
 
@@ -70,7 +71,7 @@ Subscriber:
     upserts profile row, inserts discovery_answers,
     starts report generation in background
   - Saves name to localStorage as zyrro_user_name
-  - CTA: "Get my Identity Signature Report"
+  - CTA: "Get my Identity Report"
 - Check your email screen follows
 - After magic link confirmed:
   - Redirects to /identity
@@ -82,10 +83,17 @@ State 1 — Anonymous:
 - Gated, no report content
 - Single CTA: "Start the questionnaire" → /start
 
-State 2 — Registered, questionnaire complete:
+State 2 — Registered, questionnaire complete, report generating:
+- Spinner with "Your Identity Signature Report is being prepared"
+- Polls artifacts table every 3 seconds until status changes
+
+State 3 — Registered, questionnaire complete, report ready:
 - Full Identity Signature Report
 
-State 3 — Registered, no questionnaire:
+State 4 — Registered, questionnaire complete, generation failed:
+- Error message with disabled "Try again" button
+
+State 5 — Registered, no questionnaire:
 - Prompt to complete questionnaire → /start
 
 ---
@@ -115,6 +123,13 @@ artifacts table (type: identity_report).
 - lib/identity-questions.ts — question text and hints
 - lib/prompts/identity-analysis.ts — analysis prompt
 - lib/prompts/identity-report.ts — report generation prompt
+- app/api/generate-report/route.ts — POST endpoint; upserts
+  profile, inserts discovery_answers, fires pipeline
+- app/api/chat/route.ts — POST endpoint; handles guest/free
+  plan chat and layer 2 upgrade
+- lib/conversations.ts — create conversation records
+- lib/messages.ts — save messages to DB
+- lib/artifact-schemas.ts — artifact type definitions
 
 ---
 
