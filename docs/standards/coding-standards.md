@@ -13,6 +13,15 @@ or modifying any styles.
 - If not on dev, run git checkout dev before 
   proceeding
 
+## Local verification
+- Before committing code changes, run them locally
+  (npm run dev) and confirm the build passes and
+  the affected pages work
+- Commit only once it's working — never push
+  untested code to dev, since dev deploys to staging
+- Doc-only changes need a diff review, not a
+  local run
+
 ## Styling
 - globals.css is the single source of truth 
   for all styles
