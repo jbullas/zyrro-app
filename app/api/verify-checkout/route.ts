@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
   const session = await getStripe().checkout.sessions.retrieve(session_id);
 
   if (session.payment_status === 'paid' && session.metadata?.user_id === user_id) {
-    await grantEntitlement(user_id, 'stripe');
-    return NextResponse.json({ granted: true });
+    const granted = await grantEntitlement(user_id, 'stripe');
+    return NextResponse.json({ granted });
   }
 
   return NextResponse.json({ granted: false });

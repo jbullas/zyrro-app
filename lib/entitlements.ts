@@ -22,12 +22,13 @@ export async function hasPaidEntitlement(userId: string): Promise<boolean> {
 export async function grantEntitlement(
   userId: string,
   source: 'stripe' | 'manual'
-): Promise<void> {
+): Promise<boolean> {
   const supabase = createServiceClient();
-  await supabase
+  const { error } = await supabase
     .from('entitlements')
     .upsert(
       { user_id: userId, product: 'onetime_payment', status: 'active', source },
       { onConflict: 'user_id,product' }
     );
+  return !error;
 }

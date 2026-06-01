@@ -13,6 +13,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
   }
 
-  await grantEntitlement(user_id, 'manual');
-  return NextResponse.json({ granted: true });
+  const granted = await grantEntitlement(user_id, 'manual');
+  return NextResponse.json({ granted });
 }
