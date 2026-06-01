@@ -195,13 +195,12 @@ export default function IdentityPage() {
 
   // DEV ONLY — remove before go-live
   const handleRegenerate = useCallback(async () => {
-    console.log('[regenerate] clicked, userId:', userId);
     if (!userId) return;
     const supabase = createClient();
 
     const [
-      { data: answersData, error: answersError },
-      { data: profileData, error: profileError },
+      { data: answersData },
+      { data: profileData },
     ] = await Promise.all([
       supabase
         .from('discovery_answers')
@@ -214,9 +213,6 @@ export default function IdentityPage() {
         .maybeSingle(),
     ]);
 
-    console.log('[regenerate] answers:', answersData, answersError);
-    console.log('[regenerate] name:', profileData, profileError);
-
     if (!answersData?.length) return;
 
     const name = profileData?.name || 'You';
@@ -225,13 +221,11 @@ export default function IdentityPage() {
     setPageState('generating');
     stopPolling();
 
-    console.log('[regenerate] calling API with:', { userId, name, answerCount: answers.length });
-    const res = await fetch('/api/generate-report', {
+    await fetch('/api/generate-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, name, answers }),
     });
-    console.log('[regenerate] API response status:', res.status);
 
     pollRef.current = setInterval(async () => {
       const { data } = await supabase

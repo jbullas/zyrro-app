@@ -91,7 +91,6 @@ Elements:
   fill, Tabler icon centred inside based on #1
   primary signature. See
   identity-signature-icons.md for mapping.
-- Label: "Your Named Identity"
 - Named Identity: display heading, centred,
   line break between modifier and core word
 - Identity Thesis: 15px italic, #1E1E1E,

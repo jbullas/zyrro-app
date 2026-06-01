@@ -76,7 +76,6 @@ async function runGeneration(artifactId: string, answers: DiscoveryAnswer[], nam
 export async function POST(req: NextRequest) {
   const body = await req.json() as { user_id: string; name: string; answers: DiscoveryAnswer[] };
   const { user_id, name, answers } = body;
-  console.log('[generate-report] received name:', name);
 
   if (!user_id || !name || !Array.isArray(answers)) {
     return NextResponse.json({ error: 'Missing user_id, name, or answers' }, { status: 400 });
@@ -85,16 +84,14 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient();
 
   // Insert profile row
-  const profileInsertResult = await supabase
+  await supabase
     .from('profiles')
     .upsert({ user_id, name }, { onConflict: 'user_id' });
-  console.log('[generate-report] profiles insert:', profileInsertResult);
 
   // Insert discovery answers
-  const answersResult = await supabase
+  await supabase
     .from('discovery_answers')
     .insert(answers.map(a => ({ ...a, user_id })));
-  console.log('[generate-report] discovery_answers insert:', answersResult.error ?? 'ok');
 
   const { data: existing } = await supabase
     .from('artifacts')

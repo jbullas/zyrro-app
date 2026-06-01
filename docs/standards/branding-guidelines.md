@@ -94,13 +94,13 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-seri
 
 ## Identity Badge
 
-Identity badge: gradient shield 80x88px, brand gradient fill, Tabler icon 28px white centred inside, icon determined by user's #1 primary signature.
+Identity badge: 80x88px SVG shield path with brand gradient fill. Tabler icon 28px (rgba(255,255,255,0.95)) centred inside, determined by user's #1 primary signature. See docs/standards/identity-signature-icons.md for icon mapping and shield path spec.
 
 ## Icons
 
 Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 
-* Home: ti-home  
+* Dashboard: ti-layout-dashboard  
 * Identity: ti-shield  
 * Paths: ti-arrow-fork  
 * Plan: ti-calendar  

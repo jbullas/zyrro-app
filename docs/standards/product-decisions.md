@@ -63,17 +63,17 @@ Subscriber:
 - No password field anywhere in the app
 - Contact collection screen at end of /start:
   - Collects name and email
-  - Calls supabase.auth.signInWithOtp
+  - Calls supabase.auth.signUp (random UUID
+    password, magic link via emailRedirectTo)
+  - Sets display_name in Supabase auth metadata
+  - Immediately POSTs to /api/generate-report:
+    upserts profile row, inserts discovery_answers,
+    starts report generation in background
   - Saves name to localStorage as zyrro_user_name
   - CTA: "Get my Identity Signature Report"
 - Check your email screen follows
 - After magic link confirmed:
   - Redirects to /identity
-  - discovery_answers migrated from localStorage
-    to Supabase
-  - display_name updated in Supabase auth metadata
-  - profiles row created with name
-  - localStorage cleared on success
 
 ---
 
@@ -124,6 +124,7 @@ artifacts table (type: identity_report).
 - docs/standards/identity-questions.md
 - docs/standards/product-decisions.md
 - docs/standards/identity-signature-report.md
+- docs/standards/identity-signature-icons.md
 
 ---
 

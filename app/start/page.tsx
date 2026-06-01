@@ -162,7 +162,6 @@ export default function StartPage() {
     }
 
     const userId = signUpData.user.id;
-    console.log('[signUp] user_id:', userId);
 
     // 2. Read discovery answers from localStorage
     const stored = localStorage.getItem('zyrro_discovery_answers');
@@ -176,14 +175,11 @@ export default function StartPage() {
 
     if (discoveryAnswers.length > 0) {
       // 3. API route handles profiles insert, discovery_answers insert, and generation
-      console.log('[signup] name being sent:', name);
       fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, name, answers: discoveryAnswers }),
-      })
-        .then(res => res.json().then(body => console.log('[generate-report]', res.status, body)))
-        .catch(err => console.log('[generate-report] fetch error:', err));
+      });
     }
 
     // 5. Advance to check-email screen

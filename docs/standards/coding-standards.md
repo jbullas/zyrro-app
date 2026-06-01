@@ -56,12 +56,12 @@ Do not hardcode font sizes inline.
 - Never duplicate markup across pages
 
 ## Bottom Navigation
-- 5 fixed tabs always: Home, Identity, Paths, 
-  Plan, Chat
-- Always visible, always tappable, no locking
+- 5 fixed tabs always: Dashboard, Identity, 
+  Paths, Plan, Chat
+- Logged-in: visible on all pages
+- Logged-out: hidden on all pages
 - All tabs full colour #1E1E1E at all times
 - Active tab shows gradient indicator bar only
-- Hide nav on homepage (/) only
 
 ## Page layout
 - All pages use the same max-width container 
@@ -81,6 +81,12 @@ Do not hardcode font sizes inline.
 - Non-registered users see a simple gated state 
   on all app pages
 - Gated state: eyebrow, heading, body line, 
-  two equal secondary buttons (Log in / Start 
-  the questionnaire)
+  single CTA: "Start the questionnaire" → /start
 - The page handles gating, not the nav
+
+## Session continuity
+At the start of each session, read:
+- docs/standards/product-decisions.md
+- docs/changelogs/ — most recent file first
+This ensures Claude Code has full context 
+of current state before making any changes.
