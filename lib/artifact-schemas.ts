@@ -156,3 +156,40 @@ export interface IdentitySignatureReportArtifactContent {
   domain_profile: DomainProfile;
   derived_from_signature_analysis: boolean;
 }
+
+// Path Options (artifact type: "path_options")
+
+export type StretchType = 'Natural' | 'Adjacent' | 'Reinvention';
+
+export interface PathOption {
+  id: string;                  // e.g. "path_01"
+  name: string;
+  thesis: string;
+  body: string;
+  signatures_engaged: string[];
+  stretch: StretchType;
+}
+
+export interface PathOptionsArtifactContent {
+  recap: string;
+  meaning: string;
+  reframe: string;
+  why: string;
+  options: PathOption[];       // exactly 4
+}
+
+// Path Plan (artifact type: "path_plan")
+
+export interface PathPlanPhase {
+  phase_number: number;
+  title: string;
+  estimated_duration: string;
+  milestones: string[];
+  signatures_leaned_on: string[];
+}
+
+export interface PathPlanArtifactContent {
+  plan_frame: string;
+  full_path: PathPlanPhase[];  // 3-5 phases
+  start_here: string[];        // 5-7 actions
+}
