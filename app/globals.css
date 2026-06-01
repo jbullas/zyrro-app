@@ -524,6 +524,13 @@ p {
   justify-content: center;
 }
 
+/* ── OFFER PAGE ── */
+.offer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 /* ── GATED PAGES ── */
 .gated-container {
   justify-content: center;

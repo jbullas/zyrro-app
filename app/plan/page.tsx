@@ -2,29 +2,62 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import Link from 'next/link';
 import GatedState from '@/components/GatedState';
 
+type PageState = 'loading' | 'anonymous' | 'unpaid' | 'paid';
+
 export default function PlanPage() {
-  const [authChecked, setAuthChecked] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pageState, setPageState] = useState<PageState>('loading');
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setIsAuthenticated(!!data?.user);
-      setAuthChecked(true);
-    });
+
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        setPageState('anonymous');
+        return;
+      }
+
+      const { data: entitlement } = await supabase
+        .from('entitlements')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('product', 'onetime_payment')
+        .eq('status', 'active')
+        .maybeSingle();
+
+      setPageState(entitlement ? 'paid' : 'unpaid');
+    }
+
+    init();
   }, []);
 
-  if (!authChecked) return null;
+  if (pageState === 'loading') return null;
 
-  if (!isAuthenticated) {
+  if (pageState === 'anonymous') {
     return (
       <GatedState
         eyebrow="YOUR PLAN"
         heading="Your action plan is built around your chosen path."
         body="Choose a path to unlock your plan."
       />
+    );
+  }
+
+  if (pageState === 'unpaid') {
+    return (
+      <div className="flow-container gated-container">
+        <p className="eyebrow">YOUR PLAN</p>
+        <h2>Your Plan is waiting on the other side of Path.</h2>
+        <p>
+          Choose one of your four path options on the Path page and your
+          tailored Plan will be generated automatically.
+        </p>
+        <Link href="/path" className="btn-primary">See Your Path Options</Link>
+      </div>
     );
   }
 
