@@ -531,6 +531,98 @@ p {
   gap: 12px;
 }
 
+/* ── CONFIRM DIALOG ── */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.dialog-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 24px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── PATH OPTION CARD ── */
+.option-card-sigs {
+  padding: 10px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.option-card-footer {
+  padding: 14px 16px;
+  border-top: 0.5px solid rgba(0,0,0,0.07);
+}
+
+/* ── PLAN PHASE CARD ── */
+.phase-milestones {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.phase-milestone-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.phase-milestone-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex-shrink: 0;
+  margin-top: 7px;
+}
+
+/* ── START HERE ACTIONS ── */
+.start-here-action {
+  padding-bottom: 14px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.07);
+}
+
+.start-here-action:last-child { border-bottom: none; padding-bottom: 0; }
+.start-here-action + .start-here-action { padding-top: 14px; }
+
+.start-here-action-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  margin: 0 0 4px;
+}
+
+.start-here-action-why {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* ── GATED PAGES ── */
 .gated-container {
   justify-content: center;

@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 import GatedState from '@/components/GatedState';
+import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
 
-type PageState = 'loading' | 'anonymous' | 'verifying' | 'unpaid' | 'paid';
+type PageState = 'loading' | 'anonymous' | 'verifying' | 'unpaid' | 'generating' | 'ready' | 'failed';
 
 const OFFER_FEATURES = [
   { title: 'Your Meaning',      body: 'Why your current situation makes complete sense given who you are.' },
@@ -13,45 +15,115 @@ const OFFER_FEATURES = [
   { title: 'Your Plan',         body: 'A tailored action plan built around the path you choose.' },
 ];
 
+function stretchClass(stretch: StretchType): string {
+  switch (stretch) {
+    case 'Natural':     return 'band-strong';
+    case 'Adjacent':    return 'band-moderate';
+    case 'Reinvention': return 'band-dominant';
+  }
+}
+
 export default function PathPage() {
-  const [pageState, setPageState]         = useState<PageState>('loading');
-  const [userId, setUserId]               = useState<string | null>(null);
-  const [namedIdentity, setNamedIdentity] = useState<string | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [grantLoading, setGrantLoading]   = useState(false);
+  const router = useRouter();
+  const [pageState, setPageState]                   = useState<PageState>('loading');
+  const [userId, setUserId]                         = useState<string | null>(null);
+  const [namedIdentity, setNamedIdentity]           = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading]       = useState(false);
+  const [grantLoading, setGrantLoading]             = useState(false);
+  const [pathOptions, setPathOptions]               = useState<PathOptionsArtifactContent | null>(null);
+  const [pathOptionsArtifactId, setPathOptionsArtifactId] = useState<string | null>(null);
+  const [confirmPending, setConfirmPending]         = useState<PathOption | null>(null);
+  const [selectingId, setSelectingId]               = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
+    let cancelled = false;
+
+    async function loadPathOptions(uid: string) {
+      const { data } = await supabase
+        .from('artifacts')
+        .select('id, status, content')
+        .eq('user_id', uid)
+        .eq('type', 'path_options')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (!data) {
+        await fetch('/api/generate-path-options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: uid }),
+        });
+        if (!cancelled) {
+          setPageState('generating');
+          if (pollRef.current === null) {
+            pollRef.current = setInterval(() => {
+              if (!cancelled) loadPathOptions(uid);
+            }, 3000);
+          }
+        }
+        return;
+      }
+
+      if (data.status === 'ready' && data.content) {
+        setPathOptions(data.content as PathOptionsArtifactContent);
+        setPathOptionsArtifactId(data.id as string);
+        setPageState('ready');
+        stopPolling();
+      } else if (data.status === 'failed') {
+        setPageState('failed');
+        stopPolling();
+      } else {
+        setPageState('generating');
+        if (pollRef.current === null) {
+          pollRef.current = setInterval(() => {
+            if (!cancelled) loadPathOptions(uid);
+          }, 3000);
+        }
+      }
+    }
 
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
-        setPageState('anonymous');
+        if (!cancelled) setPageState('anonymous');
         return;
       }
 
-      setUserId(user.id);
+      if (!cancelled) setUserId(user.id);
 
       // Handle return from Stripe Checkout
       const sessionId = new URLSearchParams(window.location.search).get('session_id');
       if (sessionId) {
-        setPageState('verifying');
+        if (!cancelled) setPageState('verifying');
         const res = await fetch('/api/verify-checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId, user_id: user.id }),
         });
         const { granted } = await res.json() as { granted: boolean };
-        // Clean the URL
         window.history.replaceState({}, '', '/path');
+        if (cancelled) return;
         if (granted) {
-          setPageState('paid');
+          await loadPathOptions(user.id);
           return;
         }
       }
 
-      // Check entitlement directly (user can read own rows via RLS)
+      if (cancelled) return;
+
       const { data: entitlement } = await supabase
         .from('entitlements')
         .select('id')
@@ -60,30 +132,35 @@ export default function PathPage() {
         .eq('status', 'active')
         .maybeSingle();
 
-      if (entitlement) {
-        setPageState('paid');
+      if (!entitlement) {
+        const { data: artifact } = await supabase
+          .from('artifacts')
+          .select('content')
+          .eq('user_id', user.id)
+          .eq('type', 'identity_report')
+          .eq('status', 'ready')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!cancelled) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const name = (artifact?.content as any)?.cover?.named_identity ?? null;
+          setNamedIdentity(name);
+          setPageState('unpaid');
+        }
         return;
       }
 
-      // Fetch named identity for offer personalisation
-      const { data: artifact } = await supabase
-        .from('artifacts')
-        .select('content')
-        .eq('user_id', user.id)
-        .eq('type', 'identity_report')
-        .eq('status', 'ready')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const name = (artifact?.content as any)?.cover?.named_identity ?? null;
-      setNamedIdentity(name);
-      setPageState('unpaid');
+      await loadPathOptions(user.id);
     }
 
     init();
-  }, []);
+    return () => {
+      cancelled = true;
+      stopPolling();
+    };
+  }, [stopPolling]);
 
   async function handleCheckout() {
     if (!userId) return;
@@ -112,21 +189,54 @@ export default function PathPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId }),
     });
-    setPageState('paid');
     setGrantLoading(false);
+    window.location.reload();
   }
 
+  async function handleRetry() {
+    if (!userId) return;
+    await fetch('/api/generate-path-options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    window.location.reload();
+  }
+
+  async function handleConfirmSelect() {
+    if (!confirmPending || !userId || !pathOptionsArtifactId || selectingId) return;
+    const option = confirmPending;
+    setSelectingId(option.id);
+    setConfirmPending(null);
+    const res = await fetch('/api/select-path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        path_options_artifact_id: pathOptionsArtifactId,
+        path_id: option.id,
+      }),
+    });
+    if (res.ok) {
+      router.push('/plan');
+    } else {
+      setSelectingId(null);
+    }
+  }
+
+  // ── Loading / Verifying ───────────────────────────────────────────
   if (pageState === 'loading' || pageState === 'verifying') {
     return (
       <div className="flow-container generating-container">
         <div className="spin spinner" />
         <div className="text-center-col">
-          <h2>{pageState === 'verifying' ? 'Confirming your payment…' : ''}</h2>
+          {pageState === 'verifying' && <h2>Confirming your payment…</h2>}
         </div>
       </div>
     );
   }
 
+  // ── Anonymous ─────────────────────────────────────────────────────
   if (pageState === 'anonymous') {
     return (
       <GatedState
@@ -137,88 +247,205 @@ export default function PathPage() {
     );
   }
 
-  if (pageState === 'paid') {
+  // ── Generating ────────────────────────────────────────────────────
+  if (pageState === 'generating') {
     return (
-      <div className="flow-container page-inner">
-        <p className="eyebrow">YOUR PATH</p>
-        <h2>Your Path & Plan access is confirmed.</h2>
-        <p>Full Path and Plan content is coming in the next update.</p>
-
-        {/* DEV ONLY — remove before go-live */}
-        <div style={{ marginTop: '24px', textAlign: 'center' }}>
-          <p className="eyebrow" style={{ color: '#999', marginBottom: '8px' }}>DEV — entitlement active</p>
+      <div className="flow-container generating-container">
+        <div className="spin spinner" />
+        <div className="text-center-col">
+          <h2>Your Path Options are being prepared.</h2>
+          <p className="generating-desc">This usually takes about a minute.</p>
         </div>
       </div>
     );
   }
 
+  // ── Failed ────────────────────────────────────────────────────────
+  if (pageState === 'failed') {
+    return (
+      <div className="flow-container gated-container">
+        <p className="eyebrow">YOUR PATH</p>
+        <h2>Something went wrong.</h2>
+        <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
+        <button onClick={handleRetry} className="btn-primary">Try again</button>
+      </div>
+    );
+  }
+
   // ── Unpaid: offer page ────────────────────────────────────────────
-  const headline = namedIdentity
-    ? `See where ${namedIdentity} is heading.`
-    : 'See where your identity is pointing.';
+  if (pageState === 'unpaid') {
+    const headline = namedIdentity
+      ? `See where ${namedIdentity} is heading.`
+      : 'See where your identity is pointing.';
+
+    return (
+      <>
+        <div className="flow-container">
+          <div className="scroll-area" style={{ padding: '48px 24px 40px' }}>
+            <p className="eyebrow">YOUR PATH</p>
+
+            <h1>{headline}</h1>
+
+            <p>
+              Your Identity Report showed you how you&rsquo;re wired. Path & Plan shows you
+              what to do with it — four options aligned to your signatures, and a tailored
+              plan built around the one you choose.
+            </p>
+
+            <div className="deliverables-list">
+              {OFFER_FEATURES.map(f => (
+                <div key={f.title} className="offer-row">
+                  <div className="deliverable-icon">
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.6"
+                        strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="deliverable-label" style={{ fontWeight: 700 }}>{f.title}</span>
+                    <p style={{ margin: '2px 0 0', fontSize: '14px' }}>{f.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {process.env.NEXT_PUBLIC_PRICE_DISPLAY && (
+              <div className="stats-pill">
+                <span className="stats-label" style={{ fontWeight: 700, fontSize: '15px' }}>
+                  {process.env.NEXT_PUBLIC_PRICE_DISPLAY}
+                </span>
+                <span className="sep-dot" />
+                <span className="stats-label">One-time · Yours forever</span>
+              </div>
+            )}
+
+            <button
+              onClick={handleCheckout}
+              disabled={checkoutLoading}
+              className={`btn-primary${checkoutLoading ? ' btn-disabled' : ''}`}
+            >
+              {checkoutLoading ? 'Redirecting…' : 'Get My Path & Plan'}
+            </button>
+
+            <p className="form-helper">One-time payment · No subscription · Instant access</p>
+
+            {/* DEV ONLY — remove before go-live */}
+            <div style={{ marginTop: '32px', textAlign: 'center' }}>
+              <button
+                onClick={handleDevGrant}
+                disabled={grantLoading}
+                className="btn-link"
+                style={{ fontSize: '12px', color: '#999' }}
+              >
+                {grantLoading ? 'Granting…' : 'DEV: Grant entitlement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Ready: full report ────────────────────────────────────────────
+  if (!pathOptions) return null;
+
+  const { recap, meaning, reframe, why, options } = pathOptions;
 
   return (
-    <div className="flow-container">
-      <div className="scroll-area" style={{ padding: '48px 24px 40px' }}>
-        <p className="eyebrow">YOUR PATH</p>
-
-        <h1>{headline}</h1>
-
-        <p>
-          Your Identity Report showed you how you&rsquo;re wired. Path & Plan shows you
-          what to do with it — four options aligned to your signatures, and a tailored
-          plan built around the one you choose.
-        </p>
-
-        <div className="deliverables-list">
-          {OFFER_FEATURES.map(f => (
-            <div key={f.title} className="offer-row">
-              <div className="deliverable-icon">
-                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                  <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.6"
-                    strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div>
-                <span className="deliverable-label" style={{ fontWeight: 700 }}>{f.title}</span>
-                <p style={{ margin: '2px 0 0', fontSize: '14px' }}>{f.body}</p>
-              </div>
+    <>
+      {/* Confirm dialog */}
+      {confirmPending && (
+        <div className="dialog-overlay" role="dialog" aria-modal="true">
+          <div className="dialog-card">
+            <p className="eyebrow">CONFIRM YOUR CHOICE</p>
+            <h2>You&rsquo;ve chosen {confirmPending.name}.</h2>
+            <p>This will generate your personalised Plan. You can change your path later.</p>
+            <div className="dialog-actions">
+              <button
+                onClick={handleConfirmSelect}
+                disabled={!!selectingId}
+                className={`btn-primary${selectingId ? ' btn-disabled' : ''}`}
+              >
+                {selectingId ? 'Generating…' : 'Generate my Plan'}
+              </button>
+              <button onClick={() => setConfirmPending(null)} className="btn-link">
+                Not yet
+              </button>
             </div>
-          ))}
-        </div>
-
-        {process.env.NEXT_PUBLIC_PRICE_DISPLAY && (
-          <div className="stats-pill">
-            <span className="stats-label" style={{ fontWeight: 700, fontSize: '15px' }}>
-              {process.env.NEXT_PUBLIC_PRICE_DISPLAY}
-            </span>
-            <span className="sep-dot" />
-            <span className="stats-label">One-time · Yours forever</span>
           </div>
-        )}
+        </div>
+      )}
 
-        <button
-          onClick={handleCheckout}
-          disabled={checkoutLoading}
-          className={`btn-primary${checkoutLoading ? ' btn-disabled' : ''}`}
-        >
-          {checkoutLoading ? 'Redirecting…' : 'Get My Path & Plan'}
-        </button>
+      <div className="flow-container">
+        <div className="report-scroll">
 
-        <p className="form-helper">One-time payment · No subscription · Instant access</p>
+          <div className="report-cover">
+            <p className="eyebrow">Your Path Options</p>
+          </div>
 
-        {/* DEV ONLY — remove before go-live */}
-        <div style={{ marginTop: '32px', textAlign: 'center' }}>
-          <button
-            onClick={handleDevGrant}
-            disabled={grantLoading}
-            className="btn-link"
-            style={{ fontSize: '12px', color: '#999' }}
-          >
-            {grantLoading ? 'Granting…' : 'DEV: Grant entitlement'}
-          </button>
+          <div className="report-sections">
+
+            {/* Section 1: Recap */}
+            <div className="report-section">
+              <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
+              <p>{recap}</p>
+            </div>
+
+            {/* Section 2: Meaning */}
+            <div className="report-section">
+              <p className="eyebrow">WHAT THIS MEANS FOR WHAT&rsquo;S NEXT</p>
+              <p>{meaning}</p>
+            </div>
+
+            {/* Section 3: Reframe */}
+            <div className="report-section">
+              <p className="eyebrow">WHERE YOUR STORY IS POINTING</p>
+              <p>{reframe}</p>
+            </div>
+
+            {/* Section 4: Why */}
+            <div className="report-section">
+              <p className="eyebrow">WHY THE REFRAME HOLDS</p>
+              <p>{why}</p>
+            </div>
+
+            {/* Section 5: Options */}
+            <div className="report-section">
+              <p className="eyebrow">YOUR PATH OPTIONS</p>
+              {options.map((option, i) => (
+                <div key={option.id} className="constellation-card">
+                  <div className="constellation-card-header">
+                    <div className="constellation-badge">{i + 1}</div>
+                    <div className="constellation-header-info">
+                      <div className="constellation-sig-name">{option.name}</div>
+                      <div className="constellation-sig-meta">{option.thesis}</div>
+                    </div>
+                    <span className={`score-band-pill ${stretchClass(option.stretch)}`}>
+                      {option.stretch}
+                    </span>
+                  </div>
+                  <p className="evidence-analysis">{option.body}</p>
+                  <div className="option-card-sigs">
+                    {option.signatures_engaged.map(sig => (
+                      <span key={sig} className="chip-tag">{sig}</span>
+                    ))}
+                  </div>
+                  <div className="option-card-footer">
+                    <button
+                      onClick={() => setConfirmPending(option)}
+                      disabled={!!selectingId}
+                      className={`btn-primary${selectingId ? ' btn-disabled' : ''}`}
+                    >
+                      {selectingId === option.id ? 'Generating…' : 'Select This Path →'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
