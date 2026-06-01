@@ -182,14 +182,22 @@ export interface PathOptionsArtifactContent {
 
 export interface PathPlanPhase {
   phase_number: number;
-  title: string;
+  name: string;
+  outcome: string;
   estimated_duration: string;
   milestones: string[];
   signatures_leaned_on: string[];
+  body: string;
+}
+
+export interface StartHereAction {
+  action: string;
+  why: string;
 }
 
 export interface PathPlanArtifactContent {
   plan_frame: string;
-  full_path: PathPlanPhase[];  // 3-5 phases
-  start_here: string[];        // 5-7 actions
+  full_path: PathPlanPhase[];      // 3-5 phases
+  start_here: StartHereAction[];   // 5-7 actions
+  implement_bridge: string;
 }

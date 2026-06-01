@@ -28,7 +28,7 @@ async function runGeneration(artifactId: string, answers: DiscoveryAnswer[], nam
   try {
     // Step A — Identity Analysis
     const analysisResponse = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: DETECTION_PROMPT },
@@ -44,7 +44,7 @@ async function runGeneration(artifactId: string, answers: DiscoveryAnswer[], nam
 
     // Step B — Report Generation
     const reportResponse = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: LAYER_2_PROMPT },
