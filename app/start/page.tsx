@@ -36,32 +36,6 @@ export default function StartPage() {
   const [contactError, setContactError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // TEMPORARY TEST HELPER — remove before go-live
-  useEffect(() => {
-    if (!window.location.search.includes('test=1')) return;
-    const testAnswers = QUESTIONS.map(q => ({
-      question_number: q.number,
-      question_text: q.question,
-      answer_text: [
-        'I grew up in a mid-sized city, youngest of three. My parents ran a small business so I was always around the chaos of building something. I moved cities twice for work, got married, have two kids. Life has been full but lately it feels like I\'m running hard without knowing where I\'m going.',
-        'I\'ve spent 15 years in B2B SaaS — started as a product manager, moved into VP roles, then left to co-found a startup that raised a seed round but didn\'t find product-market fit. I shut it down two years ago and joined a scale-up as Head of Product. Good money, good team, but something feels off.',
-        'Three moments stand out. Leaving my first corporate job to join a tiny startup — everyone thought I was mad but it was the best decision I made. The co-founder falling out that nearly killed the startup — I rebuilt it alone and learned what I\'m actually made of. And shutting the company down — hardest thing I\'ve done, but I did it with integrity and people respected that.',
-        'I come alive when I\'m building something from scratch or fixing something broken that others have given up on. Strategy sessions where I can connect dots across departments. Mentoring someone who suddenly gets it. I drain fast in bureaucratic environments, endless meetings with no decisions, and work that\'s purely execution without thinking.',
-        'I keep ending up as the person who has to make sense of the mess. Whether it\'s a product roadmap, a team conflict, or a business model that isn\'t working — people bring me the hard problems. I also keep finding myself in organisations that are growing faster than their systems, which I find energising at first and exhausting eventually.',
-        'My current role is well-defined and well-compensated but it\'s not mine. I\'m executing someone else\'s vision. I can see three things they\'re getting wrong and I\'ve said so, but the politics mean nothing changes. I feel like I\'m borrowing someone else\'s clothes.',
-        'I\'ve started leaving meetings early in my head. My output is still high but my investment is low. I\'ve stopped suggesting ideas because the ROI on the conversation isn\'t worth it. My partner says I seem elsewhere. That\'s probably accurate.',
-        'If I\'m honest, about three years. The startup shutdown hit hard but I thought joining a bigger company would reset things. It hasn\'t. I\'ve been managing the discomfort rather than addressing it.',
-        'Stakeholder management where I have to move slowly for political reasons. Writing documents that will be read by no one. Performance reviews where I have to translate real feedback into corporate language. Anything that requires me to pretend I care about something I don\'t.',
-        'Building the next thing. I have two ideas I\'ve been sitting on for 18 months. I keep saying I\'ll explore them when things settle down, but things don\'t settle down — I just keep adding more to the pile. I\'m also avoiding a direct conversation with my CEO about my actual role.',
-        'Solving a genuinely hard problem with a small, sharp team. Whiteboard sessions that turn into something real. When someone I\'ve mentored ships something they\'re proud of. Reading and thinking — I protect Sunday mornings for this and it\'s the most alive I feel all week.',
-        'About 18 months ago I led a full product strategy reset after an acquisition. I had real authority, a clear problem, and a team that trusted me. I worked longer hours than I do now but I didn\'t notice. That\'s probably the answer to everything.',
-        'I would stop executing someone else\'s vision and start building my own. That\'s the honest answer. I know what I\'m good at, I know the problem I want to solve, and I keep waiting for permission that isn\'t coming.',
-      ][q.number - 1],
-    }));
-    localStorage.setItem('zyrro_discovery_answers', JSON.stringify(testAnswers));
-    setScreen('contact');
-  }, []);
-
   useEffect(() => {
     const stored = localStorage.getItem('zyrro_discovery_answers');
     if (!stored) return;

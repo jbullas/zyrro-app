@@ -135,3 +135,12 @@ artifacts table (type: identity_report).
 - Never commit directly to main
 - Merge dev to main only when ready to go live
 - Commit and push to dev at end of every session
+
+---
+
+## Framework Reference
+Foundational framework documents in docs/framework/:
+- zyrro_detection_engine_spec_v_1.md
+- zyrro_identity_report_blueprint_v_1.md
+- zyrro_named_identity_system_v_1.md
+- zyrro_narrative_transformation_rules_v_1.md
