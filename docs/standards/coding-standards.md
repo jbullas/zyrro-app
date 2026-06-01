@@ -97,6 +97,22 @@ Do not hardcode font sizes inline.
   gated state markup across pages
 - The page handles gating, not the nav
 
+## Database / Supabase
+- Every schema change (table, column, constraint,
+  RLS policy, function) must be a timestamped
+  migration file in supabase/migrations/,
+  committed to the repo
+- The committed migration is the source of truth
+  — never change schema only in the Supabase
+  dashboard or SQL editor without a matching
+  committed migration
+- Running a migration in Supabase is a separate
+  manual step; note in the changelog when a
+  migration has been applied
+- Migrations are append-only: never edit or
+  delete one that has already been applied —
+  correct mistakes with a new migration
+
 ## Session continuity
 At the start of each session, read:
 - docs/standards/product-decisions.md
