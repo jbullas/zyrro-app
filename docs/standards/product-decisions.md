@@ -9,9 +9,9 @@ All coding rules: docs/standards/coding-standards.md
 - / — homepage (marketing)
 - /start — questionnaire
 - /identity — Identity Signature Report
-- /paths — path options (gated; placeholder content for authenticated users)
+- /path — path options (gated; placeholder content for authenticated users)
 - /plan — action plan (gated; placeholder content for authenticated users)
-- /chat — mentor chat (gated; working chat UI with guest/free plan and conversation persistence)
+- /mentor — mentor chat (gated; working chat UI with guest/free plan and conversation persistence)
 - /dashboard — logged-in home (gated; placeholder content for authenticated users)
 - /login — magic link login
 - /signup — magic link signup
@@ -29,14 +29,14 @@ The page handles gating, not the nav.
 Anonymous:
 - Gated state on all app pages
 - /identity: single CTA "Start the questionnaire" → /start
-- /dashboard, /paths, /plan, /chat: two CTAs —
+- /dashboard, /path, /plan, /mentor: two CTAs —
   "Log in" → /login and "Start the questionnaire" → /start
 
 Registered (all authenticated users, no tier enforcement yet):
 - Identity Signature Report on /identity
   Spec: docs/standards/identity-signature-report.md
-- /paths, /plan, /dashboard: placeholder "coming soon" content
-- /chat: working mentor chat (guest history handed off on sign-in)
+- /path, /plan, /dashboard: placeholder "coming soon" content
+- /mentor: working mentor chat (guest history handed off on sign-in)
 
 Note: paid/subscriber tier enforcement is not yet implemented
 in the code. All authenticated users reach the same content.
@@ -125,7 +125,7 @@ artifacts table (type: identity_report).
 - lib/prompts/identity-report.ts — report generation prompt
 - app/api/generate-report/route.ts — POST endpoint; upserts
   profile, inserts discovery_answers, fires pipeline
-- app/api/chat/route.ts — POST endpoint; handles guest/free
+- app/api/mentor/route.ts — POST endpoint; handles guest/free
   plan chat and layer 2 upgrade
 - lib/conversations.ts — create conversation records
 - lib/messages.ts — save messages to DB

@@ -262,7 +262,7 @@ Bullet points:
 
 CTA: Primary button
 "See what your pattern is pointing toward →"
-→ /paths (Paid tier gate)
+→ /path (Paid tier gate)
 
 ---
 

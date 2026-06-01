@@ -709,7 +709,7 @@ export default function IdentityPage() {
             <li className="limits-bullet">It does not show you which direction fits who you&rsquo;ve become</li>
             <li className="limits-bullet">It does not give you a path or a plan</li>
           </ul>
-          <Link href="/paths" className="btn-primary">
+          <Link href="/path" className="btn-primary">
             See what your pattern is pointing toward →
           </Link>
         </div>

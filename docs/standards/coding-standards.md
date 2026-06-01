@@ -66,7 +66,7 @@ Do not hardcode font sizes inline.
 
 ## Bottom Navigation
 - 5 fixed tabs always: Dashboard, Identity, 
-  Paths, Plan, Chat
+  Path, Plan, Mentor
 - Logged-in: visible on all pages
 - Logged-out: hidden on all pages
 - All tabs full colour #1E1E1E at all times
@@ -81,9 +81,9 @@ Do not hardcode font sizes inline.
 ## URLs
 - /start — questionnaire
 - /identity — identity report
-- /paths — path options
+- /path — path options
 - /plan — action plan
-- /chat — mentor chat
+- /mentor — mentor chat
 - /dashboard — logged-in home
 
 ## Gated pages

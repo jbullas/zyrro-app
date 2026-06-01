@@ -7,16 +7,16 @@ import {
   IconShield,
   IconArrowFork,
   IconCalendar,
-  IconMessages,
+  IconCompass,
 } from '@tabler/icons-react';
 import { createClient } from '@/utils/supabase/client';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: IconLayoutDashboard },
   { label: 'Identity',  href: '/identity',  icon: IconShield },
-  { label: 'Paths',     href: '/paths',     icon: IconArrowFork },
+  { label: 'Path',      href: '/path',      icon: IconArrowFork },
   { label: 'Plan',      href: '/plan',      icon: IconCalendar },
-  { label: 'Chat',      href: '/chat',      icon: IconMessages },
+  { label: 'Mentor',    href: '/mentor',    icon: IconCompass },
 ];
 
 export default function BottomNav() {

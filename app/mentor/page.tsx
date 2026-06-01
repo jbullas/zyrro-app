@@ -154,7 +154,7 @@ export default function ChatPage() {
           console.log("Chat page conversation created:", conversation);
         }
 
-        const res = await fetch("/api/chat", {
+        const res = await fetch("/api/mentor", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -248,7 +248,7 @@ export default function ChatPage() {
           activeConversationId = conversation.id;
         }
 
-        const res = await fetch("/api/chat", {
+        const res = await fetch("/api/mentor", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -318,7 +318,7 @@ export default function ChatPage() {
         });
       }
 
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/mentor", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

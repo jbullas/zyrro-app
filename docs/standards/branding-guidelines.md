@@ -102,9 +102,9 @@ Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 
 * Dashboard: ti-layout-dashboard  
 * Identity: ti-shield  
-* Paths: ti-arrow-fork  
+* Path: ti-arrow-fork  
 * Plan: ti-calendar  
-* Chat: ti-messages  
+* Mentor: ti-compass  
 * Login: ti-login (pre-registration only)  
 * Share: ti-share  
 * Arrow: ti-arrow-right (active/CTA)
