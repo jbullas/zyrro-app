@@ -6,6 +6,7 @@ import { createConversation } from "@/lib/conversations";
 import { saveMessage } from "@/lib/messages";
 import { createClient } from "@/utils/supabase/client";
 import SignupModal from "@/components/SignupModal";
+import GatedState from "@/components/GatedState";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -376,15 +377,11 @@ export default function ChatPage() {
 
   if (authChecked && !isAuthenticated) {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">ZYRRO MENTOR</p>
-        <h2>The Zyrro mentor is ready when you are.</h2>
-        <p>Complete your Identity Report to unlock the mentor.</p>
-        <div className="gated-actions">
-          <a href="/login" className="btn-secondary btn-secondary-fill">Log in</a>
-          <a href="/start" className="btn-secondary btn-secondary-fill">Start the questionnaire</a>
-        </div>
-      </div>
+      <GatedState
+        eyebrow="ZYRRO MENTOR"
+        heading="The Zyrro mentor is ready when you are."
+        body="Complete your Identity Report to unlock the mentor."
+      />
     );
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import Link from 'next/link';
+import GatedState from '@/components/GatedState';
 
 export default function PlanPage() {
   const [authChecked, setAuthChecked] = useState(false);
@@ -20,15 +20,11 @@ export default function PlanPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">YOUR PLAN</p>
-        <h2>Your action plan is built around your chosen path.</h2>
-        <p>Choose a path to unlock your plan.</p>
-        <div className="gated-actions">
-          <Link href="/login" className="btn-secondary btn-secondary-fill">Log in</Link>
-          <Link href="/start" className="btn-secondary btn-secondary-fill">Start the questionnaire</Link>
-        </div>
-      </div>
+      <GatedState
+        eyebrow="YOUR PLAN"
+        heading="Your action plan is built around your chosen path."
+        body="Choose a path to unlock your plan."
+      />
     );
   }
 

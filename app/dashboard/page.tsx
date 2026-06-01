@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import Link from 'next/link';
+import GatedState from '@/components/GatedState';
 
 export default function DashboardPage() {
   const [authChecked, setAuthChecked] = useState(false);
@@ -20,15 +20,11 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">YOUR DASHBOARD</p>
-        <h2>Your identity overview is waiting.</h2>
-        <p>Complete the questionnaire to unlock your personal dashboard.</p>
-        <div className="gated-actions">
-          <Link href="/login" className="btn-secondary btn-secondary-fill">Log in</Link>
-          <Link href="/start" className="btn-secondary btn-secondary-fill">Start the questionnaire</Link>
-        </div>
-      </div>
+      <GatedState
+        eyebrow="YOUR DASHBOARD"
+        heading="Your identity overview is waiting."
+        body="Complete the questionnaire to unlock your personal dashboard."
+      />
     );
   }
 

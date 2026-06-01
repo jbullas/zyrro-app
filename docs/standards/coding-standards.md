@@ -80,8 +80,12 @@ Do not hardcode font sizes inline.
 ## Gated pages
 - Non-registered users see a simple gated state 
   on all app pages
-- Gated state: eyebrow, heading, body line, 
-  single CTA: "Start the questionnaire" → /start
+- Gated state: eyebrow, heading, body line, then:
+  1. .btn-primary "Start the questionnaire" → /start
+  2. .btn-link "Already have an account? Log in" → /login
+- Use the shared <GatedState> component in
+  components/GatedState.tsx — never duplicate
+  gated state markup across pages
 - The page handles gating, not the nav
 
 ## Session continuity
