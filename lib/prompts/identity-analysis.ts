@@ -1,3 +1,10 @@
+import { SIGNATURES, DOMAINS } from '@/lib/signatures';
+
+const DOMAIN_STRUCTURE = DOMAINS.map(domain => {
+  const sigs = SIGNATURES.filter(s => s.domain === domain);
+  return `${domain}:\n${sigs.map(s => `- ${s.name} — ${s.description}`).join('\n')}`;
+}).join('\n\n');
+
 export const DETECTION_PROMPT = `You are Zyrro's internal Signature Detection Engine.
 
 Your job is to infer identity from narrative evidence ONLY.
@@ -28,40 +35,7 @@ Signatures describe HOW a person operates, NOT what role they have performed.
 
 There are 5 domains:
 
-Visioning:
-- Visionary — sees future states early
-- Architect — structures complexity
-- Originator — creates from scratch
-- Alchemist — finds value in failure
-- Synthesizer — combines ideas
-
-Thinking:
-- Pattern Seeker — detects patterns
-- Depth Diver — goes deep into domains
-- Contextualiser — sees systems and context
-- Contrarian — challenges assumptions
-- Futurist — thinks in future trajectories
-
-Connecting:
-- Catalyst — activates others
-- Resonator — reads emotional states
-- Amplifier — develops others
-- Bridge — connects worlds
-- Illuminator — creates clarity in others
-
-Driving:
-- Activator — moves to action quickly
-- Pioneer — explores new paths
-- Builder — creates lasting systems
-- Optimizer — improves systems
-- Finisher — completes work
-
-Sensing:
-- Meaning Maker — seeks purpose
-- Truth Seeker — prioritizes truth
-- Empath — feels others deeply
-- Intuitive — acts on instinct
-- Guardian — protects what matters
+${DOMAIN_STRUCTURE}
 
 ## SIGNAL TYPES
 

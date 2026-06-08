@@ -11,6 +11,7 @@ import {
   IconAnchor, IconEye, IconHeart, IconHandStop, IconShieldLock,
   IconShield,
 } from '@tabler/icons-react';
+import { type SignatureName } from '@/lib/signatures';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'generating' | 'failed' | 'ready';
 
@@ -115,7 +116,7 @@ const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label:
   { key: 'stress_pattern',     label: 'STRESS PATTERN' },
 ];
 
-const SIGNATURE_ICONS: Record<string, typeof IconShield> = {
+const SIGNATURE_ICONS: Record<SignatureName, typeof IconShield> = {
   'Visionary':     IconTelescope,
   'Architect':     IconBuildingSkyscraper,
   'Originator':    IconSparkles,
@@ -451,7 +452,7 @@ export default function IdentityPage() {
   } = report;
 
   const [nameLine1, nameLine2] = splitNamedIdentity(cover.named_identity);
-  const SignatureIcon = SIGNATURE_ICONS[primary_constellation[0]?.name ?? ''] ?? IconShield;
+  const SignatureIcon = SIGNATURE_ICONS[(primary_constellation[0]?.name ?? '') as SignatureName] ?? IconShield;
 
   return (
     <div className="flow-container">
@@ -564,7 +565,7 @@ export default function IdentityPage() {
 
           {/* Section 4: Primary Constellation Deep Analysis */}
           <div id="section-4" className="report-section">
-            <p className="eyebrow">PRIMARY CONSTELLATION</p>
+            <p className="eyebrow">PRIMARY SIGNATURES</p>
             {primary_constellation.map((sig, i) => {
               const band = getScoreBand(sig.score);
               return (
