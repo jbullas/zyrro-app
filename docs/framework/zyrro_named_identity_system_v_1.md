@@ -2,7 +2,7 @@
 
 ## Core Objective
 
-Generate a concise identity name that captures the user’s full Primary Signature Constellation.
+Generate a concise identity name that captures the user’s full set of **Primary Signatures**.
 
 The name must feel:
 
@@ -46,6 +46,9 @@ The Awakening Architect
 That compresses multiple signatures into one coherent identity.
 
 ---
+
+Canonical signature names and meanings: see
+`docs/framework/zyrro_detection_engine_spec_v_1.md`.
 
 # Naming Inputs
 
@@ -237,7 +240,7 @@ Best used as modifier.
 
 Output options:
 - Pattern
-n
+
 ---
 
 ### Depth Diver
@@ -571,15 +574,19 @@ Must be.
 
 Always:
 
-**THE [Named Identity]**
+**The [Named Identity]**
 
 Examples:
 
-- THE STRATEGIC BUILDER  
-- THE AWAKENING ARCHITECT  
-- THE PATTERN CATALYST  
-- THE TRUTHFUL OPERATOR  
-- THE VISIONARY GUIDE
+- The Strategic Builder  
+- The Awakening Architect  
+- The Pattern Catalyst  
+- The Truthful Operator  
+- The Visionary Guide
+
+Generated text uses title case. Display uppercasing
+is presentational (the `.named-identity` rule in
+`globals.css`), not part of the model output.
 
 Consistent formatting.
 Always.

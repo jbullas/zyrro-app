@@ -6,13 +6,17 @@ All coding rules: docs/standards/coding-standards.md
 ---
 
 ## URLs
+
+`app/` is the source of truth for which routes exist.
+This section is the tier/purpose map, not the route source.
+
 - / — homepage (marketing)
 - /start — questionnaire
-- /identity — Identity Signature Report
-- /path — path options (gated; placeholder content for authenticated users)
-- /plan — action plan (gated; placeholder content for authenticated users)
-- /mentor — mentor chat (gated; working chat UI with guest/free plan and conversation persistence)
-- /dashboard — logged-in home (gated; placeholder content for authenticated users)
+- /identity — Identity Signature Report (Registered)
+- /path — Your Path Options (Paid (one-time); paywall gated)
+- /plan — Your Path Plan (Paid (one-time); paywall gated)
+- /mentor — mentor chat (guest and Registered; conversation persistence)
+- /dashboard — logged-in home (Registered; placeholder content)
 - /login — magic link login
 - /signup — magic link signup
 
@@ -26,28 +30,40 @@ The page handles gating, not the nav.
 ---
 
 ## User States and Deliverables
+
+Canonical tier labels: **Anonymous** · **Registered** · **Paid (one-time)** · **Subscriber**
+
 Anonymous:
 - Gated state on all app pages
 - /identity: single CTA "Start the questionnaire" → /start
 - /dashboard, /path, /plan, /mentor: two CTAs —
   "Log in" → /login and "Start the questionnaire" → /start
 
-Registered (all authenticated users, no tier enforcement yet):
+Registered (authenticated users on the free plan):
 - Identity Signature Report on /identity
   Spec: docs/standards/identity-signature-report.md
-- /path, /plan, /dashboard: placeholder "coming soon" content
 - /mentor: working mentor chat (guest history handed off on sign-in)
+- /path, /plan: paywall gated (Paid (one-time) required)
+- /dashboard: placeholder "coming soon" content
 
-Note: paid/subscriber tier enforcement is not yet implemented
-in the code. All authenticated users reach the same content.
+Paid (one-time):
+- Registered deliverables, plus:
+- /path — Your Path Options
+  Spec: docs/framework/zyrro_path_plan_blueprint_v_1.md
+- /plan — Your Path Plan
+  Spec: docs/framework/zyrro_path_plan_blueprint_v_1.md
+
+Subscriber:
+- Tier label established; no subscription entitlement or gating
+  exists in code. Stripe checkout is one-time payment only
+  (`mode: 'payment'`). Future tier.
 
 ---
 
 ## Questionnaire (/start)
 - Multi-screen, app drives screens, no AI calls
-- questions sourced from lib/identity-questions.ts
-- To update questions: edit lib/identity-questions.ts
-  and keep docs/standards/identity-questions.md in sync
+- `lib/identity-questions.ts` is the single source
+  for question text and hints
 - One question per screen with progress bar
 - Back and Continue navigation
 - Continue disabled until textarea has
@@ -125,8 +141,10 @@ artifacts table (type: identity_report).
 - lib/prompts/identity-report.ts — report generation prompt
 - app/api/generate-report/route.ts — POST endpoint; upserts
   profile, inserts discovery_answers, fires pipeline
-- app/api/mentor/route.ts — POST endpoint; handles guest/free
-  plan chat and layer 2 upgrade
+- app/api/mentor/route.ts — POST endpoint; handles guest and
+  Registered (`free` plan) chat, and generates the **Registered**
+  Identity Signature Report when a guest who completed the
+  questionnaire registers (**guest → Registered**)
 - lib/conversations.ts — create conversation records
 - lib/messages.ts — save messages to DB
 - lib/artifact-schemas.ts — artifact type definitions
@@ -136,20 +154,13 @@ artifacts table (type: identity_report).
 ## Standards Files
 - docs/standards/coding-standards.md
 - docs/standards/branding-guidelines.md
-- docs/standards/identity-questions.md
 - docs/standards/product-decisions.md
 - docs/standards/identity-signature-report.md
 - docs/standards/identity-signature-icons.md
 
 ---
 
-## Git Workflow
-- All development on dev branch
-- dev branch = staging site on Vercel
-- main branch = live site at zyrro.ai
-- Never commit directly to main
-- Merge dev to main only when ready to go live
-- Commit and push to dev at end of every session
+For git workflow, see `AGENTS.md`.
 
 ---
 
@@ -159,3 +170,4 @@ Foundational framework documents in docs/framework/:
 - zyrro_identity_report_blueprint_v_1.md
 - zyrro_named_identity_system_v_1.md
 - zyrro_narrative_transformation_rules_v_1.md
+- zyrro_path_plan_blueprint_v_1.md

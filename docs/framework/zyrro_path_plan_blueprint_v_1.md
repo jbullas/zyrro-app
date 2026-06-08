@@ -147,10 +147,6 @@ Six sections, in order.
 
 Recap the identity so the directional work has a foundation.
 
-### Length
-
-100–180 words
-
 ### Must include
 
 - the named identity
@@ -172,10 +168,6 @@ Re-deliver the identity report. This is a recap, not a repeat.
 Explain what the identity pattern means going forward.
 
 Not just why it exists — what it implies for what comes next.
-
-### Length
-
-250–400 words
 
 ### Must establish
 
@@ -205,10 +197,6 @@ Shift how the user holds their pattern: from limitation or stuckness to directio
 
 This is the pivot of the entire deliverable.
 
-### Length
-
-200–350 words
-
 ### Required
 
 1. **The current frame** — how the user has likely been reading their situation (often as a problem, plateau, or friction). Ground in their stated frustrations.
@@ -235,10 +223,6 @@ Example shape:
 ### Purpose
 
 Justify the reframe so it lands as truth, not motivation.
-
-### Length
-
-150–250 words
 
 ### Must
 
@@ -270,6 +254,9 @@ Exactly 4.
 
 ### Each option is a structured object
 
+Canonical field set: see `lib/artifact-schemas.ts`.
+Per-field content rules below.
+
 Required fields per option:
 
 #### id
@@ -294,7 +281,7 @@ One sentence. 8–18 words. Where this option leads.
 
 #### body
 
-150–250 words. Must contain:
+Must contain:
 
 1. **What this option is** — the direction, concretely.
 2. **Why it fits you** — which of the user's named signatures it draws on.
@@ -372,10 +359,6 @@ Resolves in order:
 
 Connect the plan to the chosen option in one short opening.
 
-### Length
-
-60–120 words
-
 ### Must state
 
 - the chosen option by name
@@ -395,6 +378,9 @@ Show the complete A->B for the chosen option, so the user sees the whole journey
 3–5 phases, in sequence.
 
 ### Each phase is a structured object
+
+Canonical field set: see `lib/artifact-schemas.ts`.
+Per-field content rules below.
 
 Required fields per phase:
 
@@ -424,7 +410,7 @@ Which of the chosen option's `signatures_engaged` this phase draws on most.
 
 #### body
 
-80–150 words. What this phase is, why it comes here in the sequence, what makes it hard.
+What this phase is, why it comes here in the sequence, what makes it hard.
 
 ### Arc rule
 
@@ -465,10 +451,6 @@ These actions must be wrong for a different option. If a Start Here list would s
 ### Purpose
 
 Point from the plan to ongoing implementation.
-
-### Length
-
-60–120 words
 
 ### Must state
 

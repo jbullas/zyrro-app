@@ -23,9 +23,9 @@ submission, simultaneously with magic link
 email. Do not wait for email confirmation.
 
 Use a capable model — not a lightweight one.
-The report is 2,500–4,500 words of highly
-structured, evidence-grounded personalised
-prose. Model quality directly affects output
+The report is highly structured,
+evidence-grounded personalised prose.
+Model quality directly affects output
 quality. All model configuration in
 environment variables only.
 
@@ -38,9 +38,8 @@ Versioned: new version created on each
 regeneration. Previous versions never
 overwritten.
 
-Status field migration required:
-ALTER TABLE artifacts
-ADD COLUMN status TEXT DEFAULT 'generating';
+Each report artifact carries a `status` of
+`generating | ready | failed`.
 
 ---
 
@@ -86,11 +85,8 @@ Layout: centred
 Elements:
 - Report metadata: "Identity Signature Report",
   eyebrow style, centred
-- Identity badge: gradient shield badge,
-  80x88px, SVG shield path with brand gradient
-  fill, Tabler icon centred inside based on #1
-  primary signature. See
-  identity-signature-icons.md for mapping.
+- Identity badge: see identity-signature-icons.md
+  for full badge spec and icon mapping.
 - Named Identity: display heading, centred,
   line break between modifier and core word
 - Identity Thesis: 15px italic, #1E1E1E,
@@ -131,7 +127,7 @@ is already true about how you operate."
 ### 3. Signature Profile
 Three cards:
 
-Card 1 — Primary Constellation (Top 5):
+Card 1 — Primary Signatures (Top 5):
 - Gradient numbered circle (1-5)
 - Signature name + domain + Frequency × Intensity
 - Gradient score bar + score out of 25
@@ -140,21 +136,21 @@ Card 2 — Secondary Signatures (next 3):
 - Muted numbered circle (6-8)
 - Same layout as primary, muted treatment
 
-Card 3 — Domain Profile:
+Card 3 — Identity Profile:
 - Pentagon radar chart (Chart.js)
-- 5 domains: Visioning, Thinking, Driving,
-  Sensing, Connecting
+- 5 domains: Visioning, Thinking, Connecting,
+  Driving, Sensing
 - Values 0-100
 
-### 4. Primary Constellation — Deep Analysis
+### 4. Primary Signatures — Deep Analysis
 5 cards, one per primary signature.
 
 Each card:
 - Gradient numbered badge (1-5)
 - Signature name + domain + score
 - Score band: Dominant / Strong / Moderate / Weak
-- Core statement: 8-20 words
-- Evidence analysis: 150-250 words
+- Core statement
+- Evidence analysis:
   Follows: Pattern → Evidence → Meaning
   Minimum 2 real story anchors
   Present tense for identity, past for evidence
@@ -177,8 +173,8 @@ Confidence: Low / Mid / High
 Each card:
 - Muted numbered badge
 - Signature name + domain + score
-- Core statement: 8-20 words
-- Analysis: 80-150 words
+- Core statement
+- Analysis:
   Where it appears, supporting evidence,
   why it matters as a latent capacity
 
@@ -187,7 +183,7 @@ Single card.
 
 Content:
 - Named Identity as card heading
-- Synthesis: 200-350 words
+- Synthesis:
   How the Top 5 interact as one integrated
   operating system
   Describes: operating style, decision style,
@@ -198,7 +194,7 @@ Content:
 
 ### 7. How You Operate
 Single card with 5 subsections divided by
-hairline borders. Each 80-150 words.
+hairline borders.
 
 - Work Style: pace, structure, environment needs
 - Thinking Style: how they process and conclude
@@ -233,8 +229,8 @@ Flow Theory — Csikszentmihalyi (1990)
 Self-Determination Theory — Deci & Ryan (1985)
 Neural Patterning — Doidge (2007)
 
-Each pillar: title + 50-100 word explanation
-connecting the theory to the user's report.
+Each pillar: title + explanation connecting
+the theory to the user's report.
 
 ### 11. Limits of This Report
 Hardcoded. Dark purple background.
@@ -278,7 +274,7 @@ AI-generated (personalised):
 - Named Identity and Identity Thesis
 - Identity Context line
 - All signature scores and breakdowns
-- All 5 primary constellation analyses
+- All 5 Primary Signature analyses
 - All 3 secondary signature analyses
 - Constellation Synthesis
 - How You Operate (all 5 subsections)

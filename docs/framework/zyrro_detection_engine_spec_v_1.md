@@ -1,5 +1,9 @@
 # Zyrro Detection Engine Spec v1
 
+This is the canonical source for the 25 Identity Signature
+names and their meanings. Other docs reference this file;
+they do not re-list the taxonomy.
+
 ## Core Detection Principle
 
 Zyrro does **not** detect what the user says they are.

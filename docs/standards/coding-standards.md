@@ -5,13 +5,7 @@ Always read docs/standards/branding-guidelines.md
 before writing any code, creating any component, 
 or modifying any styles.
 
-## Git
-- Always work on the dev branch
-- Never commit or push to main directly
-- Verify current branch with git branch before 
-  starting any work
-- If not on dev, run git checkout dev before 
-  proceeding
+For branch and commit protocol, see `AGENTS.md`.
 
 ## Local verification
 - Before committing code changes, run them locally
@@ -40,12 +34,6 @@ Follow the type scale defined in
 docs/standards/branding-guidelines.md exactly.
 Do not hardcode font sizes inline.
 
-## Font weights
-- 400: body text, descriptions
-- 500: secondary labels
-- 600: card subtitles, nav labels
-- 700: headings, named identity, CTAs, scores
-
 ## Buttons
 - Primary CTA: .btn-primary only
 - Progress actions: .btn-secondary only
@@ -56,21 +44,12 @@ Do not hardcode font sizes inline.
 - Never hardcode colour values inline
 - Always use the CSS classes or variables 
   defined in globals.css
-- Brand gradient exact spec:
-  linear-gradient(160deg, #FE5618 0%, #FE5618 12%, 
-  #C60567 28%, #510085 52%, #510085 100%)
+- See branding-guidelines.md for brand colour
+  intent and usage rules
 
 ## Components
 - Reusable UI patterns must be React components
 - Never duplicate markup across pages
-
-## Bottom Navigation
-- 5 fixed tabs always: Dashboard, Identity, 
-  Path, Plan, Mentor
-- Logged-in: visible on all pages
-- Logged-out: hidden on all pages
-- All tabs full colour #1E1E1E at all times
-- Active tab shows gradient indicator bar only
 
 ## Page layout
 - All pages use the same max-width container 
@@ -78,20 +57,11 @@ Do not hardcode font sizes inline.
 - Content and bottom nav must be the same width
 - Screen padding: 16-18px horizontal
 
-## URLs
-- /start — questionnaire
-- /identity — identity report
-- /path — path options
-- /plan — action plan
-- /mentor — mentor chat
-- /dashboard — logged-in home
+Routes are defined by `app/`. See `product-decisions.md`
+for the tier/purpose map.
 
 ## Gated pages
-- Non-registered users see a simple gated state 
-  on all app pages
-- Gated state: eyebrow, heading, body line, then:
-  1. .btn-primary "Start the questionnaire" → /start
-  2. .btn-link "Already have an account? Log in" → /login
+- Non-registered users see a gated state on all app pages
 - Use the shared <GatedState> component in
   components/GatedState.tsx — never duplicate
   gated state markup across pages
@@ -113,9 +83,4 @@ Do not hardcode font sizes inline.
   delete one that has already been applied —
   correct mistakes with a new migration
 
-## Session continuity
-At the start of each session, read:
-- docs/standards/product-decisions.md
-- docs/changelogs/ — most recent file first
-This ensures Claude Code has full context 
-of current state before making any changes.
+For session start protocol, see `AGENTS.md`.

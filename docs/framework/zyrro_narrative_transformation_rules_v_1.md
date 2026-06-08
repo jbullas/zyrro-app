@@ -56,7 +56,7 @@ In this order.
 
 ---
 
-## Layer 1 — Pattern
+## Pattern
 
 State what the signature fundamentally does.
 
@@ -77,7 +77,7 @@ Create immediate recognition.
 
 ---
 
-## Layer 2 — Evidence
+## Evidence
 
 Anchor the pattern in the user’s story.
 
@@ -102,7 +102,7 @@ Evidence makes identity believable.
 
 ---
 
-## Layer 3 — Meaning
+## Meaning
 
 Explain why it matters.
 
@@ -327,7 +327,7 @@ Not complimentary.
 
 # The No Coaching Rule
 
-Layer 2 is descriptive.
+The **Registered** tier is descriptive.
 Not directional.
 
 Do not say:
@@ -337,7 +337,7 @@ Do not say:
 - your next step  
 - now it’s time
 
-That belongs to Layer 3.
+That belongs to the **Paid (one-time)** tier.
 
 ---
 
@@ -365,10 +365,6 @@ Critical.
 
 ## Primary Signatures
 
-Word count:
-
-**150–250 words each**
-
 Must contain:
 
 1. Signature truth  
@@ -380,10 +376,6 @@ Must contain:
 
 ## Secondary Signatures
 
-Word count:
-
-**80–150 words each**
-
 Must contain:
 
 1. Where it appears  
@@ -393,10 +385,6 @@ Must contain:
 ---
 
 ## Constellation Synthesis
-
-Word count:
-
-**200–350 words**
 
 Must explain:
 
