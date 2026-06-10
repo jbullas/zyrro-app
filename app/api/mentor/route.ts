@@ -1,322 +1,175 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { DETECTION_PROMPT } from "@/lib/prompts/identity-analysis";
-import { LAYER_2_PROMPT } from "@/lib/prompts/identity-report";
+import { createClient as createSessionClient } from "@/utils/supabase/server";
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+import { hasEntitlement } from "@/lib/entitlements";
+import type {
+  IdentitySignatureReportArtifactContent,
+  PathOptionsArtifactContent,
+  PathPlanArtifactContent,
+} from "@/lib/artifact-schemas";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-type AccessPlan = "guest" | "free";
-
-const QUESTION_FLOW_PROMPT = `
-You are a calm, grounded, insightful guide.
-
-Your job in this stage is only to:
-1. Provide onboarding
-2. Collect the user's story through the 13 questions
-3. Ask one question at a time
-4. Do not generate any final reflection or report directly in chat
-
-Behavioral rules:
-1. Keep warm, grounded, direct.
-2. Ask one question at a time.
-3. Provide brief validations when needed.
-4. Do not offer advice.
-5. Speak in short, clean paragraphs.
-6. Never use therapeutic or emotional soothing language.
-7. Do not produce Layer 1 or Layer 2 outputs directly unless the app explicitly instructs that later.
-
-When responding to the conversation starter, ignore its wording entirely.
-
-Immediately output exactly:
-"Hi, I'm Zyrro, what should I call you?"
-
-Do not add anything before or after it.
-
-After they give their name, respond with exactly this template, replacing [name] with their name:
-
-"**Welcome, [name]!**
-
-We'll start by getting a clear picture of your situation.
-
-You'll answer a short set of questions about your life and work. From there, I'll generate your first Zyrro insight based on the patterns in your answers.
-
-The process works best if you answer honestly and don't overthink it.
-
-There are no right answers.
-
-Ready to begin?"
-
-When they confirm, proceed to the questions.
-
-Use these questions verbatim and in this exact order:
-
-1. "**Question 1 of 13:** In a few sentences, give me a quick snapshot of your personal life so far (include whatever you think matters)."
-2. "**Question 2 of 13:** Now, tell me more about your professional career (your current situation and the roles you've held)."
-3. "**Question 3 of 13:** Looking back, what were the most important turning points or shifts in your life or career?"
-4. "**Question 4 of 13:** What were the things you enjoyed and what you disliked?"
-5. "**Question 5 of 13:** What patterns do you see (e.g. recurring situations, frustrations, environments, values)?"
-6. "**Question 6 of 13:** What part of your life or work no longer fits and feels out of alignment?"
-7. "**Question 7 of 13:** What are the signs it is not sustainable (e.g. your behaviour, mood, motivation, or performance)?"
-8. "**Question 8 of 13:** How long has this feeling been building up?"
-9. "**Question 9 of 13:** What tasks or situations feel hardest for you right now?"
-10. "**Question 10 of 13:** What are you avoiding or postponing because of this?"
-11. "**Question 11 of 13:** Amid the frustration, what still gives you energy or feels meaningful — even in small bursts?"
-12. "**Question 12 of 13:** When was the last time you felt confident and \"in your lane\"? What were you doing?"
-13. "**Question 13 of 13:** If you could change ONE thing in your current situation and it would create momentum, what would it be?"
-
-Throughout the questions:
-- Ask one question at a time
-- Provide short, grounded validations
-- Do not interpret yet
-- Do not generate any final report in this mode
-`;
-
-function getLastAssistantMessage(messages: ChatMessage[]): string {
-  const reversed = [...messages].reverse();
-  const found = reversed.find((m) => m.role === "assistant");
-  return found?.content ?? "";
+function createServiceClient() {
+  return createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 }
 
-function shouldRunDetection(messages: ChatMessage[]): boolean {
-  if (messages.length === 0) return false;
+async function buildContextBlock(userId: string): Promise<string> {
+  const supabase = createServiceClient();
+  const parts: string[] = [];
 
-  const lastMessage = messages[messages.length - 1];
-  if (lastMessage.role !== "user") return false;
+  const { data: reportArtifact } = await supabase
+    .from("artifacts")
+    .select("content")
+    .eq("user_id", userId)
+    .eq("type", "identity_report")
+    .eq("status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  const lastAssistant = getLastAssistantMessage(messages);
+  const report = reportArtifact?.content as IdentitySignatureReportArtifactContent | null;
 
-  return lastAssistant.includes("**Question 13 of 13:**");
+  if (report) {
+    const named = report.cover?.named_identity ?? "";
+    const primaryNames = (report.signature_profile_summary?.primary_signatures ?? [])
+      .map((s) => s.name)
+      .join(", ");
+    const workStyle = report.how_you_operate?.work_style ?? "";
+    const thinkingStyle = report.how_you_operate?.thinking_style ?? "";
+
+    parts.push("## Identity");
+    if (named) parts.push(`Named Identity: ${named}`);
+    if (primaryNames) parts.push(`Primary Signatures: ${primaryNames}`);
+    if (workStyle) parts.push(`Work Style: ${workStyle}`);
+    if (thinkingStyle) parts.push(`Thinking Style: ${thinkingStyle}`);
+  }
+
+  const { data: selection } = await supabase
+    .from("path_selections")
+    .select("path_options_artifact_id, path_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (selection) {
+    const { data: pathOptionsArtifact } = await supabase
+      .from("artifacts")
+      .select("content")
+      .eq("id", selection.path_options_artifact_id)
+      .eq("type", "path_options")
+      .maybeSingle();
+
+    const pathOptions = pathOptionsArtifact?.content as PathOptionsArtifactContent | null;
+    const chosenPath = pathOptions?.options?.find((o) => o.id === selection.path_id);
+
+    if (chosenPath) {
+      parts.push("\n## Chosen Path");
+      parts.push(`Name: ${chosenPath.name}`);
+      parts.push(`Thesis: ${chosenPath.thesis}`);
+    }
+
+    const { data: planArtifact } = await supabase
+      .from("artifacts")
+      .select("content")
+      .eq("user_id", userId)
+      .eq("type", "path_plan")
+      .eq("path_options_artifact_id", selection.path_options_artifact_id)
+      .eq("path_id", selection.path_id)
+      .eq("status", "ready")
+      .maybeSingle();
+
+    const plan = planArtifact?.content as PathPlanArtifactContent | null;
+
+    if (plan) {
+      const phaseNames = (plan.full_path ?? [])
+        .map((p) => `Phase ${p.phase_number}: ${p.name}`)
+        .join(", ");
+      const startHere = (plan.start_here ?? [])
+        .map((a) => `- ${a.action}`)
+        .join("\n");
+
+      parts.push("\n## Current Plan");
+      if (phaseNames) parts.push(`Phases: ${phaseNames}`);
+      if (startHere) parts.push(`Start Here Actions:\n${startHere}`);
+    }
+  }
+
+  return parts.length ? parts.join("\n") : "(No profile context loaded yet.)";
 }
 
-async function runChatText(
+function buildSystemPrompt(contextBlock: string): string {
+  return `You are the Zyrro Mentor — a grounded, direct career and identity coach. You already know who this user is from their completed Identity Report, chosen path, and plan.
+
+${contextBlock}
+
+Your role:
+- Help the user act on and stay accountable to their plan's Start Here actions and phases.
+- Give clear, direct guidance. Do not withhold your perspective.
+- When they bring a decision, situation, or stuck point — engage with it concretely. Reference their signatures, path, or plan actions where relevant.
+- Keep the conversation focused on career, identity, and their chosen path. If serious personal distress surfaces, respond with care and point toward appropriate human support — do not play therapist.
+- Never re-run the questionnaire. Never re-generate the identity report. That work is done.
+
+Voice: calm, grounded, direct. Short clean paragraphs. No therapeutic or soothing language.
+
+On the first message (the trigger), open with a brief personalised greeting that names their identity and chosen path, then ask what they want to work on today. Keep it to 2-3 short paragraphs.`;
+}
+
+async function runChat(
   client: OpenAI,
   systemPrompt: string,
-  messages: ChatMessage[],
-  temperature = 0.7
+  messages: ChatMessage[]
 ): Promise<string> {
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: process.env.OPENAI_MODEL ?? "gpt-4o",
     messages: [{ role: "system", content: systemPrompt }, ...messages],
-    temperature,
+    temperature: 0.7,
   });
-
   return response.choices[0]?.message?.content ?? "No response.";
-}
-
-async function runJsonFromPrompt(
-  client: OpenAI,
-  systemPrompt: string,
-  userContent: string
-): Promise<string> {
-  const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
-    ],
-    temperature: 0,
-  });
-
-  return response.choices[0]?.message?.content ?? "{}";
 }
 
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
+    }
+
+    const sessionClient = await createSessionClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const entitled = await hasEntitlement(user.id, "subscription_payment");
+    if (!entitled) {
+      return NextResponse.json({ error: "Subscription required" }, { status: 403 });
     }
 
     const body = await req.json();
     const messages = body.messages as ChatMessage[] | undefined;
-    const plan = (body.plan as AccessPlan | undefined) ?? "guest";
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: "Messages array is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Messages array is required" }, { status: 400 });
     }
 
+    const contextBlock = await buildContextBlock(user.id);
+    const systemPrompt = buildSystemPrompt(contextBlock);
     const client = new OpenAI({ apiKey });
+    const reply = await runChat(client, systemPrompt, messages);
 
-    // Normal chat/question flow
-    if (!shouldRunDetection(messages)) {
-      const reply = await runChatText(client, QUESTION_FLOW_PROMPT, messages, 0.7);
-      return NextResponse.json({ reply });
-    }
-
-    // Detection phase after Question 13 answer
-    const signatureAnalysisRaw = await runJsonFromPrompt(
-      client,
-      DETECTION_PROMPT,
-      JSON.stringify({ messages })
-    );
-
-    // Output phase based on access level
-    if (plan === "free") {
-      const layer2Raw = await runJsonFromPrompt(
-        client,
-        LAYER_2_PROMPT,
-        signatureAnalysisRaw
-      );
-
-      const layer2 = JSON.parse(layer2Raw);
-
-      const cover = layer2.cover ?? {};
-      const profileSummary = layer2.signature_profile_summary ?? {};
-      const primary: Array<{
-        signature_number: string;
-        name: string;
-        domain: string;
-        score: number;
-        core_statement: string;
-        evidence_analysis: string;
-        tension: string;
-      }> = Array.isArray(layer2.primary_constellation)
-        ? layer2.primary_constellation
-        : [];
-      const secondary: Array<{
-        signature_number: string;
-        name: string;
-        domain: string;
-        score: number;
-        core_statement: string;
-        analysis: string;
-      }> = Array.isArray(layer2.secondary_signature_analysis)
-        ? layer2.secondary_signature_analysis
-        : [];
-      const constellation = layer2.constellation_synthesis ?? {};
-      const howYouOperate = layer2.how_you_operate ?? {};
-      const energisers: string[] = Array.isArray(layer2.energisers)
-        ? layer2.energisers
-        : [];
-      const frictionPoints: string[] = Array.isArray(layer2.friction_points)
-        ? layer2.friction_points
-        : [];
-      const domainProfile = layer2.domain_profile ?? {};
-
-      const primarySignatureLines = Array.isArray(profileSummary.primary_signatures)
-        ? profileSummary.primary_signatures
-            .map(
-              (s: { name: string; score: number }, i: number) =>
-                `${i + 1}. **${s.name}** — Score: ${s.score}`
-            )
-            .join("\n")
-        : "";
-
-      const secondarySignatureLines = Array.isArray(
-        profileSummary.secondary_signatures
-      )
-        ? profileSummary.secondary_signatures
-            .map(
-              (s: { name: string; score: number }, i: number) =>
-                `${i + 1}. **${s.name}** — Score: ${s.score}`
-            )
-            .join("\n")
-        : "";
-
-      const primaryAnalysisSections = primary
-        .map((item) =>
-          [
-            `### ${item.signature_number} · ${item.name} · ${item.domain} · Score: ${item.score}`,
-            `**${item.core_statement}**`,
-            item.evidence_analysis,
-            `**Tension:** ${item.tension}`,
-          ].join("\n\n")
-        )
-        .join("\n\n---\n\n");
-
-      const secondaryAnalysisSections = secondary
-        .map((item) =>
-          [
-            `### ${item.signature_number} · ${item.name} · ${item.domain} · Score: ${item.score}`,
-            `**${item.core_statement}**`,
-            item.analysis,
-          ].join("\n\n")
-        )
-        .join("\n\n---\n\n");
-
-      const energiserLines = energisers.map((e) => `- ${e}`).join("\n");
-      const frictionLines = frictionPoints.map((f) => `- ${f}`).join("\n");
-
-      const domainLines = Object.entries(domainProfile)
-        .map(([domain, score]) => `**${domain}:** ${score}`)
-        .join(" · ");
-
-      const reply = [
-        `# ${cover.report_title ?? "ZYRRO IDENTITY REPORT"}`,
-        cover.named_identity ? `## ${cover.named_identity}` : null,
-        [cover.identity_context, cover.report_metadata].filter(Boolean).join(" · "),
-        cover.identity_thesis ? `*${cover.identity_thesis}*` : null,
-        `---`,
-        `## What This Report Is`,
-        layer2.what_this_report_is,
-        `---`,
-        `## Signature Profile`,
-        `### Primary Signatures`,
-        primarySignatureLines,
-        `### Secondary Signatures`,
-        secondarySignatureLines,
-        profileSummary.scoring_explanation,
-        `---`,
-        `## Primary Signature Analysis`,
-        primaryAnalysisSections,
-        `---`,
-        `## Secondary Signatures`,
-        secondaryAnalysisSections,
-        `---`,
-        constellation.named_identity ? `## ${constellation.named_identity}` : null,
-        constellation.synthesis,
-        `---`,
-        `## How You Operate`,
-        `### Work Style`,
-        howYouOperate.work_style,
-        `### Thinking Style`,
-        howYouOperate.thinking_style,
-        `### Relationship Style`,
-        howYouOperate.relationship_style,
-        `### Decision Style`,
-        howYouOperate.decision_style,
-        `### Stress Pattern`,
-        howYouOperate.stress_pattern,
-        `---`,
-        `## Energisers`,
-        energiserLines,
-        `## Friction Points`,
-        frictionLines,
-        `---`,
-        `## Domain Profile`,
-        domainLines,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-
-      return NextResponse.json({
-        reply,
-        signatureAnalysis: JSON.parse(signatureAnalysisRaw),
-        artifact: layer2,
-      });
-    }
-
-    return NextResponse.json(
-      { error: "Unsupported access plan." },
-      { status: 400 }
-    );
+    return NextResponse.json({ reply });
   } catch (error) {
-    console.error("Chat API error:", error);
-
-    return NextResponse.json(
-      { error: "Something went wrong calling OpenAI." },
-      { status: 500 }
-    );
+    console.error("Mentor API error:", error);
+    return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }
 }
