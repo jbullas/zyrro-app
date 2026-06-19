@@ -59,6 +59,11 @@ export default function MentorPage() {
     const supabase = createClient();
 
     async function checkSubscription() {
+      if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') {
+        setIsSubscribed(true);
+        setSubscriptionChecked(true);
+        return;
+      }
       const { data } = await supabase
         .from("entitlements")
         .select("id")

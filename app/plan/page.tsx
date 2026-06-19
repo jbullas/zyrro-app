@@ -73,17 +73,19 @@ export default function PlanPage() {
 
       if (!cancelled) setUserId(user.id);
 
-      const { data: entitlement } = await supabase
-        .from('entitlements')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('product', 'onetime_payment')
-        .eq('status', 'active')
-        .maybeSingle();
+      if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
+        const { data: entitlement } = await supabase
+          .from('entitlements')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('product', 'onetime_payment')
+          .eq('status', 'active')
+          .maybeSingle();
 
-      if (!entitlement) {
-        if (!cancelled) setPageState('unpaid');
-        return;
+        if (!entitlement) {
+          if (!cancelled) setPageState('unpaid');
+          return;
+        }
       }
 
       // Fetch the latest path selection

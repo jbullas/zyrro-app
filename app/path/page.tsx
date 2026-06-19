@@ -124,32 +124,34 @@ export default function PathPage() {
 
       if (cancelled) return;
 
-      const { data: entitlement } = await supabase
-        .from('entitlements')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('product', 'onetime_payment')
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (!entitlement) {
-        const { data: artifact } = await supabase
-          .from('artifacts')
-          .select('content')
+      if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
+        const { data: entitlement } = await supabase
+          .from('entitlements')
+          .select('id')
           .eq('user_id', user.id)
-          .eq('type', 'identity_report')
-          .eq('status', 'ready')
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .eq('product', 'onetime_payment')
+          .eq('status', 'active')
           .maybeSingle();
 
-        if (!cancelled) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const name = (artifact?.content as any)?.cover?.named_identity ?? null;
-          setNamedIdentity(name);
-          setPageState('unpaid');
+        if (!entitlement) {
+          const { data: artifact } = await supabase
+            .from('artifacts')
+            .select('content')
+            .eq('user_id', user.id)
+            .eq('type', 'identity_report')
+            .eq('status', 'ready')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!cancelled) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const name = (artifact?.content as any)?.cover?.named_identity ?? null;
+            setNamedIdentity(name);
+            setPageState('unpaid');
+          }
+          return;
         }
-        return;
       }
 
       await loadPathOptions(user.id);

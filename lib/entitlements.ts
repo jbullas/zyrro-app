@@ -10,6 +10,8 @@ function createServiceClient() {
 }
 
 export async function hasEntitlement(userId: string, product: EntitlementProduct): Promise<boolean> {
+  // NEVER set NEXT_PUBLIC_OPEN_ACCESS on the production environment.
+  if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') return true;
   const supabase = createServiceClient();
   const { data } = await supabase
     .from('entitlements')
