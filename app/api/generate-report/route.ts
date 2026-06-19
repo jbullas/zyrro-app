@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+
+export const maxDuration = 60;
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { DETECTION_PROMPT } from '@/lib/prompts/identity-analysis';
@@ -128,8 +130,7 @@ export async function POST(req: NextRequest) {
     artifactId = artifact.id;
   }
 
-  // Fire and forget — returns 200 immediately, generation runs in background
-  void runGeneration(artifactId, answers, name);
+  after(() => runGeneration(artifactId, answers, name));
 
   return NextResponse.json({ artifact_id: artifactId });
 }

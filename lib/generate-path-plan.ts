@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { PATH_PLAN_PROMPT } from '@/lib/prompts/path-plan';
@@ -149,7 +150,7 @@ export async function generatePathPlan(
     artifactId = newArtifact.id;
   }
 
-  void runPlanGeneration(artifactId, identityArtifact.content, chosenOption);
+  after(() => runPlanGeneration(artifactId, identityArtifact.content, chosenOption));
 
   return artifactId;
 }

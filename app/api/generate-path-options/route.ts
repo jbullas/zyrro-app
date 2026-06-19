@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+
+export const maxDuration = 60;
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { hasPaidEntitlement } from '@/lib/entitlements';
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
     artifactId = newArtifact.id;
   }
 
-  void runGeneration(artifactId, identityArtifact.content);
+  after(() => runGeneration(artifactId, identityArtifact.content));
 
   return NextResponse.json({ artifact_id: artifactId });
 }
