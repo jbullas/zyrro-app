@@ -47,25 +47,27 @@ export default function Header({ showLogin = true }: HeaderProps) {
         </div>
         <div className="nav-end">
           {userInitials ? (
-            <div
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                background: '#3d0063',
-                border: '1.5px solid rgba(255,255,255,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '12px',
-                fontWeight: 700,
-                color: '#fff',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              {userInitials}
-            </div>
+            <a href="/account" aria-label="My account" style={{ display: 'flex', textDecoration: 'none' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  background: '#3d0063',
+                  border: '1.5px solid rgba(255,255,255,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#fff',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {userInitials}
+              </div>
+            </a>
           ) : showLogin ? (
             <a
               href="/login"
