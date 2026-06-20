@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { IconPencil } from '@tabler/icons-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -11,17 +12,128 @@ function formatDate(iso: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+// ── Reusable inline-edit row value ────────────────────────────────────────────
+interface EditableFieldProps {
+  value: string;
+  onSave: (newValue: string) => Promise<void>;
+}
+
+function EditableField({ value, onSave }: EditableFieldProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+
+  function handleEdit() {
+    setDraft(value);
+    setEditing(true);
+  }
+
+  function handleCancel() {
+    setEditing(false);
+  }
+
+  async function handleSave() {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === value) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await onSave(trimmed);
+      setSaved(true);
+      setEditing(false);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (_e) {
+      // stay in editing mode on failure
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
+        <input
+          className="form-input"
+          style={{ flex: 1, minWidth: '120px', width: 'auto' }}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          autoFocus
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: '5px 14px', fontSize: '13px', fontWeight: 600,
+            background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
+            borderRadius: '8px', cursor: saving ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: saving ? 0.4 : 1,
+          }}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          onClick={handleCancel}
+          style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            fontSize: '13px', color: '#6E6E6E', fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+      <span style={{ fontSize: '16px', overflowWrap: 'break-word', wordBreak: 'break-word', minWidth: 0, flex: 1 }}>
+        {value || '—'}
+      </span>
+      {saved && (
+        <span style={{ fontSize: '12px', color: '#6E6E6E', whiteSpace: 'nowrap' }}>Saved</span>
+      )}
+      <button
+        onClick={handleEdit}
+        aria-label="Edit name"
+        style={{
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          color: '#B0B0B0', display: 'flex', alignItems: 'center', flexShrink: 0,
+        }}
+      >
+        <IconPencil size={14} stroke={1.75} />
+      </button>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+const ROW: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '120px 1fr',
+  gap: '12px',
+  alignItems: 'start',
+  padding: '14px 0',
+};
+
+const LABEL: React.CSSProperties = {
+  fontSize: '14px',
+  color: '#6E6E6E',
+  fontWeight: 500,
+  paddingTop: '2px',
+};
+
+const DIVIDER: React.CSSProperties = {
+  borderBottom: '1px solid rgba(0,0,0,0.07)',
+};
+
 export default function AccountPage() {
   const router = useRouter();
-  const [loaded, setLoaded]               = useState(false);
-  const [userId, setUserId]               = useState<string | null>(null);
-  const [email, setEmail]                 = useState('');
-  const [createdAt, setCreatedAt]         = useState('');
-  const [name, setName]                   = useState('');
-  const [nameInput, setNameInput]         = useState('');
-  const [nameSaving, setNameSaving]       = useState(false);
-  const [nameSaved, setNameSaved]         = useState(false);
-  const [isPaid, setIsPaid]               = useState(false);
+  const [loaded, setLoaded]           = useState(false);
+  const [userId, setUserId]           = useState<string | null>(null);
+  const [email, setEmail]             = useState('');
+  const [createdAt, setCreatedAt]     = useState('');
+  const [name, setName]               = useState('');
+  const [isPaid, setIsPaid]           = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
@@ -41,7 +153,6 @@ export default function AccountPage() {
       const meta = user.user_metadata;
       const displayName = meta?.full_name ?? meta?.display_name ?? meta?.name ?? user.email ?? '';
       setName(displayName);
-      setNameInput(displayName);
 
       if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') {
         setIsPaid(true);
@@ -62,22 +173,16 @@ export default function AccountPage() {
     init();
   }, [router]);
 
-  async function handleSaveName() {
-    if (!userId || !nameInput.trim() || nameInput.trim() === name) return;
+  async function handleSaveName(newName: string) {
+    if (!userId) return;
     const supabase = createClient();
-    setNameSaving(true);
-    const newName = nameInput.trim();
     const { error } = await supabase.auth.updateUser({
       data: { full_name: newName, display_name: newName },
     });
-    if (!error) {
-      setName(newName);
-      setNameSaved(true);
-      setTimeout(() => setNameSaved(false), 2000);
-      // Best-effort: sync to profiles table (swallow RLS errors)
-      supabase.from('profiles').update({ name: newName }).eq('user_id', userId).then(() => {});
-    }
-    setNameSaving(false);
+    if (error) throw error;
+    setName(newName);
+    // Best-effort: sync to profiles table (swallow RLS errors)
+    supabase.from('profiles').update({ name: newName }).eq('user_id', userId).then(() => {});
   }
 
   async function handleLogout() {
@@ -106,71 +211,45 @@ export default function AccountPage() {
 
   if (!loaded) return null;
 
+  const pageTitle = name ? `${name}'s Account` : 'Your Account';
+
   return (
     <div className="flow-container">
-      <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>My Account</h1>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>{pageTitle}</h1>
 
-        {/* Profile */}
-        <div className="card">
-          <p className="eyebrow">PROFILE</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#6E6E6E', display: 'block', marginBottom: '6px' }}>
-                Name
-              </label>
-              <input
-                className="form-input"
-                value={nameInput}
-                onChange={(e) => { setNameInput(e.target.value); setNameSaved(false); }}
-                placeholder="Your name"
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-                <button
-                  onClick={handleSaveName}
-                  className={`btn-primary${nameSaving || nameInput.trim() === name ? ' btn-disabled' : ''}`}
-                  disabled={nameSaving || nameInput.trim() === name}
-                  style={{ width: 'auto', padding: '10px 24px', fontSize: '14px' }}
-                >
-                  {nameSaving ? 'Saving…' : 'Save'}
-                </button>
-                {nameSaved && (
-                  <span style={{ fontSize: '13px', color: '#6E6E6E' }}>Saved</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#6E6E6E', display: 'block', marginBottom: '4px' }}>
-                Email
-              </label>
-              <p style={{ fontSize: '16px', margin: 0 }}>{email}</p>
-            </div>
+        <div>
+          {/* Name — editable */}
+          <div style={{ ...ROW, ...DIVIDER }}>
+            <span style={LABEL}>Name</span>
+            <EditableField value={name} onSave={handleSaveName} />
           </div>
-        </div>
 
-        {/* Account */}
-        <div className="card">
-          <p className="eyebrow">ACCOUNT</p>
-          <div style={{ marginTop: '12px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: '#6E6E6E', display: 'block', marginBottom: '4px' }}>
-              Member since
-            </label>
-            <p style={{ fontSize: '16px', margin: 0 }}>{createdAt ? formatDate(createdAt) : '—'}</p>
+          {/* Email — read-only */}
+          <div style={{ ...ROW, ...DIVIDER }}>
+            <span style={LABEL}>Email</span>
+            <span style={{ fontSize: '16px', overflowWrap: 'break-word', wordBreak: 'break-word', minWidth: 0 }}>
+              {email}
+            </span>
           </div>
-        </div>
 
-        {/* Plan & access */}
-        <div className="card">
-          <p className="eyebrow">PLAN &amp; ACCESS</p>
-          <div style={{ marginTop: '12px' }}>
+          {/* Member since — read-only */}
+          <div style={{ ...ROW, ...DIVIDER }}>
+            <span style={LABEL}>Member since</span>
+            <span style={{ fontSize: '16px' }}>{createdAt ? formatDate(createdAt) : '—'}</span>
+          </div>
+
+          {/* Plan */}
+          <div style={ROW}>
+            <span style={LABEL}>Plan</span>
             {isPaid ? (
-              <p style={{ fontSize: '16px', margin: 0 }}>
+              <span style={{ fontSize: '16px' }}>
                 <strong>Unlocked</strong> — Paths, Plan, Mentor
-              </p>
+              </span>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <p style={{ fontSize: '16px', margin: 0 }}>Free plan</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <span style={{ fontSize: '16px' }}>Free plan</span>
                 <button
                   onClick={handleCheckout}
                   className={`btn-primary${checkoutLoading ? ' btn-disabled' : ''}`}
@@ -184,11 +263,7 @@ export default function AccountPage() {
         </div>
 
         {/* Log out */}
-        <button
-          onClick={handleLogout}
-          className="btn-link"
-          style={{ marginTop: '8px' }}
-        >
+        <button onClick={handleLogout} className="btn-link">
           Log out
         </button>
 
