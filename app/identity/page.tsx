@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import {
@@ -178,10 +179,10 @@ function scrollTo(id: string) {
 }
 
 export default function IdentityPage() {
+  const router = useRouter();
   const [pageState, setPageState] = useState<PageState>('loading');
   const [report, setReport]       = useState<IdentityReport | null>(null);
   const [reportDate, setReportDate] = useState<string>('');
-  const [userId, setUserId] = useState<string | null>(null);
   const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
   const chartRef        = useRef<HTMLCanvasElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,62 +194,6 @@ export default function IdentityPage() {
       pollRef.current = null;
     }
   }, []);
-
-  // DEV ONLY — remove before go-live
-  const handleRegenerate = useCallback(async () => {
-    if (!userId) return;
-    const supabase = createClient();
-
-    const [
-      { data: answersData },
-      { data: profileData },
-    ] = await Promise.all([
-      supabase
-        .from('discovery_answers')
-        .select('question_number, question_text, answer_text')
-        .eq('user_id', userId),
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle(),
-    ]);
-
-    if (!answersData?.length) return;
-
-    const name = profileData?.name || 'You';
-    const answers = answersData;
-
-    setPageState('generating');
-    stopPolling();
-
-    await fetch('/api/generate-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, name, answers }),
-    });
-
-    pollRef.current = setInterval(async () => {
-      const { data } = await supabase
-        .from('artifacts')
-        .select('id, status, content, created_at')
-        .eq('user_id', userId)
-        .eq('type', 'identity_report')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data?.status === 'ready' && data.content) {
-        setReport(data.content as IdentityReport);
-        setReportDate((data.created_at as string) ?? '');
-        setPageState('ready');
-        stopPolling();
-      } else if (data?.status === 'failed') {
-        setPageState('failed');
-        stopPolling();
-      }
-    }, 3000);
-  }, [userId, stopPolling]);
 
   // Chart.js init when report is ready
   useEffect(() => {
@@ -318,7 +263,7 @@ export default function IdentityPage() {
     let cancelled  = false;
 
     async function loadArtifact(userId: string) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('artifacts')
         .select('id, status, content, created_at')
         .eq('user_id', userId)
@@ -328,6 +273,11 @@ export default function IdentityPage() {
         .maybeSingle();
 
       if (cancelled) return;
+
+      if (error) {
+        router.push('/login');
+        return;
+      }
 
       if (!data) {
         setPageState('no-questionnaire');
@@ -352,23 +302,39 @@ export default function IdentityPage() {
       }
     }
 
+    function readAnswersCount(uid: string) {
+      return supabase
+        .from('discovery_answers')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', uid);
+    }
+
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      let { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        const { data } = await supabase.auth.refreshSession();
+        user = data.user ?? null;
+      }
 
       if (!user) {
         if (!cancelled) setPageState('anonymous');
         return;
       }
 
-      if (!cancelled) setUserId(user.id);
       if (cancelled) return;
 
-      const { count } = await supabase
-        .from('discovery_answers')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
+      let { count, error } = await readAnswersCount(user.id);
+      if (error) {
+        await supabase.auth.refreshSession();
+        ({ count, error } = await readAnswersCount(user.id));
+      }
       if (cancelled) return;
+
+      if (error) {
+        router.push('/login');
+        return;
+      }
 
       if (!count || count === 0) {
         setPageState('no-questionnaire');
@@ -383,7 +349,7 @@ export default function IdentityPage() {
       cancelled = true;
       stopPolling();
     };
-  }, [stopPolling]);
+  }, [stopPolling, router]);
 
   // ── Loading ────────────────────────────────────────────────────────
   if (pageState === 'loading') return null;
@@ -681,16 +647,6 @@ export default function IdentityPage() {
           </div>
 
         </div>{/* end .report-sections */}
-
-        {/* DEV ONLY — remove before go-live */}
-        <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
-          <button
-            onClick={handleRegenerate}
-            style={{ background: 'none', border: 'none', color: '#999', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}
-          >
-            Regenerate report
-          </button>
-        </div>
 
         {/* Section 11: Limits of This Report */}
         <div id="section-11" className="limits-block">
