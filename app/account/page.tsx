@@ -53,8 +53,7 @@ function EditableField({ value, onSave }: EditableFieldProps) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
         <input
-          className="form-input"
-          style={{ flex: 1, minWidth: '120px', width: 'auto' }}
+          className="form-input form-input-compact"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           autoFocus
@@ -62,21 +61,13 @@ function EditableField({ value, onSave }: EditableFieldProps) {
         <button
           onClick={handleSave}
           disabled={saving}
-          style={{
-            padding: '5px 14px', fontSize: '13px', fontWeight: 600,
-            background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-            borderRadius: '8px', cursor: saving ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: saving ? 0.4 : 1,
-          }}
+          className={`btn-secondary btn-secondary-compact${saving ? ' btn-disabled' : ''}`}
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
         <button
           onClick={handleCancel}
-          style={{
-            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-            fontSize: '13px', color: '#6E6E6E', fontFamily: 'inherit', whiteSpace: 'nowrap',
-          }}
+          className="btn-link btn-link-inline"
         >
           Cancel
         </button>
@@ -95,10 +86,7 @@ function EditableField({ value, onSave }: EditableFieldProps) {
       <button
         onClick={handleEdit}
         aria-label="Edit name"
-        style={{
-          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-          color: '#B0B0B0', display: 'flex', alignItems: 'center', flexShrink: 0,
-        }}
+        className="edit-icon"
       >
         <IconPencil size={14} stroke={1.75} />
       </button>
