@@ -35,40 +35,24 @@ export async function POST(req: NextRequest) {
     .from('discovery_answers')
     .insert(answers.map(a => ({ ...a, user_id })));
 
-  const { data: existing } = await supabase
+  const { data: artifact, error: insertError } = await supabase
     .from('artifacts')
+    .insert({
+      user_id,
+      type: 'identity_report',
+      access_level: 'free',
+      status: 'generating',
+      content: {},
+    })
     .select('id')
-    .eq('user_id', user_id)
-    .eq('type', 'identity_report')
-    .maybeSingle();
+    .single();
 
-  let artifactId: string;
-
-  if (existing) {
-    await supabase
-      .from('artifacts')
-      .update({ status: 'generating', content: {} })
-      .eq('id', existing.id);
-    artifactId = existing.id;
-  } else {
-    const { data: artifact, error: insertError } = await supabase
-      .from('artifacts')
-      .insert({
-        user_id,
-        type: 'identity_report',
-        access_level: 'free',
-        status: 'generating',
-        content: {},
-      })
-      .select('id')
-      .single();
-
-    if (insertError || !artifact) {
-      console.error('Artifact insert error:', insertError);
-      return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
-    }
-    artifactId = artifact.id;
+  if (insertError || !artifact) {
+    console.error('Artifact insert error:', insertError);
+    return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
   }
+
+  const artifactId = artifact.id;
 
   after(() => generateIdentityReport({ artifactId, answers, name }));
 
