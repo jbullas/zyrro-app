@@ -11,9 +11,6 @@ function createServiceClient() {
   );
 }
 
-console.log('[generate-report] SUPABASE_SERVICE_ROLE_KEY length:', process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0);
-console.log('[generate-report] OPENAI_API_KEY length:', process.env.OPENAI_API_KEY?.length ?? 0);
-console.log('[generate-report] OPENAI_API_KEY prefix:', process.env.OPENAI_API_KEY?.slice(0, 5) ?? 'undefined');
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as { user_id: string; name: string; answers: DiscoveryAnswer[] };
