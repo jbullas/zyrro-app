@@ -389,7 +389,16 @@ export default function IdentityPage() {
         <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
         <h2>Something went wrong.</h2>
         <p>We couldn&rsquo;t generate your report. Please try again.</p>
-        <button className="btn-primary" disabled>Try again</button>
+        <button
+          className="btn-primary"
+          onClick={() =>
+            fetch('/api/retry-generation', { method: 'POST' }).then(() =>
+              window.location.reload()
+            )
+          }
+        >
+          Try again
+        </button>
       </div>
     );
   }
