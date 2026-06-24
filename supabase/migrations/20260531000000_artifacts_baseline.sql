@@ -3,7 +3,9 @@
 -- history was established. IF NOT EXISTS / OR REPLACE guards make this safe to
 -- run against the live DB; on a fresh environment it builds the full table.
 -- Prerequisites (fresh build): public.set_updated_at() from
--- 20260530000000_shared_functions.sql, plus tables public.profiles and public.conversations.
+-- 20260530000000_shared_functions.sql; public.profiles from
+-- 20260530000001_profiles_baseline.sql; public.conversations from
+-- 20260530000002_conversations_baseline.sql.
 
 CREATE TABLE IF NOT EXISTS public.artifacts (
   id                        uuid        NOT NULL DEFAULT gen_random_uuid(),
