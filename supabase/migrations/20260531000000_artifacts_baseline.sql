@@ -2,19 +2,8 @@
 -- The table was created directly in the Supabase dashboard before this migration
 -- history was established. IF NOT EXISTS / OR REPLACE guards make this safe to
 -- run against the live DB; on a fresh environment it builds the full table.
--- Prerequisite tables: public.profiles, public.conversations must exist first.
-
--- Shared utility: called by updated_at triggers across multiple tables.
--- TODO: relocate to a dedicated shared-functions migration during full-schema capture.
-CREATE OR REPLACE FUNCTION public.set_updated_at()
-  RETURNS trigger
-  LANGUAGE plpgsql
-AS $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
+-- Prerequisites (fresh build): public.set_updated_at() from
+-- 20260530000000_shared_functions.sql, plus tables public.profiles and public.conversations.
 
 CREATE TABLE IF NOT EXISTS public.artifacts (
   id                        uuid        NOT NULL DEFAULT gen_random_uuid(),
