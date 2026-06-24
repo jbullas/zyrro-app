@@ -310,12 +310,7 @@ export default function IdentityPage() {
     }
 
     async function init() {
-      let { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        const { data } = await supabase.auth.refreshSession();
-        user = data.user ?? null;
-      }
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         if (!cancelled) setPageState('anonymous');
@@ -324,11 +319,7 @@ export default function IdentityPage() {
 
       if (cancelled) return;
 
-      let { count, error } = await readAnswersCount(user.id);
-      if (error) {
-        await supabase.auth.refreshSession();
-        ({ count, error } = await readAnswersCount(user.id));
-      }
+      const { count, error } = await readAnswersCount(user.id);
       if (cancelled) return;
 
       if (error) {
