@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 // Must match maxDuration on the four generation routes (app/auth/callback,
 // app/api/retry-generation, app/api/generate-path-options, app/api/select-path).
 export const GENERATION_BUDGET_MS = 240_000;
-export const SPINNER_TIMEOUT_MS   = 120_000;
+export const SPINNER_TIMEOUT_MS   =  10_000;
 export const FLIP_GUARD_MS        =  10_000;
 
 export type GenerationPhase =
