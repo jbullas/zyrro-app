@@ -5,8 +5,11 @@ import { createClient } from '@/utils/supabase/client';
 
 // Must match maxDuration on the four generation routes (app/auth/callback,
 // app/api/retry-generation, app/api/generate-path-options, app/api/select-path).
+// Invariant: SPINNER_LATE_COPY_MS < SPINNER_TIMEOUT_MS < GENERATION_BUDGET_MS
+// (75 s < 120 s < 240 s). Adjust any one value while keeping this ordering.
 export const GENERATION_BUDGET_MS = 240_000;
-export const SPINNER_TIMEOUT_MS   =  10_000;
+export const SPINNER_TIMEOUT_MS   = 120_000;
+export const SPINNER_LATE_COPY_MS =  75_000;
 export const FLIP_GUARD_MS        =  10_000;
 
 export type GenerationPhase =
@@ -16,9 +19,9 @@ export type GenerationPhase =
   | { phase: 'ready'; content: unknown; createdAt: string }
   | { phase: 'failed' };
 
-// Polls an artifact row by ID, softening the spinner copy after 45 s, switching to a
-// come-back-later state past SPINNER_TIMEOUT_MS, and flipping a stranded generating row
-// to 'failed' once its age exceeds GENERATION_BUDGET_MS + FLIP_GUARD_MS.
+// Polls an artifact row by ID, softening the spinner copy after SPINNER_LATE_COPY_MS,
+// switching to a come-back-later state past SPINNER_TIMEOUT_MS, and flipping a stranded
+// generating row to 'failed' once its age exceeds GENERATION_BUDGET_MS + FLIP_GUARD_MS.
 export function useGenerationStatus(artifactId: string | null): GenerationPhase {
   const [genPhase, setGenPhase] = useState<GenerationPhase>({ phase: 'idle' });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,7 +80,7 @@ export function useGenerationStatus(artifactId: string | null): GenerationPhase 
       setGenPhase(
         age > SPINNER_TIMEOUT_MS
           ? { phase: 'come-back-later' }
-          : age > 45_000
+          : age > SPINNER_LATE_COPY_MS
             ? { phase: 'spinner', variant: 'late' }
             : { phase: 'spinner', variant: 'early' },
       );

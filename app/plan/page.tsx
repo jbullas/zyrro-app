@@ -131,7 +131,8 @@ export default function PlanPage() {
   async function handleRetry() {
     if (!userId || !activeSelection) return;
     setRetrying(true);
-    await fetch('/api/select-path', {
+    setArtifactId(null);
+    const res = await fetch('/api/select-path', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -141,7 +142,10 @@ export default function PlanPage() {
       }),
     });
     setRetrying(false);
-    window.location.reload();
+    if (res.ok) {
+      const { artifact_id } = await res.json() as { artifact_id: string };
+      setArtifactId(artifact_id);
+    }
   }
 
   // ── Loading ───────────────────────────────────────────────────────

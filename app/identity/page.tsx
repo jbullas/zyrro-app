@@ -340,8 +340,35 @@ export default function IdentityPage() {
     );
   }
 
+  async function handleRetry() {
+    setArtifactId(null);
+    const supabase = createClient();
+    await fetch('/api/retry-generation', { method: 'POST' });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('artifacts')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('type', 'identity_report')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) setArtifactId(data.id as string);
+  }
+
   // ── has-artifact: hook-driven generation states ────────────────────
-  if (genPhase.phase === 'idle') return null;
+  if (genPhase.phase === 'idle') {
+    return (
+      <div className="flow-container generating-container">
+        <div className="spin spinner" />
+        <div className="text-center-col">
+          <h2>Your Identity Signature Report is being prepared.</h2>
+          <p className="generating-desc">This usually takes about a minute.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (genPhase.phase === 'spinner') {
     return (
@@ -378,14 +405,7 @@ export default function IdentityPage() {
         <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
         <h2>Something went wrong.</h2>
         <p>We couldn&rsquo;t generate your report. Please try again.</p>
-        <button
-          className="btn-primary"
-          onClick={() =>
-            fetch('/api/retry-generation', { method: 'POST' }).then(() =>
-              window.location.reload()
-            )
-          }
-        >
+        <button className="btn-primary" onClick={handleRetry}>
           Try again
         </button>
       </div>

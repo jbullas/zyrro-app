@@ -34,6 +34,7 @@ export default function PathPage() {
   const [pathOptionsArtifactId, setPathOptionsArtifactId] = useState<string | null>(null);
   const [confirmPending, setConfirmPending]         = useState<PathOption | null>(null);
   const [selectingId, setSelectingId]               = useState<string | null>(null);
+  const [startFailed, setStartFailed]               = useState(false);
 
   // pathOptionsArtifactId doubles as the hook's artifact ID
   const genPhase   = useGenerationStatus(pathOptionsArtifactId);
@@ -56,15 +57,19 @@ export default function PathPage() {
       if (cancelled) return;
 
       if (!data) {
+        setPageState('has-artifact'); // show spinner while the generate call is in flight
         const res = await fetch('/api/generate-path-options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: uid }),
         });
-        if (!cancelled && res.ok) {
-          const { artifact_id } = await res.json() as { artifact_id: string };
-          setPathOptionsArtifactId(artifact_id);
-          setPageState('has-artifact');
+        if (!cancelled) {
+          if (res.ok) {
+            const { artifact_id } = await res.json() as { artifact_id: string };
+            setPathOptionsArtifactId(artifact_id);
+          } else {
+            setStartFailed(true);
+          }
         }
         return;
       }
@@ -173,12 +178,19 @@ export default function PathPage() {
 
   async function handleRetry() {
     if (!userId) return;
-    await fetch('/api/generate-path-options', {
+    setStartFailed(false);
+    setPathOptionsArtifactId(null);
+    const res = await fetch('/api/generate-path-options', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId }),
     });
-    window.location.reload();
+    if (res.ok) {
+      const { artifact_id } = await res.json() as { artifact_id: string };
+      setPathOptionsArtifactId(artifact_id);
+    } else {
+      setStartFailed(true);
+    }
   }
 
   async function handleConfirmSelect() {
@@ -227,7 +239,28 @@ export default function PathPage() {
 
   // ── has-artifact: hook-driven generation states ───────────────────
   if (pageState === 'has-artifact') {
-    if (genPhase.phase === 'idle') return null;
+    if (startFailed) {
+      return (
+        <div className="flow-container gated-container">
+          <p className="eyebrow">YOUR PATH</p>
+          <h2>Something went wrong.</h2>
+          <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
+          <button onClick={handleRetry} className="btn-primary">Try again</button>
+        </div>
+      );
+    }
+
+    if (genPhase.phase === 'idle') {
+      return (
+        <div className="flow-container generating-container">
+          <div className="spin spinner" />
+          <div className="text-center-col">
+            <h2>Your Path Options are being prepared.</h2>
+            <p className="generating-desc">This usually takes about a minute.</p>
+          </div>
+        </div>
+      );
+    }
 
     if (genPhase.phase === 'spinner') {
       return (
