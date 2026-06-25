@@ -3,7 +3,7 @@ import { type EmailOtpType } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { kickoffIdentityGeneration } from '@/lib/kickoff-identity-generation';
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

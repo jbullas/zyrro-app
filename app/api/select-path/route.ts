@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { hasPaidEntitlement } from '@/lib/entitlements';
 import { generatePathPlan } from '@/lib/generate-path-plan';

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { hasPaidEntitlement } from '@/lib/entitlements';
