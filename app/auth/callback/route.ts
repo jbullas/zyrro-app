@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
         cookies: {
           getAll() { return req.cookies.getAll(); },
           setAll(cookiesToSet) {
+            console.log('[callback] setAll fired, names:', cookiesToSet.map(c => c.name));
             cookiesToSet.forEach(({ name, value, options }) =>
               response.cookies.set(name, value, options));
           },
@@ -30,7 +31,8 @@ export async function GET(req: NextRequest) {
     );
 
     if (token_hash && type) {
-      const { error } = await supabase.auth.verifyOtp({ type, token_hash });
+      const { data, error } = await supabase.auth.verifyOtp({ type, token_hash });
+      console.log('[callback] verifyOtp error:', error?.message ?? null, '| session present:', !!data?.session);
       if (error) {
         return NextResponse.redirect(new URL('/login', req.url));
       }
@@ -42,6 +44,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { data: { user } } = await supabase.auth.getUser();
+    console.log('[callback] getUser user present:', !!user);
     if (!user) {
       return NextResponse.redirect(new URL('/login', req.url));
     }
