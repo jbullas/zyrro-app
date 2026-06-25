@@ -3,7 +3,8 @@ import { type EmailOtpType } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { kickoffIdentityGeneration } from '@/lib/kickoff-identity-generation';
 
-export const maxDuration = 180;
+// Keep in sync with GENERATION_BUDGET_MS in lib/generation-status.ts (240 s = 240_000 ms).
+export const maxDuration = 240;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

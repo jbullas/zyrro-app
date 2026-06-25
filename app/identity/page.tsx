@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
@@ -13,8 +13,9 @@ import {
   IconShield,
 } from '@tabler/icons-react';
 import { type SignatureName } from '@/lib/signatures';
+import { useGenerationStatus } from '@/lib/generation-status';
 
-type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'generating' | 'failed' | 'ready';
+type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
 interface PrimarySignatureEntry {
   signature_number: string;
@@ -180,24 +181,19 @@ function scrollTo(id: string) {
 
 export default function IdentityPage() {
   const router = useRouter();
-  const [pageState, setPageState] = useState<PageState>('loading');
-  const [report, setReport]       = useState<IdentityReport | null>(null);
-  const [reportDate, setReportDate] = useState<string>('');
-  const pollRef         = useRef<ReturnType<typeof setInterval> | null>(null);
-  const chartRef        = useRef<HTMLCanvasElement>(null);
+  const [pageState, setPageState]   = useState<PageState>('loading');
+  const [artifactId, setArtifactId] = useState<string | null>(null);
+  const chartRef                     = useRef<HTMLCanvasElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chartInstanceRef = useRef<any>(null);
+  const chartInstanceRef             = useRef<any>(null);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current !== null) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
+  const genPhase   = useGenerationStatus(artifactId);
+  const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
+  const reportDate = genPhase.phase === 'ready' ? genPhase.createdAt : '';
 
   // Chart.js init when report is ready
   useEffect(() => {
-    if (pageState !== 'ready' || !report?.domain_profile) return;
+    if (!report?.domain_profile) return;
     const dp = report.domain_profile;
 
     const initChart = () => {
@@ -255,9 +251,9 @@ export default function IdentityPage() {
       if (chartInstanceRef.current) chartInstanceRef.current.destroy();
       chartInstanceRef.current = null;
     };
-  }, [pageState, report?.domain_profile]);
+  }, [report?.domain_profile]);
 
-  // Main load + polling
+  // Main load — finds the artifact ID and hands polling to useGenerationStatus
   useEffect(() => {
     const supabase = createClient();
     let cancelled  = false;
@@ -265,7 +261,7 @@ export default function IdentityPage() {
     async function loadArtifact(userId: string) {
       const { data, error } = await supabase
         .from('artifacts')
-        .select('id, status, content, created_at')
+        .select('id')
         .eq('user_id', userId)
         .eq('type', 'identity_report')
         .order('created_at', { ascending: false })
@@ -273,33 +269,11 @@ export default function IdentityPage() {
         .maybeSingle();
 
       if (cancelled) return;
+      if (error) { router.push('/login'); return; }
+      if (!data) { setPageState('no-questionnaire'); return; }
 
-      if (error) {
-        router.push('/login');
-        return;
-      }
-
-      if (!data) {
-        setPageState('no-questionnaire');
-        return;
-      }
-
-      if (data.status === 'ready' && data.content) {
-        setReport(data.content as IdentityReport);
-        setReportDate((data.created_at as string) ?? '');
-        setPageState('ready');
-        stopPolling();
-      } else if (data.status === 'failed') {
-        setPageState('failed');
-        stopPolling();
-      } else {
-        setPageState('generating');
-        if (pollRef.current === null) {
-          pollRef.current = setInterval(() => {
-            if (!cancelled) loadArtifact(userId);
-          }, 3000);
-        }
-      }
+      setArtifactId(data.id as string);
+      setPageState('has-artifact');
     }
 
     function readAnswersCount(uid: string) {
@@ -336,11 +310,8 @@ export default function IdentityPage() {
     }
 
     init();
-    return () => {
-      cancelled = true;
-      stopPolling();
-    };
-  }, [stopPolling, router]);
+    return () => { cancelled = true; };
+  }, [router]);
 
   // ── Loading ────────────────────────────────────────────────────────
   if (pageState === 'loading') return null;
@@ -369,21 +340,39 @@ export default function IdentityPage() {
     );
   }
 
-  // ── State 3a: Generating ───────────────────────────────────────────
-  if (pageState === 'generating') {
+  // ── has-artifact: hook-driven generation states ────────────────────
+  if (genPhase.phase === 'idle') return null;
+
+  if (genPhase.phase === 'spinner') {
     return (
       <div className="flow-container generating-container">
         <div className="spin spinner" />
         <div className="text-center-col">
           <h2>Your Identity Signature Report is being prepared.</h2>
-          <p className="generating-desc">This usually takes about a minute.</p>
+          <p className="generating-desc">
+            {genPhase.variant === 'early'
+              ? 'This usually takes about a minute.'
+              : 'Still working — this is taking a little longer than usual…'}
+          </p>
         </div>
       </div>
     );
   }
 
-  // ── State 3b: Failed ───────────────────────────────────────────────
-  if (pageState === 'failed') {
+  if (genPhase.phase === 'come-back-later') {
+    return (
+      <div className="flow-container generating-container">
+        <div className="text-center-col">
+          <p className="generating-desc">
+            Your report is still being prepared. This is taking longer than expected — you can
+            leave this page and come back in a few minutes. It&rsquo;ll be here when it&rsquo;s ready.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (genPhase.phase === 'failed') {
     return (
       <div className="flow-container gated-container">
         <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>

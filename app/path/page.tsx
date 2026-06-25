@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import GatedState from '@/components/GatedState';
 import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
+import { useGenerationStatus } from '@/lib/generation-status';
 
-type PageState = 'loading' | 'anonymous' | 'verifying' | 'unpaid' | 'generating' | 'ready' | 'failed';
+type PageState = 'loading' | 'anonymous' | 'verifying' | 'unpaid' | 'has-artifact';
 
 const OFFER_FEATURES = [
   { title: 'Your Meaning',      body: 'Why your current situation makes complete sense given who you are.' },
@@ -30,18 +31,13 @@ export default function PathPage() {
   const [namedIdentity, setNamedIdentity]           = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading]       = useState(false);
   const [grantLoading, setGrantLoading]             = useState(false);
-  const [pathOptions, setPathOptions]               = useState<PathOptionsArtifactContent | null>(null);
   const [pathOptionsArtifactId, setPathOptionsArtifactId] = useState<string | null>(null);
   const [confirmPending, setConfirmPending]         = useState<PathOption | null>(null);
   const [selectingId, setSelectingId]               = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current !== null) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
+  // pathOptionsArtifactId doubles as the hook's artifact ID
+  const genPhase   = useGenerationStatus(pathOptionsArtifactId);
+  const pathOptions = genPhase.phase === 'ready' ? genPhase.content as PathOptionsArtifactContent : null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -50,7 +46,7 @@ export default function PathPage() {
     async function loadPathOptions(uid: string) {
       const { data } = await supabase
         .from('artifacts')
-        .select('id, status, content')
+        .select('id')
         .eq('user_id', uid)
         .eq('type', 'path_options')
         .order('created_at', { ascending: false })
@@ -60,38 +56,21 @@ export default function PathPage() {
       if (cancelled) return;
 
       if (!data) {
-        await fetch('/api/generate-path-options', {
+        const res = await fetch('/api/generate-path-options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: uid }),
         });
-        if (!cancelled) {
-          setPageState('generating');
-          if (pollRef.current === null) {
-            pollRef.current = setInterval(() => {
-              if (!cancelled) loadPathOptions(uid);
-            }, 3000);
-          }
+        if (!cancelled && res.ok) {
+          const { artifact_id } = await res.json() as { artifact_id: string };
+          setPathOptionsArtifactId(artifact_id);
+          setPageState('has-artifact');
         }
         return;
       }
 
-      if (data.status === 'ready' && data.content) {
-        setPathOptions(data.content as PathOptionsArtifactContent);
-        setPathOptionsArtifactId(data.id as string);
-        setPageState('ready');
-        stopPolling();
-      } else if (data.status === 'failed') {
-        setPageState('failed');
-        stopPolling();
-      } else {
-        setPageState('generating');
-        if (pollRef.current === null) {
-          pollRef.current = setInterval(() => {
-            if (!cancelled) loadPathOptions(uid);
-          }, 3000);
-        }
-      }
+      setPathOptionsArtifactId(data.id as string);
+      setPageState('has-artifact');
     }
 
     async function init() {
@@ -158,11 +137,8 @@ export default function PathPage() {
     }
 
     init();
-    return () => {
-      cancelled = true;
-      stopPolling();
-    };
-  }, [stopPolling]);
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleCheckout() {
     if (!userId) return;
@@ -249,29 +225,50 @@ export default function PathPage() {
     );
   }
 
-  // ── Generating ────────────────────────────────────────────────────
-  if (pageState === 'generating') {
-    return (
-      <div className="flow-container generating-container">
-        <div className="spin spinner" />
-        <div className="text-center-col">
-          <h2>Your Path Options are being prepared.</h2>
-          <p className="generating-desc">This usually takes about a minute.</p>
-        </div>
-      </div>
-    );
-  }
+  // ── has-artifact: hook-driven generation states ───────────────────
+  if (pageState === 'has-artifact') {
+    if (genPhase.phase === 'idle') return null;
 
-  // ── Failed ────────────────────────────────────────────────────────
-  if (pageState === 'failed') {
-    return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">YOUR PATH</p>
-        <h2>Something went wrong.</h2>
-        <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
-        <button onClick={handleRetry} className="btn-primary">Try again</button>
-      </div>
-    );
+    if (genPhase.phase === 'spinner') {
+      return (
+        <div className="flow-container generating-container">
+          <div className="spin spinner" />
+          <div className="text-center-col">
+            <h2>Your Path Options are being prepared.</h2>
+            <p className="generating-desc">
+              {genPhase.variant === 'early'
+                ? 'This usually takes about a minute.'
+                : 'Still working — this is taking a little longer than usual…'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (genPhase.phase === 'come-back-later') {
+      return (
+        <div className="flow-container generating-container">
+          <div className="text-center-col">
+            <p className="generating-desc">
+              Your Path Options are still being prepared. This is taking longer than expected — you
+              can leave this page and come back in a few minutes. It&rsquo;ll be here when it&rsquo;s ready.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (genPhase.phase === 'failed') {
+      return (
+        <div className="flow-container gated-container">
+          <p className="eyebrow">YOUR PATH</p>
+          <h2>Something went wrong.</h2>
+          <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
+          <button onClick={handleRetry} className="btn-primary">Try again</button>
+        </div>
+      );
+    }
+    // phase === 'ready': fall through to report render below
   }
 
   // ── Unpaid: offer page ────────────────────────────────────────────
