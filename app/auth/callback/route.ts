@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { type EmailOtpType } from '@supabase/supabase-js';
-import { createClient } from '@/utils/supabase/server';
+import { createServerClient } from '@supabase/ssr';
 import { kickoffIdentityGeneration } from '@/lib/kickoff-identity-generation';
 
 export const maxDuration = 60;
@@ -11,8 +11,23 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get('type') as EmailOtpType | null;
   const code = searchParams.get('code');
 
+  // Build the success response first so the cookie adapter can write onto it.
+  const response = NextResponse.redirect(new URL('/identity', req.url));
+
   if ((token_hash && type) || code) {
-    const supabase = await createClient();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return req.cookies.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options));
+          },
+        },
+      }
+    );
 
     if (token_hash && type) {
       const { error } = await supabase.auth.verifyOtp({ type, token_hash });
@@ -20,7 +35,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(new URL('/login', req.url));
       }
     } else {
-      await supabase.auth.exchangeCodeForSession(code!);
+      const { error } = await supabase.auth.exchangeCodeForSession(code!);
+      if (error) {
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
     }
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -31,5 +49,5 @@ export async function GET(req: NextRequest) {
     await kickoffIdentityGeneration(user);
   }
 
-  return NextResponse.redirect(new URL('/identity', req.url));
+  return response;
 }
