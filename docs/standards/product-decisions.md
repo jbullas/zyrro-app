@@ -190,10 +190,12 @@ Foundational framework documents in docs/framework/:
    tracked separately as its own low-priority ticket.)
 
 3. Continuity ("who we said this person is, what path they chose, how today
-   connects") is meant to surface on the Dashboard, not just live inside the
-   mentor's context. Rationale: this is the strongest current argument for the
-   memory table's owner being the mentor/continuity system — formal decision
-   still pending, Dashboard design is a separate discussion.
+   connects") surfaces on the Dashboard. The memory table is owned by the
+   mentor/continuity system: it stores a per-user working model — named
+   identity, chosen path/Project, and rolling session summaries — which the
+   mentor reads for continuity and the Dashboard displays. Rationale: this
+   resolves the open ownership question noted at the time this doc was first
+   written.
 
 4. Zyrro is a daily companion, but its purpose is to progress the user toward
    their chosen path ("Northern Star") through real action and real-world
