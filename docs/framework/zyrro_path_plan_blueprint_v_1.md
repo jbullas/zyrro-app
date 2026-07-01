@@ -335,6 +335,41 @@ A user may change their selection later; changing it generates the corresponding
 
 ---
 
+## Project (optional, always offered)
+
+### Position in arc
+
+Path -> Project -> Plan.
+
+Offered immediately after path selection (Section 6), before Path Plan generation.
+
+### Mechanic
+
+Always offered to every user — not a detected or gated feature. Framed as
+"want to name this?", an option to name (or rename) the chosen path.
+
+If skipped, the path proceeds unnamed exactly as it does today. Nothing else
+changes.
+
+### Naming
+
+Uses Rich Barton's naming framework (rare words, high-scoring letters) —
+ticket #11 scope. No new naming framework is introduced here.
+
+### Out of scope
+
+Branding, color schemes, or any visual identity generation (ticket #12).
+Zyrro's existing look and feel is retained throughout — no exceptions.
+
+### Downstream effect
+
+If named, the Project name threads into Path Plan generation — the Plan
+Frame should reference it. It is also the anchor for future Dashboard
+integration. The Dashboard spec itself is a separate, not-yet-scoped
+discussion and is not designed here.
+
+---
+
 # `/plan` — YOUR PATH PLAN
 
 The plan for the chosen option. Generated after selection.
@@ -489,6 +524,7 @@ Today's UI exposes one option set and one active selection. The data model assum
 - Section 4 Why the reframe holds
 - exactly 4 structured Path Options, with varied `stretch`
 - Section 6 selection CTA
+- after Section 6, an optional Project-naming step (always offered, never required)
 
 `/plan` (Your Path Plan) must always include:
 
