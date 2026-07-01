@@ -42,12 +42,17 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient();
 
   // Record the selection event (append-only; latest row = active selection)
-  await supabase.from('path_selections').insert({
+  const { error: insertError } = await supabase.from('path_selections').insert({
     user_id: user.id,
     path_options_artifact_id,
     path_id,
     ...(project_name ? { project_name } : {}),
   });
+
+  if (insertError) {
+    console.error('path_selections insert failed:', insertError);
+    return NextResponse.json({ error: 'Failed to record selection' }, { status: 500 });
+  }
 
   // Return the existing ready plan immediately — no regeneration, no cost
   const { data: existingPlan } = await supabase
