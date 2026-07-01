@@ -136,7 +136,6 @@ export default function PlanPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id: userId,
         path_options_artifact_id: activeSelection.path_options_artifact_id,
         path_id: activeSelection.path_id,
       }),

@@ -61,7 +61,6 @@ export default function PathPage() {
         const res = await fetch('/api/generate-path-options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: uid }),
         });
         if (!cancelled) {
           if (res.ok) {
@@ -183,7 +182,6 @@ export default function PathPage() {
     const res = await fetch('/api/generate-path-options', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId }),
     });
     if (res.ok) {
       const { artifact_id } = await res.json() as { artifact_id: string };
@@ -202,7 +200,6 @@ export default function PathPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user_id: userId,
         path_options_artifact_id: pathOptionsArtifactId,
         path_id: option.id,
       }),

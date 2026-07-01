@@ -4,6 +4,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 export const maxDuration = 240;
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
+import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
 import { PATH_OPTIONS_PROMPT } from '@/lib/prompts/path-options';
 import type { PathOptionsArtifactContent } from '@/lib/artifact-schemas';
@@ -62,14 +63,14 @@ async function runGeneration(artifactId: string, identityReport: unknown) {
   }
 }
 
-export async function POST(req: NextRequest) {
-  const { user_id } = await req.json() as { user_id: string };
-
-  if (!user_id) {
-    return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+export async function POST(_req: NextRequest) {
+  const sessionClient = await createSessionClient();
+  const { data: { user } } = await sessionClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const entitled = await hasPaidEntitlement(user_id);
+  const entitled = await hasPaidEntitlement(user.id);
   if (!entitled) {
     return NextResponse.json({ error: 'Payment required' }, { status: 403 });
   }
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
   const { data: identityArtifact } = await supabase
     .from('artifacts')
     .select('content')
-    .eq('user_id', user_id)
+    .eq('user_id', user.id)
     .eq('type', 'identity_report')
     .eq('status', 'ready')
     .order('created_at', { ascending: false })
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
   const { data: existing } = await supabase
     .from('artifacts')
     .select('id')
-    .eq('user_id', user_id)
+    .eq('user_id', user.id)
     .eq('type', 'path_options')
     .maybeSingle();
 
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
     const { data: newArtifact, error } = await supabase
       .from('artifacts')
       .insert({
-        user_id,
+        user_id: user.id,
         type: 'path_options',
         access_level: 'paid',
         status: 'generating',
