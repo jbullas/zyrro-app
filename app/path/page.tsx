@@ -94,7 +94,7 @@ export default function PathPage() {
         const res = await fetch('/api/verify-checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, user_id: user.id }),
+          body: JSON.stringify({ session_id: sessionId }),
         });
         const { granted } = await res.json() as { granted: boolean };
         window.history.replaceState({}, '', '/path');
