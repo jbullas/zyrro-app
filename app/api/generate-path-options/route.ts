@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 
-export const maxDuration = 60;
+// Keep in sync with GENERATION_BUDGET_MS in lib/generation-status.ts (240 s = 240_000 ms).
+export const maxDuration = 240;
 import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { hasPaidEntitlement } from '@/lib/entitlements';

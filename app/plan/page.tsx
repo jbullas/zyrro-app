@@ -5,18 +5,21 @@ import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import GatedState from '@/components/GatedState';
 import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
+import { useGenerationStatus } from '@/lib/generation-status';
 
-type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'generating' | 'ready' | 'failed';
+type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'has-artifact';
 
 export default function PlanPage() {
   const [pageState, setPageState]     = useState<PageState>('loading');
   const [userId, setUserId]           = useState<string | null>(null);
-  const [plan, setPlan]               = useState<PathPlanArtifactContent | null>(null);
+  const [artifactId, setArtifactId]   = useState<string | null>(null);
   const [activeSelection, setActiveSelection] = useState<{
     path_options_artifact_id: string;
     path_id: string;
   } | null>(null);
   const [retrying, setRetrying]       = useState(false);
+  // Used only to retry the initial artifact-ID lookup in the edge case where the
+  // row hasn't committed yet when the page first loads.
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -25,6 +28,9 @@ export default function PlanPage() {
       pollRef.current = null;
     }
   }, []);
+
+  const genPhase = useGenerationStatus(artifactId);
+  const plan     = genPhase.phase === 'ready' ? genPhase.content as PathPlanArtifactContent : null;
 
   useEffect(() => {
     const supabase = createClient();
@@ -37,7 +43,7 @@ export default function PlanPage() {
     ) {
       const { data } = await supabase
         .from('artifacts')
-        .select('id, status, content')
+        .select('id')
         .eq('user_id', uid)
         .eq('type', 'path_plan')
         .eq('path_options_artifact_id', pathOptionsArtifactId)
@@ -46,21 +52,20 @@ export default function PlanPage() {
 
       if (cancelled) return;
 
-      if (data?.status === 'ready' && data.content) {
-        setPlan(data.content as PathPlanArtifactContent);
-        setPageState('ready');
-        stopPolling();
-      } else if (data?.status === 'failed') {
-        setPageState('failed');
-        stopPolling();
-      } else {
-        setPageState('generating');
+      if (!data) {
+        // select-path always creates the artifact before redirect; this retry handles
+        // the edge case where the commit hasn't landed yet.
         if (pollRef.current === null) {
           pollRef.current = setInterval(() => {
             if (!cancelled) loadPlanArtifact(uid, pathOptionsArtifactId, pathId);
           }, 3000);
         }
+        return;
       }
+
+      stopPolling();
+      setArtifactId(data.id as string);
+      setPageState('has-artifact');
     }
 
     async function init() {
@@ -126,7 +131,8 @@ export default function PlanPage() {
   async function handleRetry() {
     if (!userId || !activeSelection) return;
     setRetrying(true);
-    await fetch('/api/select-path', {
+    setArtifactId(null);
+    const res = await fetch('/api/select-path', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -136,7 +142,10 @@ export default function PlanPage() {
       }),
     });
     setRetrying(false);
-    window.location.reload();
+    if (res.ok) {
+      const { artifact_id } = await res.json() as { artifact_id: string };
+      setArtifactId(artifact_id);
+    }
   }
 
   // ── Loading ───────────────────────────────────────────────────────
@@ -180,8 +189,8 @@ export default function PlanPage() {
     );
   }
 
-  // ── Generating ────────────────────────────────────────────────────
-  if (pageState === 'generating') {
+  // ── has-artifact: hook-driven generation states ───────────────────
+  if (genPhase.phase === 'idle') {
     return (
       <div className="flow-container generating-container">
         <div className="spin spinner" />
@@ -193,8 +202,36 @@ export default function PlanPage() {
     );
   }
 
-  // ── Failed ────────────────────────────────────────────────────────
-  if (pageState === 'failed') {
+  if (genPhase.phase === 'spinner') {
+    return (
+      <div className="flow-container generating-container">
+        <div className="spin spinner" />
+        <div className="text-center-col">
+          <h2>Your Plan is being prepared.</h2>
+          <p className="generating-desc">
+            {genPhase.variant === 'early'
+              ? 'This usually takes about a minute.'
+              : 'Still working — this is taking a little longer than usual…'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (genPhase.phase === 'come-back-later') {
+    return (
+      <div className="flow-container generating-container">
+        <div className="text-center-col">
+          <p className="generating-desc">
+            Your plan is still being prepared. This is taking longer than expected — you can
+            leave this page and come back in a few minutes. It&rsquo;ll be here when it&rsquo;s ready.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (genPhase.phase === 'failed') {
     return (
       <div className="flow-container gated-container">
         <p className="eyebrow">YOUR PLAN</p>

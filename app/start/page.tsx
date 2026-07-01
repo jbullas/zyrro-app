@@ -6,13 +6,6 @@ import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react';
 import { QUESTIONS } from '@/lib/identity-questions';
 import { createClient } from '@/utils/supabase/client';
 
-const GENERATING_STEPS = [
-  'Detecting your signatures',
-  'Mapping your constellation',
-  'Generating your Named Identity',
-  'Writing your report',
-];
-
 const DELIVERABLES = [
   'Your Named Identity',
   'Your Top 5 Identity Signatures',
@@ -20,7 +13,7 @@ const DELIVERABLES = [
   'What energises you, and what drains you',
 ];
 
-type Screen = 'intro' | 'question' | 'generating' | 'contact' | 'check-email';
+type Screen = 'intro' | 'question' | 'contact' | 'check-email';
 
 export default function StartPage() {
   const router = useRouter();
@@ -29,7 +22,6 @@ export default function StartPage() {
   const [screen, setScreen] = useState<Screen>('intro');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<string[]>(Array(13).fill(''));
-  const [generatingStep, setGeneratingStep] = useState(0);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -53,28 +45,6 @@ export default function StartPage() {
       });
     } catch {}
   }, []);
-
-  useEffect(() => {
-    if (screen !== 'generating') return;
-
-    const data = QUESTIONS.map((q, i) => ({
-      question_number: q.number,
-      question_text: q.question,
-      answer_text: answers[i] || '',
-    }));
-    localStorage.setItem('zyrro_discovery_answers', JSON.stringify(data));
-    localStorage.setItem('zyrro_questionnaire_complete', 'true');
-
-    const timers = [
-      setTimeout(() => setGeneratingStep(1), 900),
-      setTimeout(() => setGeneratingStep(2), 1900),
-      setTimeout(() => setGeneratingStep(3), 3100),
-      setTimeout(() => setGeneratingStep(4), 4300),
-      setTimeout(() => setScreen('contact'), 5500),
-    ];
-
-    return () => timers.forEach(clearTimeout);
-  }, [screen]);
 
   const currentQuestion = QUESTIONS[questionIndex];
   const currentAnswer = answers[questionIndex] || '';
@@ -108,7 +78,7 @@ export default function StartPage() {
   function handleContinue() {
     saveToStorage(answers);
     if (questionIndex === 12) {
-      setScreen('generating');
+      setScreen('contact');
     } else {
       setQuestionIndex(qi => qi + 1);
     }
@@ -119,12 +89,26 @@ export default function StartPage() {
     setContactError('');
     setSubmitting(true);
 
-    // 1. Create user account immediately
+    // Read answers from localStorage; strip question_text — lives server-side in QUESTIONS
+    const stored = localStorage.getItem('zyrro_discovery_answers');
+    let discoveryAnswers: Array<{ question_number: number; answer_text: string }> = [];
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as Array<{ question_number: number; question_text: string; answer_text: string }>;
+        if (Array.isArray(parsed)) {
+          discoveryAnswers = parsed.map(a => ({
+            question_number: a.question_number,
+            answer_text: a.answer_text.slice(0, 1000),
+          }));
+        }
+      } catch {}
+    }
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password: crypto.randomUUID(),
       options: {
-        data: { display_name: name },
+        data: { display_name: name, discovery_answers: discoveryAnswers },
         emailRedirectTo: window.location.origin + '/auth/callback',
       },
     });
@@ -135,28 +119,6 @@ export default function StartPage() {
       return;
     }
 
-    const userId = signUpData.user.id;
-
-    // 2. Read discovery answers from localStorage
-    const stored = localStorage.getItem('zyrro_discovery_answers');
-    let discoveryAnswers: Array<{ question_number: number; question_text: string; answer_text: string }> = [];
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) discoveryAnswers = parsed;
-      } catch {}
-    }
-
-    if (discoveryAnswers.length > 0) {
-      // 3. API route handles profiles insert, discovery_answers insert, and generation
-      fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, name, answers: discoveryAnswers }),
-      });
-    }
-
-    // 5. Advance to check-email screen
     localStorage.setItem('zyrro_user_name', name);
     setSubmitting(false);
     setScreen('check-email');
@@ -167,72 +129,6 @@ export default function StartPage() {
       email,
       options: { emailRedirectTo: window.location.origin + '/auth/callback' },
     });
-  }
-
-  // ── GENERATING ─────────────────────────────────────────────────────
-  if (screen === 'generating') {
-    return (
-      <div className="flow-container generating-container">
-        <div className="spin spinner" />
-
-        <div className="text-center-col">
-          <h2>Building your report</h2>
-          <p className="generating-desc">
-            Zyrro is analysing your answers and detecting your identity patterns.
-          </p>
-        </div>
-
-        <div className="generating-steps">
-          {GENERATING_STEPS.map((step, i) => {
-            const stepNum = i + 1;
-            const isDone = generatingStep >= stepNum;
-            const isCurrent = generatingStep === stepNum - 1;
-            return (
-              <div
-                key={step}
-                className="step-row"
-                style={{
-                  opacity: isDone || isCurrent ? 1 : 0.3,
-                  transition: 'opacity 0.5s ease',
-                }}
-              >
-                <div
-                  className="step-indicator transition-bg"
-                  style={{ background: isDone ? 'var(--gradient)' : 'rgba(0,0,0,0.06)' }}
-                >
-                  {isDone ? (
-                    <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
-                      <path
-                        d="M1 4.5L4 7.5L10 1"
-                        stroke="white"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  ) : (
-                    <div
-                      className="step-dot transition-bg"
-                      style={{ background: isCurrent ? 'var(--color-grad-2)' : 'var(--color-nav-inactive)' }}
-                    />
-                  )}
-                </div>
-                <span
-                  className="step-label"
-                  style={{
-                    color: isDone ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                    fontWeight: isDone ? 600 : 400,
-                    transition: 'color 0.4s ease',
-                  }}
-                >
-                  {step}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
   }
 
   // ── CONTACT COLLECTION ─────────────────────────────────────────────
