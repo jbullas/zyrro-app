@@ -21,9 +21,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { path_options_artifact_id, path_id } = await req.json() as {
+  const { path_options_artifact_id, path_id, project_name } = await req.json() as {
     path_options_artifact_id: string;
     path_id: string;
+    project_name?: string;
   };
 
   if (!path_options_artifact_id || !path_id) {
@@ -41,7 +42,12 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient();
 
   // Record the selection event (append-only; latest row = active selection)
-  await supabase.from('path_selections').insert({ user_id: user.id, path_options_artifact_id, path_id });
+  await supabase.from('path_selections').insert({
+    user_id: user.id,
+    path_options_artifact_id,
+    path_id,
+    ...(project_name ? { project_name } : {}),
+  });
 
   // Return the existing ready plan immediately — no regeneration, no cost
   const { data: existingPlan } = await supabase

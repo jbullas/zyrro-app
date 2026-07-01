@@ -597,6 +597,39 @@ p {
   gap: 10px;
 }
 
+/* ── PROJECT NAME CARD ── */
+.project-name-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-name-card {
+  text-align: left;
+  background: #fff;
+  border-radius: 10px;
+  border: 0.5px solid rgba(0,0,0,0.1);
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.project-name-card.selected {
+  border-color: var(--color-accent);
+}
+
+.project-name-card-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.project-name-card-rationale {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 /* ── PATH OPTION CARD ── */
 .option-card-sigs {
   padding: 10px 16px;

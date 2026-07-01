@@ -35,6 +35,11 @@ export default function PathPage() {
   const [confirmPending, setConfirmPending]         = useState<PathOption | null>(null);
   const [selectingId, setSelectingId]               = useState<string | null>(null);
   const [startFailed, setStartFailed]               = useState(false);
+  const [namingOption, setNamingOption]             = useState<PathOption | null>(null);
+  const [namingLoading, setNamingLoading]           = useState(false);
+  const [nameOptions, setNameOptions]               = useState<{ name: string; rationale: string }[]>([]);
+  const [selectedName, setSelectedName]             = useState<string | null>(null);
+  const [customName, setCustomName]                 = useState('');
 
   // pathOptionsArtifactId doubles as the hook's artifact ID
   const genPhase   = useGenerationStatus(pathOptionsArtifactId);
@@ -191,17 +196,42 @@ export default function PathPage() {
     }
   }
 
-  async function handleConfirmSelect() {
-    if (!confirmPending || !userId || !pathOptionsArtifactId || selectingId) return;
+  async function handleProceedToNaming() {
+    if (!confirmPending || !userId || !pathOptionsArtifactId) return;
     const option = confirmPending;
-    setSelectingId(option.id);
     setConfirmPending(null);
+    setNamingOption(option);
+    setNameOptions([]);
+    setSelectedName(null);
+    setCustomName('');
+    setNamingLoading(true);
+    const res = await fetch('/api/generate-project-name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path_options_artifact_id: pathOptionsArtifactId,
+        path_id: option.id,
+      }),
+    });
+    setNamingLoading(false);
+    if (res.ok) {
+      const { options: generated } = await res.json() as { options: { name: string; rationale: string }[] };
+      setNameOptions(generated);
+    }
+  }
+
+  async function handleFinalizeSelect(projectName?: string) {
+    if (!namingOption || !userId || !pathOptionsArtifactId || selectingId) return;
+    const option = namingOption;
+    setSelectingId(option.id);
+    setNamingOption(null);
     const res = await fetch('/api/select-path', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         path_options_artifact_id: pathOptionsArtifactId,
         path_id: option.id,
+        ...(projectName ? { project_name: projectName } : {}),
       }),
     });
     if (res.ok) {
@@ -390,15 +420,73 @@ export default function PathPage() {
             <h2>You&rsquo;ve chosen {confirmPending.name}.</h2>
             <p>This will generate your personalised Plan. You can change your path later.</p>
             <div className="dialog-actions">
-              <button
-                onClick={handleConfirmSelect}
-                disabled={!!selectingId}
-                className={`btn-primary${selectingId ? ' btn-disabled' : ''}`}
-              >
-                {selectingId ? 'Generating…' : 'Generate my Plan'}
+              <button onClick={handleProceedToNaming} className="btn-primary">
+                Continue
               </button>
               <button onClick={() => setConfirmPending(null)} className="btn-link">
                 Not yet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Project naming dialog */}
+      {namingOption && (
+        <div className="dialog-overlay" role="dialog" aria-modal="true">
+          <div className="dialog-card">
+            <p className="eyebrow">NAME YOUR PROJECT</p>
+            <h2>Want to name this?</h2>
+            <p>
+              Give {namingOption.name} a name of its own, or skip — your path proceeds
+              either way.
+            </p>
+
+            {namingLoading && <div className="spin spinner" />}
+
+            {!namingLoading && nameOptions.length > 0 && (
+              <div className="project-name-options">
+                {nameOptions.map(opt => (
+                  <button
+                    key={opt.name}
+                    type="button"
+                    onClick={() => { setSelectedName(opt.name); setCustomName(''); }}
+                    className={`project-name-card${selectedName === opt.name ? ' selected' : ''}`}
+                  >
+                    <div className="project-name-card-title">{opt.name}</div>
+                    <p className="project-name-card-rationale">{opt.rationale}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!namingLoading && (
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Or write your own"
+                value={customName}
+                onChange={(e) => {
+                  setCustomName(e.target.value);
+                  setSelectedName(null);
+                }}
+              />
+            )}
+
+            <div className="dialog-actions">
+              <button
+                onClick={() => handleFinalizeSelect(selectedName ?? (customName.trim() || undefined))}
+                disabled={!!selectingId || (!selectedName && !customName.trim())}
+                className={`btn-primary${selectingId || (!selectedName && !customName.trim()) ? ' btn-disabled' : ''}`}
+              >
+                {selectingId ? 'Generating…' : 'Name my Project'}
+              </button>
+              <button
+                onClick={() => handleFinalizeSelect(undefined)}
+                disabled={!!selectingId}
+                className="btn-link"
+              >
+                Skip
               </button>
             </div>
           </div>
