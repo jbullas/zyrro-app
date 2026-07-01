@@ -171,3 +171,31 @@ Foundational framework documents in docs/framework/:
 - zyrro_named_identity_system_v_1.md
 - zyrro_narrative_transformation_rules_v_1.md
 - zyrro_path_plan_blueprint_v_1.md
+
+---
+
+## Mentor & Continuity — Philosophy Decisions (2026-07-01)
+
+1. Mentor mode is Zyrro-detected by default, with manual override always
+   available. Rationale: the mentor should adapt (support / accountability /
+   challenge) to the user's current state on its own, while still letting the
+   user override it at any time. Note: this supersedes/extends ticket #15,
+   which was scoped as user-selected only.
+
+2. The Reframe (/path, Section 3) should fold in emerging_signatures when
+   active, biasing the reframe toward forward-direction language rather than
+   pure reinterpretation, without exposing it as a separate "new identity"
+   mechanic. Rationale: transparency and consent are satisfied by the reframe
+   being evidence-backed and earned, not by a disclosure step. (Implementation
+   tracked separately as its own low-priority ticket.)
+
+3. Continuity ("who we said this person is, what path they chose, how today
+   connects") is meant to surface on the Dashboard, not just live inside the
+   mentor's context. Rationale: this is the strongest current argument for the
+   memory table's owner being the mentor/continuity system — formal decision
+   still pending, Dashboard design is a separate discussion.
+
+4. Zyrro is a daily companion, but its purpose is to progress the user toward
+   their chosen path ("Northern Star") through real action and real-world
+   people, not to become a substitute relationship. Rationale: this should
+   inform the mentor's system prompt design when that work happens.
