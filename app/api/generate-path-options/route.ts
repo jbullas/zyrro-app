@@ -2,10 +2,10 @@ import { NextRequest, NextResponse, after } from 'next/server';
 
 // Keep in sync with GENERATION_BUDGET_MS in lib/generation-status.ts (240 s = 240_000 ms).
 export const maxDuration = 240;
-import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
+import { getChatCompletion } from '@/lib/llm';
 import { PATH_OPTIONS_PROMPT } from '@/lib/prompts/path-options';
 import type { PathOptionsArtifactContent } from '@/lib/artifact-schemas';
 
@@ -29,11 +29,9 @@ function validatePathOptions(data: unknown): data is PathOptionsArtifactContent 
 
 async function runGeneration(artifactId: string, identityReport: unknown) {
   const supabase = createServiceClient();
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+    const content = await getChatCompletion({
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: PATH_OPTIONS_PROMPT },
@@ -43,7 +41,7 @@ async function runGeneration(artifactId: string, identityReport: unknown) {
       temperature: 0,
     });
 
-    const options = JSON.parse(response.choices[0]?.message?.content ?? '{}');
+    const options = JSON.parse(content ?? '{}');
 
     if (!validatePathOptions(options)) {
       throw new Error('Path options failed validation');

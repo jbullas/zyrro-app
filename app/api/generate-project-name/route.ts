@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
+import { getChatCompletion } from '@/lib/llm';
 import { PROJECT_NAME_PROMPT } from '@/lib/prompts/project-name';
 import type { PathOption } from '@/lib/artifact-schemas';
 
@@ -74,11 +74,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Chosen path option not found' }, { status: 404 });
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
   try {
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+    const content = await getChatCompletion({
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: PROJECT_NAME_PROMPT },
@@ -95,7 +92,7 @@ export async function POST(req: NextRequest) {
       temperature: 0.7,
     });
 
-    const parsed = JSON.parse(response.choices[0]?.message?.content ?? '{}');
+    const parsed = JSON.parse(content ?? '{}');
 
     if (!validateProjectNameOptions(parsed)) {
       throw new Error('Project name options failed validation');

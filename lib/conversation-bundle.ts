@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
+import { getChatCompletion } from '@/lib/llm';
 import { CONVERSATION_BUNDLE_PROMPT } from '@/lib/prompts/conversation-bundle';
 
 function createServiceClient() {
@@ -53,10 +53,7 @@ export async function resolveConversationBundle(
     return null;
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+  const content = await getChatCompletion({
     messages: [
       { role: 'system', content: CONVERSATION_BUNDLE_PROMPT },
       { role: 'user', content: JSON.stringify(messages ?? []) },
@@ -64,7 +61,7 @@ export async function resolveConversationBundle(
     temperature: 0.3,
   });
 
-  const summary = response.choices[0]?.message?.content?.trim() ?? '';
+  const summary = content?.trim() ?? '';
   const summaryGeneratedAt = new Date().toISOString();
 
   const { error: updateError } = await supabase

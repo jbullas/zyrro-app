@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
+import { getChatCompletion } from '@/lib/llm';
 import { DETECTION_PROMPT } from '@/lib/prompts/identity-analysis';
 import { LAYER_2_PROMPT } from '@/lib/prompts/identity-report';
 
@@ -26,12 +26,10 @@ export async function generateIdentityReport({
   name: string;
 }): Promise<void> {
   const supabase = createServiceClient();
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
     // Step A — Identity Analysis
-    const analysisResponse = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+    const analysisContent = await getChatCompletion({
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: DETECTION_PROMPT },
@@ -41,13 +39,10 @@ export async function generateIdentityReport({
       temperature: 0,
     });
 
-    const analysis = JSON.parse(
-      analysisResponse.choices[0]?.message?.content ?? '{}'
-    );
+    const analysis = JSON.parse(analysisContent ?? '{}');
 
     // Step B — Report Generation
-    const reportResponse = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+    const reportContent = await getChatCompletion({
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: LAYER_2_PROMPT },
@@ -57,9 +52,7 @@ export async function generateIdentityReport({
       temperature: 0,
     });
 
-    const report = JSON.parse(
-      reportResponse.choices[0]?.message?.content ?? '{}'
-    );
+    const report = JSON.parse(reportContent ?? '{}');
 
     // Step C — Update artifact to ready
     await supabase

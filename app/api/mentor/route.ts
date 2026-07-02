@@ -1,8 +1,8 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/utils/supabase/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { hasEntitlement } from "@/lib/entitlements";
+import { getChatCompletion } from "@/lib/llm";
 import type {
   IdentitySignatureReportArtifactContent,
   PathOptionsArtifactContent,
@@ -124,16 +124,14 @@ On the first message (the trigger), open with a brief personalised greeting that
 }
 
 async function runChat(
-  client: OpenAI,
   systemPrompt: string,
   messages: ChatMessage[]
 ): Promise<string> {
-  const response = await client.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4o",
+  const content = await getChatCompletion({
     messages: [{ role: "system", content: systemPrompt }, ...messages],
     temperature: 0.7,
   });
-  return response.choices[0]?.message?.content ?? "No response.";
+  return content ?? "No response.";
 }
 
 export async function POST(req: Request) {
@@ -164,8 +162,7 @@ export async function POST(req: Request) {
 
     const contextBlock = await buildContextBlock(user.id);
     const systemPrompt = buildSystemPrompt(contextBlock);
-    const client = new OpenAI({ apiKey });
-    const reply = await runChat(client, systemPrompt, messages);
+    const reply = await runChat(systemPrompt, messages);
 
     return NextResponse.json({ reply });
   } catch (error) {

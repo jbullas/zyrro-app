@@ -1,6 +1,6 @@
 import { after } from 'next/server';
-import OpenAI from 'openai';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
+import { getChatCompletion } from '@/lib/llm';
 import { PATH_PLAN_PROMPT } from '@/lib/prompts/path-plan';
 import type { PathPlanArtifactContent, PathOption } from '@/lib/artifact-schemas';
 
@@ -28,11 +28,9 @@ async function runPlanGeneration(
   chosenOption: PathOption,
 ) {
   const supabase = createServiceClient();
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+    const content = await getChatCompletion({
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: PATH_PLAN_PROMPT },
@@ -45,7 +43,7 @@ async function runPlanGeneration(
       temperature: 0,
     });
 
-    const plan = JSON.parse(response.choices[0]?.message?.content ?? '{}');
+    const plan = JSON.parse(content ?? '{}');
 
     if (!validatePathPlan(plan)) {
       throw new Error('Path plan failed validation');
