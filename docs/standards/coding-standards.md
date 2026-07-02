@@ -83,4 +83,14 @@ for the tier/purpose map.
   delete one that has already been applied —
   correct mistakes with a new migration
 
+## LLM calls
+- All calls to the LLM provider go through `lib/llm.ts` — never
+  instantiate the provider client or call its completion method
+  directly in a route or lib file
+- If `lib/llm.ts` doesn't exist yet, this rule takes effect once
+  ticket #47 lands it; new code in the meantime should still avoid
+  adding another independent call site
+- Model name is read from env (`OPENAI_MODEL`, default `gpt-4o`) —
+  never hardcoded
+
 For session start protocol, see `AGENTS.md`.
