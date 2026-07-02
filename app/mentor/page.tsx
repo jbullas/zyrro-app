@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { createConversation } from "@/lib/conversations";
-import { saveMessage } from "@/lib/messages";
+import { createConversation, listConversations, type ConversationListItem } from "@/lib/conversations";
+import { saveMessage, listMessages } from "@/lib/messages";
 import { createClient } from "@/utils/supabase/client";
 import GatedState from "@/components/GatedState";
 
@@ -11,6 +11,8 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
+
+type View = "list" | "chat";
 
 export default function MentorPage() {
   const [input, setInput] = useState("");
@@ -22,6 +24,11 @@ export default function MentorPage() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const [grantLoading, setGrantLoading] = useState(false);
+  const [view, setView] = useState<View>("list");
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [endLoading, setEndLoading] = useState(false);
+  const [endError, setEndError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -79,41 +86,101 @@ export default function MentorPage() {
 
   useEffect(() => {
     if (!subscriptionChecked || !isAuthenticated || !isSubscribed) return;
-    if (messages.length > 0) return;
+    if (view !== "list") return;
 
-    async function startConversation() {
-      setLoading(true);
-
+    async function refreshConversations() {
+      setConversationsLoading(true);
       try {
-        const conversation = await createConversation();
-        setConversationId(conversation.id);
-
-        const res = await fetch("/api/mentor", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: "Start" }],
-          }),
-        });
-
-        const data: { reply?: string; error?: string } = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Request failed");
-
-        const firstReply = data.reply ?? "No response.";
-
-        await saveMessage({ conversationId: conversation.id, role: "assistant", content: firstReply });
-        setMessages([{ role: "assistant", content: firstReply }]);
+        const rows = await listConversations();
+        setConversations(rows);
       } catch (err) {
-        console.error("startConversation failed:", err);
-        setMessages([{ role: "assistant", content: "Error connecting to mentor." }]);
+        console.error("listConversations failed:", err);
       } finally {
-        setLoading(false);
-        inputRef.current?.focus();
+        setConversationsLoading(false);
       }
     }
 
-    startConversation();
-  }, [subscriptionChecked, isAuthenticated, isSubscribed, messages.length]);
+    refreshConversations();
+  }, [subscriptionChecked, isAuthenticated, isSubscribed, view]);
+
+  async function startConversation() {
+    setLoading(true);
+
+    try {
+      const conversation = await createConversation();
+      setConversationId(conversation.id);
+
+      const res = await fetch("/api/mentor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Start" }],
+        }),
+      });
+
+      const data: { reply?: string; error?: string } = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+
+      const firstReply = data.reply ?? "No response.";
+
+      await saveMessage({ conversationId: conversation.id, role: "assistant", content: firstReply });
+      setMessages([{ role: "assistant", content: firstReply }]);
+    } catch (err) {
+      console.error("startConversation failed:", err);
+      setMessages([{ role: "assistant", content: "Error connecting to mentor." }]);
+    } finally {
+      setLoading(false);
+      setEndError("");
+      setView("chat");
+      inputRef.current?.focus();
+    }
+  }
+
+  async function openConversation(id: string) {
+    setLoading(true);
+
+    try {
+      const rows = await listMessages(id);
+      setMessages(rows);
+      setConversationId(id);
+      setEndError("");
+      setView("chat");
+    } catch (err) {
+      console.error("listMessages failed:", err);
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  function backToList() {
+    setView("list");
+  }
+
+  async function handleEndConversation() {
+    if (!conversationId || endLoading) return;
+
+    setEndLoading(true);
+    setEndError("");
+
+    try {
+      const res = await fetch("/api/end-conversation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: conversationId }),
+      });
+
+      const data: { error?: string } = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+
+      setView("list");
+    } catch (err) {
+      console.error("end-conversation failed:", err);
+      setEndError("Couldn't end the conversation. Try again.");
+    } finally {
+      setEndLoading(false);
+    }
+  }
 
   async function handleSend() {
     if (!input.trim() || loading) return;
@@ -221,8 +288,49 @@ export default function MentorPage() {
     );
   }
 
+  if (view === "list") {
+    return (
+      <div className="flow-container mentor-list-container">
+        <div className="mentor-list-header">
+          <h2>Your conversations</h2>
+          <button onClick={startConversation} disabled={loading} className="btn-secondary btn-secondary-compact">
+            New conversation
+          </button>
+        </div>
+
+        {conversationsLoading ? (
+          <p className="mentor-list-empty">Loading…</p>
+        ) : conversations.length === 0 ? (
+          <p className="mentor-list-empty">No conversations yet — start one above.</p>
+        ) : (
+          conversations.map((c) => (
+            <button key={c.id} onClick={() => openConversation(c.id)} className="toc-row">
+              <span className={`mentor-list-row-title${c.summary ? "" : " mentor-list-row-title--untitled"}`}>
+                {c.summary || "Untitled conversation"}
+              </span>
+              <span className="mentor-list-row-date">
+                {new Date(c.last_message_at ?? c.created_at).toLocaleDateString()}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flow-container mentor-chat-container">
+      <div className="mentor-chat-header">
+        <button onClick={backToList} className="btn-back">← Back</button>
+        <button onClick={handleEndConversation} disabled={endLoading} className="btn-link btn-link-inline">
+          {endLoading ? "Ending…" : "End conversation"}
+        </button>
+      </div>
+      {endError && (
+        <div className="mentor-end-error-wrap">
+          <p className="form-error">{endError}</p>
+        </div>
+      )}
       <div className="mentor-messages">
         {messages.map((msg, i) => (
           <div key={i} className={`mentor-message mentor-message--${msg.role}`}>

@@ -45,3 +45,35 @@ export async function saveMessage({
 
   return data
 }
+
+export type MessageListItem = {
+  role: MessageRole
+  content: string
+}
+
+export async function listMessages(conversationId: string): Promise<MessageListItem[]> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError) {
+    throw userError
+  }
+
+  if (!user) {
+    throw new Error('No authenticated user found')
+  }
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('role, content')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []) as MessageListItem[]
+}

@@ -1609,3 +1609,56 @@ p {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.mentor-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px var(--spacing-screen-x) 0;
+  flex-shrink: 0;
+}
+
+.mentor-end-error-wrap {
+  padding: 8px var(--spacing-screen-x) 0;
+  flex-shrink: 0;
+}
+
+/* ── MENTOR CONVERSATION LIST ── */
+
+.mentor-list-container {
+  padding: 20px var(--spacing-screen-x) 20px;
+  overflow-y: auto;
+}
+
+.mentor-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.mentor-list-empty {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+  padding: 20px 0;
+}
+
+.mentor-list-row-title {
+  flex: 1;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mentor-list-row-title--untitled {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.mentor-list-row-date {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
