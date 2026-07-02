@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# planning-surface bundle (regenerate with scripts/make-bundle.mjs)
+/context-bundle.md
