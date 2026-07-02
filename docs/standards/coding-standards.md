@@ -87,10 +87,13 @@ for the tier/purpose map.
 - All calls to the LLM provider go through `lib/llm.ts` — never
   instantiate the provider client or call its completion method
   directly in a route or lib file
-- If `lib/llm.ts` doesn't exist yet, this rule takes effect once
-  ticket #47 lands it; new code in the meantime should still avoid
-  adding another independent call site
 - Model name is read from env (`OPENAI_MODEL`, default `gpt-4o`) —
-  never hardcoded
+  never hardcoded. Swapping models within the same provider is a
+  one-line env change.
+- Swapping providers entirely (e.g. OpenAI to Anthropic) is not a
+  one-line change — `lib/llm.ts` currently wraps the OpenAI SDK
+  directly, so a provider swap means rewriting the inside of that one
+  file. The win from centralizing calls is that it's one file to
+  change, not zero-effort provider independence.
 
 For session start protocol, see `AGENTS.md`.
