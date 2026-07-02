@@ -31,3 +31,15 @@ Changelogs are append-only history. Never edit past entries.
 
 - The claude.ai planning surface is blind to this repo. To refresh it, run `node scripts/make-bundle.mjs`, which writes `context-bundle.md` (gitignored) to attach to the planning chat.
 - Code owns the volatile facts (routes, file structure, build status, runtime model). Don't restate them in docs — reference the code.
+
+## Local memory (Claude Code)
+
+Claude Code maintains its own persistent, file-based memory outside this
+repo, at `.claude/projects/C--Users-miros-zyrro-app/memory/`. It holds
+narrow, factual operational lessons (e.g. how to introspect live Supabase
+schema, how to confirm a migration was actually applied) — not product
+decisions, not code-state facts. Code-state facts still come only from
+the live repo; product/architecture decisions still live in `docs/`. This
+memory is a below-the-radar operational aid, not a second source of
+truth — if something in it matters for how the team works, it belongs in
+`docs/` or here in `AGENTS.md` instead.
