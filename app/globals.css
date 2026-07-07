@@ -1518,8 +1518,8 @@ p {
 }
 
 .mentor-bubble--user {
-  background: var(--gradient-cta);
-  color: #fff;
+  background: rgba(0,0,0,0.06);
+  color: var(--color-text-primary);
   border-radius: var(--radius-md) var(--radius-sm) var(--radius-md) var(--radius-md);
   font-size: 15px;
 }
@@ -1608,7 +1608,7 @@ p {
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-bold);
   color: #fff;
-  background: var(--gradient-cta);
+  background: var(--color-accent);
   border: none;
   border-radius: var(--radius-pill);
   cursor: pointer;

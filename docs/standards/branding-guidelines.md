@@ -49,7 +49,6 @@ Always appears in:
 
 * Application header (full surface, every screen)  
 * Identity badge (the named identity card on dashboard)  
-* CTA buttons (primary actions only)  
 * Signature score bars  
 * Progress bar (question flow)  
 * Step number circles  
