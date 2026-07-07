@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import LinkButton from '@/components/LinkButton';
+import MessageState from '@/components/MessageState';
 import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -270,12 +271,12 @@ export default function PathPage() {
   if (pageState === 'has-artifact') {
     if (startFailed) {
       return (
-        <div className="flow-container gated-container">
-          <p className="eyebrow">YOUR PATH</p>
-          <h2>Something went wrong.</h2>
-          <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
-          <PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>
-        </div>
+        <MessageState
+          eyebrow="YOUR PATH"
+          heading="Something went wrong."
+          body="We couldn’t generate your Path Options. Please try again."
+          cta={<PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>}
+        />
       );
     }
 
@@ -322,12 +323,12 @@ export default function PathPage() {
 
     if (genPhase.phase === 'failed') {
       return (
-        <div className="flow-container gated-container">
-          <p className="eyebrow">YOUR PATH</p>
-          <h2>Something went wrong.</h2>
-          <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
-          <PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>
-        </div>
+        <MessageState
+          eyebrow="YOUR PATH"
+          heading="Something went wrong."
+          body="We couldn’t generate your Path Options. Please try again."
+          cta={<PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>}
+        />
       );
     }
     // phase === 'ready': fall through to report render below

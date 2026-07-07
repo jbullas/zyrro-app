@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
+import MessageState from '@/components/MessageState';
 import {
   IconTelescope, IconBuildingSkyscraper, IconSparkles, IconFlask, IconCirclesRelation,
   IconChartDots, IconArrowBarDown, IconLayersIntersect, IconSwords, IconRocket,
@@ -319,24 +320,26 @@ export default function IdentityPage() {
   // ── State 1: Anonymous ─────────────────────────────────────────────
   if (pageState === 'anonymous') {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
-        <h1>Your Identity Signature Report is waiting.</h1>
-        <p>Create a free account to access your Named Identity and full Identity Signature Report.</p>
-        <PrimaryButton href="/start">Start the questionnaire</PrimaryButton>
-      </div>
+      <MessageState
+        eyebrow="IDENTITY SIGNATURE REPORT"
+        heading="Your Identity Signature Report is waiting."
+        headingLevel="h1"
+        body="Create a free account to access your Named Identity and full Identity Signature Report."
+        cta={<PrimaryButton href="/start">Start the questionnaire</PrimaryButton>}
+      />
     );
   }
 
   // ── State 2: No questionnaire ──────────────────────────────────────
   if (pageState === 'no-questionnaire') {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
-        <h1>Your report isn&rsquo;t ready yet.</h1>
-        <p>Complete the questionnaire to generate your Identity Signature Report.</p>
-        <PrimaryButton href="/start">Start the questionnaire</PrimaryButton>
-      </div>
+      <MessageState
+        eyebrow="IDENTITY SIGNATURE REPORT"
+        heading="Your report isn’t ready yet."
+        headingLevel="h1"
+        body="Complete the questionnaire to generate your Identity Signature Report."
+        cta={<PrimaryButton href="/start">Start the questionnaire</PrimaryButton>}
+      />
     );
   }
 
@@ -401,14 +404,12 @@ export default function IdentityPage() {
 
   if (genPhase.phase === 'failed') {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
-        <h2>Something went wrong.</h2>
-        <p>We couldn&rsquo;t generate your report. Please try again.</p>
-        <PrimaryButton onClick={handleRetry}>
-          Try again
-        </PrimaryButton>
-      </div>
+      <MessageState
+        eyebrow="IDENTITY SIGNATURE REPORT"
+        heading="Something went wrong."
+        body="We couldn’t generate your report. Please try again."
+        cta={<PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>}
+      />
     );
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
+import MessageState from '@/components/MessageState';
 import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -164,27 +165,24 @@ export default function PlanPage() {
   // ── Unpaid ────────────────────────────────────────────────────────
   if (pageState === 'unpaid') {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">YOUR PLAN</p>
-        <h2>Your Plan is waiting on the other side of Path.</h2>
-        <p>
-          Choose one of your four path options on the Path page and your
-          tailored Plan will be generated automatically.
-        </p>
-        <PrimaryButton href="/path">See Your Path Options</PrimaryButton>
-      </div>
+      <MessageState
+        eyebrow="YOUR PLAN"
+        heading="Your Plan is waiting on the other side of Path."
+        body="Choose one of your four path options on the Path page and your tailored Plan will be generated automatically."
+        cta={<PrimaryButton href="/path">See Your Path Options</PrimaryButton>}
+      />
     );
   }
 
   // ── No selection ──────────────────────────────────────────────────
   if (pageState === 'no-selection') {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">YOUR PLAN</p>
-        <h2>Choose your path first.</h2>
-        <p>Select one of your four path options and your Plan will be generated automatically.</p>
-        <PrimaryButton href="/path">See Your Path Options</PrimaryButton>
-      </div>
+      <MessageState
+        eyebrow="YOUR PLAN"
+        heading="Choose your path first."
+        body="Select one of your four path options and your Plan will be generated automatically."
+        cta={<PrimaryButton href="/path">See Your Path Options</PrimaryButton>}
+      />
     );
   }
 
@@ -232,14 +230,16 @@ export default function PlanPage() {
 
   if (genPhase.phase === 'failed') {
     return (
-      <div className="flow-container gated-container">
-        <p className="eyebrow">YOUR PLAN</p>
-        <h2>Something went wrong.</h2>
-        <p>We couldn&rsquo;t generate your Plan. Please try again.</p>
-        <PrimaryButton onClick={handleRetry} disabled={retrying}>
-          {retrying ? 'Retrying…' : 'Try again'}
-        </PrimaryButton>
-      </div>
+      <MessageState
+        eyebrow="YOUR PLAN"
+        heading="Something went wrong."
+        body="We couldn’t generate your Plan. Please try again."
+        cta={
+          <PrimaryButton onClick={handleRetry} disabled={retrying}>
+            {retrying ? 'Retrying…' : 'Try again'}
+          </PrimaryButton>
+        }
+      />
     );
   }
 
