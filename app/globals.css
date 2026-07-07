@@ -1532,15 +1532,18 @@ p {
   border-radius: var(--radius-sm) var(--radius-md) var(--radius-md) var(--radius-md);
 }
 
-.mentor-bubble--loading {
-  padding: 14px 18px;
+.mentor-typing {
   display: flex;
   align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
 }
 
-.mentor-bubble--loading .spinner {
-  width: 20px;
-  height: 20px;
+.mentor-typing .spinner {
+  width: 16px;
+  height: 16px;
   border-width: 2px;
 }
 
@@ -1558,6 +1561,14 @@ p {
   margin: 0 0 10px;
   padding-left: 20px;
   color: var(--color-text-primary);
+}
+
+.mentor-md-ul {
+  list-style-type: disc;
+}
+
+.mentor-md-ol {
+  list-style-type: decimal;
 }
 
 .mentor-md-li {

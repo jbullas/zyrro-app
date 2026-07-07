@@ -354,8 +354,9 @@ export default function MentorPage() {
         ))}
         {loading && (
           <div className="mentor-message mentor-message--assistant">
-            <div className="mentor-bubble mentor-bubble--assistant mentor-bubble--loading">
+            <div className="mentor-typing">
               <span className="spinner spin" />
+              <span>Thinking...</span>
             </div>
           </div>
         )}
