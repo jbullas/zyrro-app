@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
+import GeneratingState from '@/components/GeneratingState';
 import {
   IconTelescope, IconBuildingSkyscraper, IconSparkles, IconFlask, IconCirclesRelation,
   IconChartDots, IconArrowBarDown, IconLayersIntersect, IconSwords, IconRocket,
@@ -363,42 +364,32 @@ export default function IdentityPage() {
   // ── has-artifact: hook-driven generation states ────────────────────
   if (genPhase.phase === 'idle') {
     return (
-      <div className="flow-container generating-container">
-        <div className="spin spinner" />
-        <div className="text-center-col">
-          <h2>Your Identity Signature Report is being prepared.</h2>
-          <p className="generating-desc">This usually takes about a minute.</p>
-        </div>
-      </div>
+      <GeneratingState
+        heading="Your Identity Signature Report is being prepared."
+        description="This usually takes about a minute."
+      />
     );
   }
 
   if (genPhase.phase === 'spinner') {
     return (
-      <div className="flow-container generating-container">
-        <div className="spin spinner" />
-        <div className="text-center-col">
-          <h2>Your Identity Signature Report is being prepared.</h2>
-          <p className="generating-desc">
-            {genPhase.variant === 'early'
-              ? 'This usually takes about a minute.'
-              : 'Still working — this is taking a little longer than usual…'}
-          </p>
-        </div>
-      </div>
+      <GeneratingState
+        heading="Your Identity Signature Report is being prepared."
+        description={
+          genPhase.variant === 'early'
+            ? 'This usually takes about a minute.'
+            : 'Still working — this is taking a little longer than usual…'
+        }
+      />
     );
   }
 
   if (genPhase.phase === 'come-back-later') {
     return (
-      <div className="flow-container generating-container">
-        <div className="text-center-col">
-          <p className="generating-desc">
-            Your report is still being prepared. This is taking longer than expected — you can
-            leave this page and come back in a few minutes. It&rsquo;ll be here when it&rsquo;s ready.
-          </p>
-        </div>
-      </div>
+      <GeneratingState
+        spinner={false}
+        description="Your report is still being prepared. This is taking longer than expected — you can leave this page and come back in a few minutes. It’ll be here when it’s ready."
+      />
     );
   }
 

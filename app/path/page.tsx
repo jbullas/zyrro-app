@@ -7,6 +7,7 @@ import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import LinkButton from '@/components/LinkButton';
 import MessageState from '@/components/MessageState';
+import GeneratingState from '@/components/GeneratingState';
 import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -247,12 +248,9 @@ export default function PathPage() {
   // ── Loading / Verifying ───────────────────────────────────────────
   if (pageState === 'loading' || pageState === 'verifying') {
     return (
-      <div className="flow-container generating-container">
-        <div className="spin spinner" />
-        <div className="text-center-col">
-          {pageState === 'verifying' && <h2>Confirming your payment…</h2>}
-        </div>
-      </div>
+      <GeneratingState
+        heading={pageState === 'verifying' ? 'Confirming your payment…' : undefined}
+      />
     );
   }
 
@@ -282,42 +280,32 @@ export default function PathPage() {
 
     if (genPhase.phase === 'idle') {
       return (
-        <div className="flow-container generating-container">
-          <div className="spin spinner" />
-          <div className="text-center-col">
-            <h2>Your Path Options are being prepared.</h2>
-            <p className="generating-desc">This usually takes about a minute.</p>
-          </div>
-        </div>
+        <GeneratingState
+          heading="Your Path Options are being prepared."
+          description="This usually takes about a minute."
+        />
       );
     }
 
     if (genPhase.phase === 'spinner') {
       return (
-        <div className="flow-container generating-container">
-          <div className="spin spinner" />
-          <div className="text-center-col">
-            <h2>Your Path Options are being prepared.</h2>
-            <p className="generating-desc">
-              {genPhase.variant === 'early'
-                ? 'This usually takes about a minute.'
-                : 'Still working — this is taking a little longer than usual…'}
-            </p>
-          </div>
-        </div>
+        <GeneratingState
+          heading="Your Path Options are being prepared."
+          description={
+            genPhase.variant === 'early'
+              ? 'This usually takes about a minute.'
+              : 'Still working — this is taking a little longer than usual…'
+          }
+        />
       );
     }
 
     if (genPhase.phase === 'come-back-later') {
       return (
-        <div className="flow-container generating-container">
-          <div className="text-center-col">
-            <p className="generating-desc">
-              Your Path Options are still being prepared. This is taking longer than expected — you
-              can leave this page and come back in a few minutes. It&rsquo;ll be here when it&rsquo;s ready.
-            </p>
-          </div>
-        </div>
+        <GeneratingState
+          spinner={false}
+          description="Your Path Options are still being prepared. This is taking longer than expected — you can leave this page and come back in a few minutes. It’ll be here when it’s ready."
+        />
       );
     }
 
