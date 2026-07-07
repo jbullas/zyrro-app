@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import PrimaryButton from '@/components/PrimaryButton'
 
 export default function SignupPage() {
   const supabase = createClient()
@@ -49,9 +50,9 @@ export default function SignupPage() {
 
             {message && <p className="form-error">{message}</p>}
 
-            <button type="submit" className="btn-primary">
+            <PrimaryButton type="submit">
               Send me a link
-            </button>
+            </PrimaryButton>
           </>
         )}
 

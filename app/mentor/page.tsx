@@ -6,6 +6,8 @@ import { createConversation, listConversations, type ConversationListItem } from
 import { saveMessage, listMessages } from "@/lib/messages";
 import { createClient } from "@/utils/supabase/client";
 import GatedState from "@/components/GatedState";
+import SecondaryButton from "@/components/SecondaryButton";
+import LinkButton from "@/components/LinkButton";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -293,9 +295,9 @@ export default function MentorPage() {
       <div className="flow-container mentor-list-container">
         <div className="mentor-list-header">
           <h2>Your conversations</h2>
-          <button onClick={startConversation} disabled={loading} className="btn-secondary btn-secondary-compact">
+          <SecondaryButton onClick={startConversation} disabled={loading} compact>
             New conversation
-          </button>
+          </SecondaryButton>
         </div>
 
         {conversationsLoading ? (
@@ -322,9 +324,9 @@ export default function MentorPage() {
     <div className="flow-container mentor-chat-container">
       <div className="mentor-chat-header">
         <button onClick={backToList} className="btn-back">← Back</button>
-        <button onClick={handleEndConversation} disabled={endLoading} className="btn-link btn-link-inline">
+        <LinkButton onClick={handleEndConversation} disabled={endLoading} inline>
           {endLoading ? "Ending…" : "End conversation"}
-        </button>
+        </LinkButton>
       </div>
       {endError && (
         <div className="mentor-end-error-wrap">

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import Link from 'next/link';
+import PrimaryButton from '@/components/PrimaryButton';
 import {
   IconTelescope, IconBuildingSkyscraper, IconSparkles, IconFlask, IconCirclesRelation,
   IconChartDots, IconArrowBarDown, IconLayersIntersect, IconSwords, IconRocket,
@@ -323,7 +323,7 @@ export default function IdentityPage() {
         <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
         <h1>Your Identity Signature Report is waiting.</h1>
         <p>Create a free account to access your Named Identity and full Identity Signature Report.</p>
-        <Link href="/start" className="btn-primary">Start the questionnaire</Link>
+        <PrimaryButton href="/start">Start the questionnaire</PrimaryButton>
       </div>
     );
   }
@@ -335,7 +335,7 @@ export default function IdentityPage() {
         <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
         <h1>Your report isn&rsquo;t ready yet.</h1>
         <p>Complete the questionnaire to generate your Identity Signature Report.</p>
-        <Link href="/start" className="btn-primary">Start the questionnaire</Link>
+        <PrimaryButton href="/start">Start the questionnaire</PrimaryButton>
       </div>
     );
   }
@@ -405,9 +405,9 @@ export default function IdentityPage() {
         <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
         <h2>Something went wrong.</h2>
         <p>We couldn&rsquo;t generate your report. Please try again.</p>
-        <button className="btn-primary" onClick={handleRetry}>
+        <PrimaryButton onClick={handleRetry}>
           Try again
-        </button>
+        </PrimaryButton>
       </div>
     );
   }
@@ -675,9 +675,9 @@ export default function IdentityPage() {
             <li className="limits-bullet">It does not show you which direction fits who you&rsquo;ve become</li>
             <li className="limits-bullet">It does not give you a path or a plan</li>
           </ul>
-          <Link href="/path" className="btn-primary">
+          <PrimaryButton href="/path">
             See what your pattern is pointing toward →
-          </Link>
+          </PrimaryButton>
         </div>
 
       </div>{/* end .report-scroll */}

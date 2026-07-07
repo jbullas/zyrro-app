@@ -2,9 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react';
+import { IconArrowRight } from '@tabler/icons-react';
 import { QUESTIONS } from '@/lib/identity-questions';
 import { createClient } from '@/utils/supabase/client';
+import PrimaryButton from '@/components/PrimaryButton';
+import SecondaryButton from '@/components/SecondaryButton';
+import LinkButton from '@/components/LinkButton';
+import BackButton from '@/components/BackButton';
 
 const DELIVERABLES = [
   'Your Named Identity',
@@ -163,9 +167,9 @@ export default function StartPage() {
 
             {contactError && <p className="form-error">{contactError}</p>}
 
-            <button type="submit" className="btn-primary" disabled={submitting}>
+            <PrimaryButton type="submit" disabled={submitting}>
               {submitting ? 'Sending…' : 'Get my Identity Report'}
-            </button>
+            </PrimaryButton>
 
             <p className="form-helper">Free. No credit card required.</p>
           </form>
@@ -187,9 +191,9 @@ export default function StartPage() {
 
           <p className="form-helper">Can&rsquo;t find it? Check your spam folder.</p>
 
-          <button onClick={handleResend} className="btn-link">
+          <LinkButton onClick={handleResend}>
             Resend the link
-          </button>
+          </LinkButton>
         </div>
       </div>
     );
@@ -237,15 +241,14 @@ export default function StartPage() {
             ))}
           </div>
 
-          <button
+          <PrimaryButton
             onClick={() => {
               setQuestionIndex(0);
               setScreen('question');
             }}
-            className="btn-primary"
           >
             Begin
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     );
@@ -305,18 +308,11 @@ export default function StartPage() {
 
         {/* Navigation buttons */}
         <div className="row-between">
-          <button onClick={handleBack} className="btn-back">
-            <IconArrowLeft size={16} stroke={2} />
-            Back
-          </button>
-          <button
-            onClick={handleContinue}
-            disabled={!canContinue}
-            className={`btn-secondary${canContinue ? '' : ' btn-disabled'}`}
-          >
+          <BackButton onClick={handleBack} />
+          <SecondaryButton onClick={handleContinue} disabled={!canContinue}>
             {questionIndex === 12 ? 'Finish' : 'Continue'}
             <IconArrowRight size={16} stroke={2} />
-          </button>
+          </SecondaryButton>
         </div>
       </div>
     </div>

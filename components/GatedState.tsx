@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import PrimaryButton from '@/components/PrimaryButton';
+import LinkButton from '@/components/LinkButton';
 
 interface GatedStateProps {
   eyebrow: string;
@@ -12,8 +13,8 @@ export default function GatedState({ eyebrow, heading, body }: GatedStateProps) 
       <p className="eyebrow">{eyebrow}</p>
       <h2>{heading}</h2>
       <p>{body}</p>
-      <Link href="/start" className="btn-primary">Start the questionnaire</Link>
-      <Link href="/login" className="btn-link">Already have an account? Log in</Link>
+      <PrimaryButton href="/start">Start the questionnaire</PrimaryButton>
+      <LinkButton href="/login">Already have an account? Log in</LinkButton>
     </div>
   );
 }

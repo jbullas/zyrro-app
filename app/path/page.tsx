@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import GatedState from '@/components/GatedState';
+import PrimaryButton from '@/components/PrimaryButton';
+import LinkButton from '@/components/LinkButton';
 import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -272,7 +274,7 @@ export default function PathPage() {
           <p className="eyebrow">YOUR PATH</p>
           <h2>Something went wrong.</h2>
           <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
-          <button onClick={handleRetry} className="btn-primary">Try again</button>
+          <PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>
         </div>
       );
     }
@@ -324,7 +326,7 @@ export default function PathPage() {
           <p className="eyebrow">YOUR PATH</p>
           <h2>Something went wrong.</h2>
           <p>We couldn&rsquo;t generate your Path Options. Please try again.</p>
-          <button onClick={handleRetry} className="btn-primary">Try again</button>
+          <PrimaryButton onClick={handleRetry}>Try again</PrimaryButton>
         </div>
       );
     }
@@ -378,13 +380,9 @@ export default function PathPage() {
               </div>
             )}
 
-            <button
-              onClick={handleCheckout}
-              disabled={checkoutLoading}
-              className={`btn-primary${checkoutLoading ? ' btn-disabled' : ''}`}
-            >
+            <PrimaryButton onClick={handleCheckout} disabled={checkoutLoading}>
               {checkoutLoading ? 'Redirecting…' : 'Get My Path & Plan'}
-            </button>
+            </PrimaryButton>
 
             <p className="form-helper">One-time payment · No subscription · Instant access</p>
 
@@ -420,12 +418,12 @@ export default function PathPage() {
             <h2>You&rsquo;ve chosen {confirmPending.name}.</h2>
             <p>This will generate your personalised Plan. You can change your path later.</p>
             <div className="dialog-actions">
-              <button onClick={handleProceedToNaming} className="btn-primary">
+              <PrimaryButton onClick={handleProceedToNaming}>
                 Continue
-              </button>
-              <button onClick={() => setConfirmPending(null)} className="btn-link">
+              </PrimaryButton>
+              <LinkButton onClick={() => setConfirmPending(null)}>
                 Not yet
-              </button>
+              </LinkButton>
             </div>
           </div>
         </div>
@@ -474,20 +472,18 @@ export default function PathPage() {
             )}
 
             <div className="dialog-actions">
-              <button
+              <PrimaryButton
                 onClick={() => handleFinalizeSelect(selectedName ?? (customName.trim() || undefined))}
                 disabled={!!selectingId || (!selectedName && !customName.trim())}
-                className={`btn-primary${selectingId || (!selectedName && !customName.trim()) ? ' btn-disabled' : ''}`}
               >
                 {selectingId ? 'Generating…' : 'Name my Project'}
-              </button>
-              <button
+              </PrimaryButton>
+              <LinkButton
                 onClick={() => handleFinalizeSelect(undefined)}
                 disabled={!!selectingId}
-                className="btn-link"
               >
                 Skip
-              </button>
+              </LinkButton>
             </div>
           </div>
         </div>
@@ -548,13 +544,12 @@ export default function PathPage() {
                     ))}
                   </div>
                   <div className="option-card-footer">
-                    <button
+                    <PrimaryButton
                       onClick={() => setConfirmPending(option)}
                       disabled={!!selectingId}
-                      className={`btn-primary${selectingId ? ' btn-disabled' : ''}`}
                     >
                       {selectingId === option.id ? 'Generating…' : 'Select This Path →'}
-                    </button>
+                    </PrimaryButton>
                   </div>
                 </div>
               ))}

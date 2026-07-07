@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import Link from 'next/link';
 import GatedState from '@/components/GatedState';
+import PrimaryButton from '@/components/PrimaryButton';
 import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -171,7 +171,7 @@ export default function PlanPage() {
           Choose one of your four path options on the Path page and your
           tailored Plan will be generated automatically.
         </p>
-        <Link href="/path" className="btn-primary">See Your Path Options</Link>
+        <PrimaryButton href="/path">See Your Path Options</PrimaryButton>
       </div>
     );
   }
@@ -183,7 +183,7 @@ export default function PlanPage() {
         <p className="eyebrow">YOUR PLAN</p>
         <h2>Choose your path first.</h2>
         <p>Select one of your four path options and your Plan will be generated automatically.</p>
-        <Link href="/path" className="btn-primary">See Your Path Options</Link>
+        <PrimaryButton href="/path">See Your Path Options</PrimaryButton>
       </div>
     );
   }
@@ -236,13 +236,9 @@ export default function PlanPage() {
         <p className="eyebrow">YOUR PLAN</p>
         <h2>Something went wrong.</h2>
         <p>We couldn&rsquo;t generate your Plan. Please try again.</p>
-        <button
-          onClick={handleRetry}
-          disabled={retrying}
-          className={`btn-primary${retrying ? ' btn-disabled' : ''}`}
-        >
+        <PrimaryButton onClick={handleRetry} disabled={retrying}>
           {retrying ? 'Retrying…' : 'Try again'}
-        </button>
+        </PrimaryButton>
       </div>
     );
   }
@@ -323,9 +319,9 @@ export default function PlanPage() {
         <div className="limits-block">
           <p className="limits-eyebrow">NOW LET&rsquo;S IMPLEMENT IT</p>
           <p className="limits-body">{implement_bridge}</p>
-          <Link href="/mentor" className="btn-primary">
+          <PrimaryButton href="/mentor">
             Open the Mentor →
-          </Link>
+          </PrimaryButton>
         </div>
 
       </div>

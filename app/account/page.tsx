@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { IconPencil } from '@tabler/icons-react';
+import PrimaryButton from '@/components/PrimaryButton';
+import SecondaryButton from '@/components/SecondaryButton';
+import LinkButton from '@/components/LinkButton';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -58,19 +61,12 @@ function EditableField({ value, onSave }: EditableFieldProps) {
           onChange={(e) => setDraft(e.target.value)}
           autoFocus
         />
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={`btn-secondary btn-secondary-compact${saving ? ' btn-disabled' : ''}`}
-        >
+        <SecondaryButton onClick={handleSave} disabled={saving} compact>
           {saving ? 'Saving…' : 'Save'}
-        </button>
-        <button
-          onClick={handleCancel}
-          className="btn-link btn-link-inline"
-        >
+        </SecondaryButton>
+        <LinkButton onClick={handleCancel} inline>
           Cancel
-        </button>
+        </LinkButton>
       </div>
     );
   }
@@ -238,22 +234,18 @@ export default function AccountPage() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <span style={{ fontSize: '16px' }}>Free plan</span>
-                <button
-                  onClick={handleCheckout}
-                  className={`btn-primary${checkoutLoading ? ' btn-disabled' : ''}`}
-                  disabled={checkoutLoading}
-                >
+                <PrimaryButton onClick={handleCheckout} disabled={checkoutLoading}>
                   {checkoutLoading ? 'Redirecting…' : 'Upgrade'}
-                </button>
+                </PrimaryButton>
               </div>
             )}
           </div>
         </div>
 
         {/* Log out */}
-        <button onClick={handleLogout} className="btn-link">
+        <LinkButton onClick={handleLogout}>
           Log out
-        </button>
+        </LinkButton>
 
       </div>
     </div>
