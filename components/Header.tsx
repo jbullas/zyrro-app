@@ -2,7 +2,6 @@
 
 import { createClient } from '@/utils/supabase/client';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { IconLogin } from '@tabler/icons-react';
 
 type HeaderProps = {
@@ -11,7 +10,6 @@ type HeaderProps = {
 
 export default function Header({ showLogin = true }: HeaderProps) {
   const [userInitials, setUserInitials] = useState<string | null>(null);
-  const pathname = usePathname();
 
   useEffect(() => {
     const supabase = createClient();
@@ -28,8 +26,6 @@ export default function Header({ showLogin = true }: HeaderProps) {
       }
     });
   }, []);
-
-  if (pathname === '/') return null;
 
   return (
     <header className="w-full flex-shrink-0 sticky top-0 z-50 bg-gradient-brand">

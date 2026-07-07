@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
 import Link from 'next/link';
-import { IconLogin } from '@tabler/icons-react';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -16,22 +15,6 @@ export default async function Home() {
 
       {/* HERO — self-contained gradient with nav */}
       <div className="hero-section">
-
-        {/* Nav */}
-        <div className="nav-spacer" />
-        <div className="nav-bar" style={{ padding: '8px 16px 0' }}>
-          <div />
-          <div className="nav-center">
-            <a href="/">
-              <img src="https://zyrro.ai/images/logo_300px.png" alt="Zyrro" className="nav-logo" />
-            </a>
-          </div>
-          <div className="nav-end">
-            <a href="/login" className="nav-icon-link" aria-label="Log in">
-              <IconLogin size={28} stroke={1.75} />
-            </a>
-          </div>
-        </div>
 
         {/* Hero content */}
         <div className="hero-content">
