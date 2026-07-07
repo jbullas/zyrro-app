@@ -6,6 +6,9 @@ import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
+import ConstellationCard from '@/components/ConstellationCard';
+import ChipRow from '@/components/ChipRow';
+import LimitsBlock from '@/components/LimitsBlock';
 import {
   IconTelescope, IconBuildingSkyscraper, IconSparkles, IconFlask, IconCirclesRelation,
   IconChartDots, IconArrowBarDown, IconLayersIntersect, IconSwords, IconRocket,
@@ -536,15 +539,13 @@ export default function IdentityPage() {
             {primary_constellation.map((sig, i) => {
               const band = getScoreBand(sig.score);
               return (
-                <div key={sig.name} className="constellation-card">
-                  <div className="constellation-card-header">
-                    <div className="constellation-badge">{i + 1}</div>
-                    <div className="constellation-header-info">
-                      <div className="constellation-sig-name">{sig.name}</div>
-                      <div className="constellation-sig-meta">{sig.domain} · {sig.score}/25</div>
-                    </div>
-                    <span className={`score-band-pill ${bandClass(band)}`}>{band}</span>
-                  </div>
+                <ConstellationCard
+                  key={sig.name}
+                  badge={i + 1}
+                  title={sig.name}
+                  meta={`${sig.domain} · ${sig.score}/25`}
+                  pill={<span className={`score-band-pill ${bandClass(band)}`}>{band}</span>}
+                >
                   <p className="core-statement">{sig.core_statement}</p>
                   <p className="evidence-analysis">{sig.evidence_analysis}</p>
                   <div className="tension-block">
@@ -569,7 +570,7 @@ export default function IdentityPage() {
                       <span className="score-chip-value">{sig.confidence ?? '—'}</span>
                     </div>
                   </div>
-                </div>
+                </ConstellationCard>
               );
             })}
           </div>
@@ -578,17 +579,16 @@ export default function IdentityPage() {
           <div id="section-5" className="report-section">
             <p className="eyebrow">SECONDARY SIGNATURES</p>
             {secondary_signature_analysis.map((sig, i) => (
-              <div key={sig.name} className="constellation-card">
-                <div className="constellation-card-header">
-                  <div className="constellation-badge-muted">{i + 6}</div>
-                  <div className="constellation-header-info">
-                    <div className="constellation-sig-name">{sig.name}</div>
-                    <div className="constellation-sig-meta">{sig.domain} · {sig.score}</div>
-                  </div>
-                </div>
+              <ConstellationCard
+                key={sig.name}
+                badge={i + 6}
+                muted
+                title={sig.name}
+                meta={`${sig.domain} · ${sig.score}`}
+              >
                 <p className="core-statement">{sig.core_statement}</p>
                 <p className="evidence-analysis">{sig.analysis}</p>
-              </div>
+              </ConstellationCard>
             ))}
           </div>
 
@@ -617,21 +617,13 @@ export default function IdentityPage() {
           {/* Section 8: Energisers */}
           <div id="section-8" className="report-section">
             <p className="eyebrow">ENERGISERS</p>
-            <div className="chips-wrap">
-              {energisers.map(e => (
-                <span key={e} className="chip-tag">{e}</span>
-              ))}
-            </div>
+            <ChipRow items={energisers} wrapperClassName="chips-wrap" />
           </div>
 
           {/* Section 9: Friction Points */}
           <div id="section-9" className="report-section">
             <p className="eyebrow">FRICTION POINTS</p>
-            <div className="chips-wrap">
-              {friction_points.map(f => (
-                <span key={f} className="chip-friction">{f}</span>
-              ))}
-            </div>
+            <ChipRow items={friction_points} wrapperClassName="chips-wrap" itemClassName="chip-friction" />
           </div>
 
           {/* Section 10: Research Foundation */}
@@ -650,27 +642,19 @@ export default function IdentityPage() {
         </div>{/* end .report-sections */}
 
         {/* Section 11: Limits of This Report */}
-        <div id="section-11" className="limits-block">
-          <p className="limits-eyebrow">LIMITS OF THIS REPORT</p>
-          <h2 className="limits-heading">
-            This report shows you how you operate. It doesn't show you why you feel stuck.
-          </h2>
-          <p className="limits-body">
-            You now have a precise picture of your identity patterns. But knowing how you operate
-            doesn&rsquo;t resolve the gap between how you operate and how your life is actually
-            structured right now. That gap is costing you — in energy, in output, and in the quiet
-            sense that something important is misaligned.
-          </p>
-          <ul className="limits-bullets">
-            <li className="limits-bullet">This report does not explain what your pattern is pointing toward</li>
-            <li className="limits-bullet">It does not identify what you&rsquo;ve outgrown or why it feels stuck</li>
-            <li className="limits-bullet">It does not show you which direction fits who you&rsquo;ve become</li>
-            <li className="limits-bullet">It does not give you a path or a plan</li>
-          </ul>
-          <PrimaryButton href="/path">
-            See what your pattern is pointing toward →
-          </PrimaryButton>
-        </div>
+        <LimitsBlock
+          id="section-11"
+          eyebrow="LIMITS OF THIS REPORT"
+          heading="This report shows you how you operate. It doesn't show you why you feel stuck."
+          body="You now have a precise picture of your identity patterns. But knowing how you operate doesn’t resolve the gap between how you operate and how your life is actually structured right now. That gap is costing you — in energy, in output, and in the quiet sense that something important is misaligned."
+          bullets={[
+            'This report does not explain what your pattern is pointing toward',
+            'It does not identify what you’ve outgrown or why it feels stuck',
+            'It does not show you which direction fits who you’ve become',
+            'It does not give you a path or a plan',
+          ]}
+          cta={<PrimaryButton href="/path">See what your pattern is pointing toward →</PrimaryButton>}
+        />
 
       </div>{/* end .report-scroll */}
     </div>

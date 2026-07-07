@@ -8,6 +8,8 @@ import PrimaryButton from '@/components/PrimaryButton';
 import LinkButton from '@/components/LinkButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
+import ConstellationCard from '@/components/ConstellationCard';
+import ChipRow from '@/components/ChipRow';
 import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -515,23 +517,19 @@ export default function PathPage() {
             <div className="report-section">
               <p className="eyebrow">YOUR PATH OPTIONS</p>
               {options.map((option, i) => (
-                <div key={option.id} className="constellation-card">
-                  <div className="constellation-card-header">
-                    <div className="constellation-badge">{i + 1}</div>
-                    <div className="constellation-header-info">
-                      <div className="constellation-sig-name">{option.name}</div>
-                      <div className="constellation-sig-meta">{option.thesis}</div>
-                    </div>
+                <ConstellationCard
+                  key={option.id}
+                  badge={i + 1}
+                  title={option.name}
+                  meta={option.thesis}
+                  pill={
                     <span className={`score-band-pill ${stretchClass(option.stretch)}`}>
                       {option.stretch}
                     </span>
-                  </div>
+                  }
+                >
                   <p className="evidence-analysis">{option.body}</p>
-                  <div className="option-card-sigs">
-                    {option.signatures_engaged.map(sig => (
-                      <span key={sig} className="chip-tag">{sig}</span>
-                    ))}
-                  </div>
+                  <ChipRow items={option.signatures_engaged} wrapperClassName="option-card-sigs" />
                   <div className="option-card-footer">
                     <PrimaryButton
                       onClick={() => setConfirmPending(option)}
@@ -540,7 +538,7 @@ export default function PathPage() {
                       {selectingId === option.id ? 'Generating…' : 'Select This Path →'}
                     </PrimaryButton>
                   </div>
-                </div>
+                </ConstellationCard>
               ))}
             </div>
 

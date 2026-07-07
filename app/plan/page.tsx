@@ -6,6 +6,9 @@ import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
+import ConstellationCard from '@/components/ConstellationCard';
+import ChipRow from '@/components/ChipRow';
+import LimitsBlock from '@/components/LimitsBlock';
 import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 
@@ -259,14 +262,12 @@ export default function PlanPage() {
           <div className="report-section">
             <p className="eyebrow">THE FULL PATH</p>
             {full_path.map(phase => (
-              <div key={phase.phase_number} className="constellation-card">
-                <div className="constellation-card-header">
-                  <div className="constellation-badge">{phase.phase_number}</div>
-                  <div className="constellation-header-info">
-                    <div className="constellation-sig-name">{phase.name}</div>
-                    <div className="constellation-sig-meta">{phase.estimated_duration}</div>
-                  </div>
-                </div>
+              <ConstellationCard
+                key={phase.phase_number}
+                badge={phase.phase_number}
+                title={phase.name}
+                meta={phase.estimated_duration}
+              >
                 <p className="core-statement">{phase.outcome}</p>
                 <p className="evidence-analysis">{phase.body}</p>
                 {phase.milestones.length > 0 && (
@@ -281,13 +282,9 @@ export default function PlanPage() {
                   </div>
                 )}
                 {phase.signatures_leaned_on.length > 0 && (
-                  <div className="option-card-sigs">
-                    {phase.signatures_leaned_on.map(sig => (
-                      <span key={sig} className="chip-tag">{sig}</span>
-                    ))}
-                  </div>
+                  <ChipRow items={phase.signatures_leaned_on} wrapperClassName="option-card-sigs" />
                 )}
-              </div>
+              </ConstellationCard>
             ))}
           </div>
 
@@ -307,13 +304,11 @@ export default function PlanPage() {
         </div>
 
         {/* Now Let's Implement It */}
-        <div className="limits-block">
-          <p className="limits-eyebrow">NOW LET&rsquo;S IMPLEMENT IT</p>
-          <p className="limits-body">{implement_bridge}</p>
-          <PrimaryButton href="/mentor">
-            Open the Mentor →
-          </PrimaryButton>
-        </div>
+        <LimitsBlock
+          eyebrow="NOW LET’S IMPLEMENT IT"
+          body={implement_bridge}
+          cta={<PrimaryButton href="/mentor">Open the Mentor →</PrimaryButton>}
+        />
 
       </div>
     </div>
