@@ -7,6 +7,18 @@ or modifying any styles.
 
 For branch and commit protocol, see `AGENTS.md`.
 
+## Guiding principle
+The primary objective is consistent code that's easy to maintain — not
+just "no inline styles" as an isolated rule. Most UI patterns repeat
+across pages; there's rarely a good reason to hand-code the same thing
+per-page instead of using a shared component or globals.css class.
+
+When a specific case is ambiguous (e.g. two page-specific patterns that
+are similar but not identical), default to recommending consolidation
+into one shared pattern rather than preserving the divergence — unless
+there's a real, stated reason for the difference (e.g. genuinely
+different UX requirements, not just accumulated drift).
+
 ## Local verification
 - Before committing code changes, run them locally
   (npm run dev) and confirm the build passes and
