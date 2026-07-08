@@ -54,9 +54,9 @@ function EditableField({ value, onSave }: EditableFieldProps) {
 
   if (editing) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
+      <div className="gap-8" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
         <input
-          className="form-input form-input-compact"
+          className="input-field input-field--compact"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           autoFocus
@@ -72,8 +72,8 @@ function EditableField({ value, onSave }: EditableFieldProps) {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-      <span style={{ fontSize: '16px', overflowWrap: 'break-word', wordBreak: 'break-word', minWidth: 0, flex: 1 }}>
+    <div className="gap-8" style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+      <span className="flex-1" style={{ fontSize: '16px', overflowWrap: 'break-word', wordBreak: 'break-word', minWidth: 0 }}>
         {value || '—'}
       </span>
       {saved && (
@@ -199,7 +199,7 @@ export default function AccountPage() {
 
   return (
     <div className="flow-container">
-      <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div className="gap-24" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column' }}>
 
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>{pageTitle}</h1>
 
@@ -232,7 +232,7 @@ export default function AccountPage() {
                 <strong>Unlocked</strong> — Paths, Plan, Mentor
               </span>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="gap-12" style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '16px' }}>Free plan</span>
                 <PrimaryButton onClick={handleCheckout} disabled={checkoutLoading}>
                   {checkoutLoading ? 'Redirecting…' : 'Upgrade'}

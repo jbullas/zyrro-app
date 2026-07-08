@@ -529,7 +529,7 @@ export default function IdentityPage() {
 
             <div className="card">
               <p className="card-sub-label">Identity Profile</p>
-              <canvas ref={chartRef} style={{ width: '100%', maxHeight: '260px' }} />
+              <canvas ref={chartRef} className="identity-chart-canvas" />
             </div>
           </div>
 
@@ -596,7 +596,7 @@ export default function IdentityPage() {
           <div id="section-6" className="report-section">
             <p className="eyebrow">CONSTELLATION SYNTHESIS</p>
             <div className="card">
-              <h3 className="named-identity" style={{ marginBottom: '12px' }}>{constellation_synthesis.named_identity}</h3>
+              <h3 className="named-identity mb-12">{constellation_synthesis.named_identity}</h3>
               <p>{constellation_synthesis.synthesis}</p>
             </div>
           </div>

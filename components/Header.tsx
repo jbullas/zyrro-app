@@ -30,7 +30,7 @@ export default function Header({ showLogin = true }: HeaderProps) {
   return (
     <header className="w-full flex-shrink-0 sticky top-0 z-50 bg-gradient-brand">
       <div className="nav-spacer" />
-      <div className="nav-bar" style={{ padding: '8px 16px 14px' }}>
+      <div className="nav-bar">
         <div />
         <div className="nav-center">
           <a href="/" className="nav-center">

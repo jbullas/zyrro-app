@@ -36,7 +36,7 @@ export default function LoginPage() {
         ) : (
           <>
             <input
-              className="form-input"
+              className="input-field"
               type="email"
               placeholder="Your email address"
               value={email}

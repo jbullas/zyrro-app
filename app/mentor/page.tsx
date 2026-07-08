@@ -373,7 +373,7 @@ export default function MentorPage() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask your mentor…"
-          className="mentor-input"
+          className="input-field flex-1"
         />
         <button
           onClick={handleSend}

@@ -148,7 +148,7 @@ export default function StartPage() {
 
           <form onSubmit={handleContactSubmit} className="page-form" style={{ maxWidth: '100%' }}>
             <input
-              className="form-input"
+              className="input-field"
               type="text"
               placeholder="Your first name"
               value={name}
@@ -157,7 +157,7 @@ export default function StartPage() {
             />
 
             <input
-              className="form-input"
+              className="input-field"
               type="email"
               placeholder="Your email address"
               value={email}
@@ -215,7 +215,7 @@ export default function StartPage() {
 
           <div className="deliverables-list">
             {DELIVERABLES.map(item => (
-              <div key={item} className="flex-start-row" style={{ gap: '10px' }}>
+              <div key={item} className="flex-start-row gap-12">
                 <div className="deliverable-icon">
                   <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
                     <path
@@ -262,7 +262,7 @@ export default function StartPage() {
     <div className="flow-container">
       {/* Progress bar */}
       <div className="progress-bar-header">
-        <div className="row-between" style={{ marginBottom: '7px' }}>
+        <div className="row-between mb-8">
           <span className="label-micro">Question {questionIndex + 1} of 13</span>
           <span className="label-micro">{questionIndex + 1}/13</span>
         </div>
@@ -274,11 +274,11 @@ export default function StartPage() {
       {/* Scrollable content */}
       <div className="scroll-area scroll-area--question">
         {/* Question header */}
-        <div className="flex-start-row" style={{ gap: '14px' }}>
+        <div className="flex-start-row gap-16">
           <div className="question-number">
             {currentQuestion.number}
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="flex-1">
             <p className="question-text" style={{ margin: '0 0 5px' }}>
               {currentQuestion.question}
             </p>
@@ -288,13 +288,13 @@ export default function StartPage() {
           </div>
         </div>
 
-        {/* Answer card */}
-        <div className="card card-answer">
+        {/* Answer */}
+        <div>
           <textarea
             value={currentAnswer}
             onChange={e => updateAnswer(e.target.value)}
             placeholder="Type your answer here…"
-            className="answer-textarea"
+            className="input-field input-field--textarea"
           />
           <div className="char-counter-row">
             <span

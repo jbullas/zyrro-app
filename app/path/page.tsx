@@ -451,7 +451,7 @@ export default function PathPage() {
 
             {!namingLoading && (
               <input
-                className="form-input"
+                className="input-field"
                 type="text"
                 placeholder="Or write your own"
                 value={customName}

@@ -11,7 +11,7 @@ export default async function Home() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div className="flex-1" style={{ display: 'flex', flexDirection: 'column' }}>
 
       {/* HERO — self-contained gradient with nav */}
       <div className="hero-section">
@@ -42,7 +42,7 @@ export default async function Home() {
         <h2 className="section-title">
           You've built a great life. So why doesn't it feel like enough?
         </h2>
-        <p className="section-body" style={{ marginBottom: '20px' }}>
+        <p className="section-body mb-20">
           You're accomplished. Experienced. Respected. And yet something feels hollow. The goals that once drove you no longer excite you. The life that looks right from the outside doesn't feel right on the inside.
         </p>
         <ul className="bullet-list">
@@ -67,17 +67,17 @@ export default async function Home() {
       {/* HOW IT WORKS */}
       <section className="page-section-alt">
         <div className="page-container">
-          <h2 className="section-title" style={{ marginBottom: '32px', textAlign: 'center' }}>
+          <h2 className="section-title mb-32" style={{ textAlign: 'center' }}>
             Simple. Structured. Surprisingly revealing.
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="gap-20" style={{ display: 'flex', flexDirection: 'column' }}>
             {[
               { n: '1', text: 'Answer 13 questions about your life and work' },
               { n: '2', text: 'Zyrro detects patterns across your answers' },
               { n: '3', text: 'Receive your Identity Signature, precise and personal' },
               { n: '4', text: 'Unlock your Paths, Plan and Mentor as you grow' },
             ].map((step) => (
-              <div key={step.n} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+              <div key={step.n} className="gap-16" style={{ display: 'flex', alignItems: 'flex-start' }}>
                 <div className="step-number">
                   {step.n}
                 </div>
@@ -93,13 +93,13 @@ export default async function Home() {
       {/* WHAT YOU GET */}
       <section className="page-section">
         <div className="page-container">
-          <h2 className="section-title" style={{ marginBottom: '8px', textAlign: 'center' }}>
+          <h2 className="section-title mb-8" style={{ textAlign: 'center' }}>
             Four layers of insight. One clear direction.
           </h2>
-          <p style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <p className="mb-32" style={{ textAlign: 'center' }}>
             Each layer builds on the last, from self-knowledge to action.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="gap-16" style={{ display: 'flex', flexDirection: 'column' }}>
             {[
               { label: 'Identity', q: 'Who are you?', desc: 'Your named identity, signature patterns, and a precise picture of how you operate, based on your actual life story. Delivered in your first session.' },
               { label: 'Paths', q: 'Why are you here?', desc: 'A set of realistic directions forward, based on your patterns. Unlocked after your Identity report.' },
@@ -107,7 +107,7 @@ export default async function Home() {
               { label: 'Mentor', q: 'How do you stay on track?', desc: 'Access to your personal AI mentor, keeping you accountable, focused and moving forward. Available after your plan is set.' },
             ].map((item) => (
               <div key={item.label} className="card">
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '6px' }}>
+                <div className="gap-12 mb-8" style={{ display: 'flex', alignItems: 'baseline' }}>
                   <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#FE5618' }}>{item.label}</span>
                   <span style={{ fontSize: '16px', fontWeight: 700, color: '#1E1E1E' }}>{item.q}</span>
                 </div>
