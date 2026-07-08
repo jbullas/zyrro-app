@@ -52,7 +52,7 @@ export default function DashboardPage() {
         <p className="mentor-list-empty">Loading…</p>
       ) : metaBundle ? (
         <div className="card">
-          <p className="mentor-md-p" style={{ whiteSpace: 'pre-wrap' }}>{metaBundle.content}</p>
+          <p className="mentor-md-p mentor-md-p--prewrap">{metaBundle.content}</p>
           <p className="mentor-list-empty">
             Last updated on {new Date(metaBundle.created_at).toLocaleDateString()}
           </p>

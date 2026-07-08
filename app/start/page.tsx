@@ -139,7 +139,7 @@ export default function StartPage() {
   if (screen === 'contact') {
     return (
       <div className="flow-container">
-        <div className="scroll-area" style={{ padding: '48px 24px 32px' }}>
+        <div className="scroll-area scroll-area--intro">
           <p className="eyebrow">YOUR IDENTITY REPORT IS READY</p>
 
           <h1>Create your free account to see your report</h1>
@@ -182,7 +182,7 @@ export default function StartPage() {
   if (screen === 'check-email') {
     return (
       <div className="flow-container">
-        <div className="scroll-area" style={{ padding: '48px 24px 32px' }}>
+        <div className="scroll-area scroll-area--intro">
           <p className="eyebrow">ONE MORE STEP</p>
 
           <h1>Check your inbox</h1>
@@ -203,7 +203,7 @@ export default function StartPage() {
   if (screen === 'intro') {
     return (
       <div className="flow-container">
-        <div className="scroll-area" style={{ padding: '48px 24px 32px' }}>
+        <div className="scroll-area scroll-area--intro">
           <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
 
           <h1>Find out exactly how you&rsquo;re wired, and why it matters.</h1>
@@ -272,7 +272,7 @@ export default function StartPage() {
       </div>
 
       {/* Scrollable content */}
-      <div className="scroll-area" style={{ padding: '24px 24px 32px' }}>
+      <div className="scroll-area scroll-area--question">
         {/* Question header */}
         <div className="flex-start-row" style={{ gap: '14px' }}>
           <div className="question-number">
@@ -298,8 +298,7 @@ export default function StartPage() {
           />
           <div className="char-counter-row">
             <span
-              className="char-counter"
-              style={{ color: currentAnswer.length >= 900 ? 'var(--color-grad-2)' : '#BBBBBB' }}
+              className={`char-counter${currentAnswer.length >= 900 ? ' char-counter--limit' : ''}`}
             >
               {currentAnswer.length}/1000
             </span>

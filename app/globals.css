@@ -775,6 +775,18 @@ p {
   gap: 18px;
 }
 
+.scroll-area--wide-bottom {
+  padding: 48px 24px 40px;
+}
+
+.scroll-area--intro {
+  padding: 48px 24px 32px;
+}
+
+.scroll-area--question {
+  padding: 24px 24px 32px;
+}
+
 .step-indicator {
   width: 24px;
   height: 24px;
@@ -962,6 +974,11 @@ p {
 .char-counter {
   font-size: var(--font-size-micro);
   font-weight: var(--font-weight-medium);
+  color: #BBBBBB;
+}
+
+.char-counter--limit {
+  color: var(--color-grad-2);
 }
 
 /* ── IDENTITY REPORT ─────────────────────────────── */
@@ -1555,6 +1572,10 @@ p {
 }
 
 .mentor-md-p:last-child { margin-bottom: 0; }
+
+.mentor-md-p--prewrap {
+  white-space: pre-wrap;
+}
 
 .mentor-md-ul,
 .mentor-md-ol {

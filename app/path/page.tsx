@@ -333,7 +333,7 @@ export default function PathPage() {
     return (
       <>
         <div className="flow-container">
-          <div className="scroll-area" style={{ padding: '48px 24px 40px' }}>
+          <div className="scroll-area scroll-area--wide-bottom">
             <p className="eyebrow">YOUR PATH</p>
 
             <h1>{headline}</h1>
