@@ -95,6 +95,19 @@ for the tier/purpose map.
   delete one that has already been applied —
   correct mistakes with a new migration
 
+## Artifact regeneration (Tier C changes)
+- When regenerating an LLM-generated artifact (identity_report,
+  path_options, path_plan) due to a prompt/logic change, always INSERT a
+  new row — never UPDATE an existing artifact's `content` in place.
+- "Current" artifact for a given user/type is always the most recent by
+  `created_at` (`order by created_at desc, limit 1`) — this is already the
+  pattern `generatePathPlan` uses to resolve the identity report; keep
+  applying it, don't special-case around it.
+- Deterministic bugfixes to already-wrong stored data (e.g. #33, #1) are
+  the exception — those UPDATE in place, since they're not a new version
+  of a legitimate report. See docs/standards/product-decisions.md for the
+  full tier policy.
+
 ## LLM calls
 - All calls to the LLM provider go through `lib/llm.ts` — never
   instantiate the provider client or call its completion method

@@ -130,8 +130,46 @@ Input: identity analysis JSON
 Output: full Identity Signature Report JSON
 
 Both fire after registration, in the background.
-Report stored as versioned artifact in
-artifacts table (type: identity_report).
+Report stored as an artifact in the artifacts
+table (type: identity_report). Regeneration
+policy: see "Artifact Regeneration & Update
+Policy" below.
+
+---
+
+## Artifact Regeneration & Update Policy
+
+Applies whenever generation logic (prompts, backend logic) changes for
+already-registered users' existing artifacts (identity_report, path_options,
+path_plan).
+
+**Tier A — Presentation only.** Nothing stored changes; only how it renders
+(chart type, sort order for display, styling). Ships automatically to
+everyone — no artifact update, no user action.
+
+**Tier B — Deterministic data correction.** A stored field was wrong and is
+fixable by formula from data already on hand, no LLM involved, and nothing
+downstream (Path/Plan generation) reads the field. Backfilled automatically,
+silently, in place — this is a bugfix, not a new version of the report.
+
+**Tier C — Regenerating an LLM-generated artifact.** Any prompt/logic change
+that could produce different substance (a different named identity, different
+primary signatures, a different Path or Plan). Never automatic. User must
+explicitly trigger regeneration. Warning copy is tailored to the artifact:
+- Identity: warn that any already-chosen Path/Plan won't update to match and
+  may feel disconnected from the new identity.
+- Path/Plan: warn that this replaces the current one; once milestone
+  completion tracking exists (#52), tracked progress on the current Plan
+  needs explicit handling before allowing regeneration.
+
+Tier C regeneration always INSERTs a new artifact row — never UPDATEs an
+existing one. Old versions are retained, never deleted or overwritten. "The
+current artifact" for a user/type is always the most recent by
+`created_at`. See docs/standards/coding-standards.md for the implementation
+rule.
+
+Tier B corrections (see above) are the one exception — they UPDATE in place,
+since they're fixing already-wrong data, not creating a new version.
 
 ---
 
