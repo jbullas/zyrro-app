@@ -32,6 +32,25 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Postgres jsonb doesn't preserve key insertion order — it round-trips
+// objects in its own canonical order, not the order the JS that wrote them
+// used. Plain JSON.stringify comparison would then flag a row as "changed"
+// purely because of key order, not because any value actually differs
+// (bit us on domain_profile: computeDomainProfile always builds it in
+// lib/signatures.ts's DOMAINS order, which doesn't match jsonb's stored key
+// order). Sort object keys recursively before stringifying so comparisons
+// are value-equality, not incidental-serialization-equality.
+function canonicalStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(',')}]`;
+  }
+  if (isPlainObject(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map(k => `${JSON.stringify(k)}:${canonicalStringify(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 // Confirms the shape the rest of this script depends on before touching a
 // row — anything short of this is reported and skipped, not guessed at.
 function hasExpectedShape(content: unknown): content is Content {
@@ -99,25 +118,28 @@ for (const row of rows ?? []) {
   const fixed = applyFixes(original);
 
   const fieldChanges: string[] = [];
-  if (JSON.stringify(original.primary_constellation) !== JSON.stringify(fixed.primary_constellation)) {
+  if (canonicalStringify(original.primary_constellation) !== canonicalStringify(fixed.primary_constellation)) {
     fieldChanges.push('primary_constellation');
   }
-  if (JSON.stringify(original.secondary_signature_analysis) !== JSON.stringify(fixed.secondary_signature_analysis)) {
+  if (
+    canonicalStringify(original.secondary_signature_analysis) !==
+    canonicalStringify(fixed.secondary_signature_analysis)
+  ) {
     fieldChanges.push('secondary_signature_analysis');
   }
   if (
-    JSON.stringify(original.signature_profile_summary.primary_signatures) !==
-    JSON.stringify(fixed.signature_profile_summary.primary_signatures)
+    canonicalStringify(original.signature_profile_summary.primary_signatures) !==
+    canonicalStringify(fixed.signature_profile_summary.primary_signatures)
   ) {
     fieldChanges.push('signature_profile_summary.primary_signatures');
   }
   if (
-    JSON.stringify(original.signature_profile_summary.secondary_signatures) !==
-    JSON.stringify(fixed.signature_profile_summary.secondary_signatures)
+    canonicalStringify(original.signature_profile_summary.secondary_signatures) !==
+    canonicalStringify(fixed.signature_profile_summary.secondary_signatures)
   ) {
     fieldChanges.push('signature_profile_summary.secondary_signatures');
   }
-  if (JSON.stringify(original.domain_profile) !== JSON.stringify(fixed.domain_profile)) {
+  if (canonicalStringify(original.domain_profile) !== canonicalStringify(fixed.domain_profile)) {
     fieldChanges.push('domain_profile');
   }
 
