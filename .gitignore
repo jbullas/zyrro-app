@@ -42,3 +42,6 @@ next-env.d.ts
 
 # planning-surface bundle (regenerate with scripts/make-bundle.mjs)
 /context-bundle.md
+
+# live-verification test artifacts (storageState, screenshots — scripts/run-verification.mts)
+/.verification-runs/

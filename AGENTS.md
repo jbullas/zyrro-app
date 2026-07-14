@@ -32,6 +32,20 @@ Changelogs are append-only history. Never edit past entries.
 - The claude.ai planning surface is blind to this repo. To refresh it, run `node scripts/make-bundle.mjs`, which writes `context-bundle.md` (gitignored) to attach to the planning chat.
 - Code owns the volatile facts (routes, file structure, build status, runtime model). Don't restate them in docs — reference the code.
 
+## Live verification pass
+
+Any live verification pass that needs an authenticated session — driving a
+real page against a real (synthetic) user rather than just typechecking —
+should reach for `scripts/run-verification.mts` instead of re-deriving the
+bootstrap/teardown pattern by hand. It bootstraps a synthetic test user via
+`generateLink` + the real `/auth/callback` route, seeds whatever artifact/
+conversation rows the check needs, hands you a thin Playwright driver
+(`goto`, `computedStyle`, `screenshot`), and tears the user down afterward
+even if the check throws. Cross-reference CC's local memory entry
+`reference_local_test_auth_bootstrap` for the manual version of this same
+pattern — keep the two in sync rather than letting them drift into separate
+explanations of the same thing.
+
 ## Local memory (Claude Code)
 
 Claude Code maintains its own persistent, file-based memory outside this
