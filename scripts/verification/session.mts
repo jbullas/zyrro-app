@@ -43,15 +43,27 @@ export function createAdminClient(): SupabaseClient {
  * /auth/callback route so cookies are set exactly as they are for a real
  * user. Saves the resulting storageState so callers can open as many
  * driver pages as they need without re-bootstrapping.
+ *
+ * `opts.metadata` is set as the new user's `user_metadata` (via generateLink's
+ * `options.data`). Pass `{ discovery_answers, display_name }` here to make
+ * hitting /auth/callback fire a REAL generateIdentityReport run through
+ * kickoffIdentityGeneration — the strongest form of live verification for
+ * anything touching the generation pipeline, since it exercises the actual
+ * shipped code path against real (uncontrolled) LLM output, not just a
+ * seeded/final artifact.
  */
 export async function bootstrapTestUser(
   supabase: SupabaseClient,
-  opts: { baseUrl?: string; email?: string } = {}
+  opts: { baseUrl?: string; email?: string; metadata?: Record<string, unknown> } = {}
 ): Promise<TestUser> {
   const baseUrl = opts.baseUrl ?? 'http://localhost:3000';
   const email = opts.email ?? `zyrro-verify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 
-  const { data, error } = await supabase.auth.admin.generateLink({ type: 'magiclink', email });
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+    options: opts.metadata ? { data: opts.metadata } : undefined,
+  });
   if (error || !data?.user) {
     throw new Error(`generateLink failed for ${email}: ${error?.message ?? 'no user returned'}`);
   }

@@ -48,6 +48,7 @@ export interface VerificationSessionOptions {
   baseUrl?: string;
   email?: string;
   headless?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 /**
