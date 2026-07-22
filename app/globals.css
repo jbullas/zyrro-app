@@ -1536,6 +1536,48 @@ p {
   flex-shrink: 0;
 }
 
+/* ── IDENTITY BADGE (shield + signature icon) ── */
+.identity-badge-wrap {
+  position: relative;
+  width: 80px;
+  height: 88px;
+  flex-shrink: 0;
+}
+
+.identity-badge-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── DASHBOARD: IDENTITY CARD ── */
+.identity-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.identity-card-body {
+  margin-top: var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.identity-card-thesis {
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.identity-card-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
 /* ── SPACING UTILITIES ───────────────────────────── */
 /* Placed last so they win against component classes' own margin/gap
    rules at equal specificity (e.g. .section-title's margin-bottom). */

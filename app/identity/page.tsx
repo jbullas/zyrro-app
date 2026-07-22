@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
@@ -9,15 +9,9 @@ import GeneratingState from '@/components/GeneratingState';
 import ConstellationCard from '@/components/ConstellationCard';
 import ChipRow from '@/components/ChipRow';
 import LimitsBlock from '@/components/LimitsBlock';
-import {
-  IconTelescope, IconBuildingSkyscraper, IconSparkles, IconFlask, IconCirclesRelation,
-  IconChartDots, IconArrowBarDown, IconLayersIntersect, IconSwords, IconRocket,
-  IconBolt, IconWaveSine, IconSpeakerphone, IconBuildingBridge, IconBulb,
-  IconPlayerPlay, IconCompass, IconHammer, IconAdjustments, IconFlag,
-  IconAnchor, IconEye, IconHeart, IconHandStop, IconShieldLock,
-  IconShield,
-} from '@tabler/icons-react';
-import { type SignatureName } from '@/lib/signatures';
+import IdentityBadge from '@/components/IdentityBadge';
+import DomainRadarChart from '@/components/DomainRadarChart';
+import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import { useGenerationStatus } from '@/lib/generation-status';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
@@ -123,34 +117,6 @@ const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label:
   { key: 'stress_pattern',     label: 'STRESS PATTERN' },
 ];
 
-const SIGNATURE_ICONS: Record<SignatureName, typeof IconShield> = {
-  'Visionary':     IconTelescope,
-  'Architect':     IconBuildingSkyscraper,
-  'Originator':    IconSparkles,
-  'Alchemist':     IconFlask,
-  'Synthesizer':   IconCirclesRelation,
-  'Pattern Seeker':IconChartDots,
-  'Depth Diver':   IconArrowBarDown,
-  'Contextualiser':IconLayersIntersect,
-  'Contrarian':    IconSwords,
-  'Futurist':      IconRocket,
-  'Catalyst':      IconBolt,
-  'Resonator':     IconWaveSine,
-  'Amplifier':     IconSpeakerphone,
-  'Bridge':        IconBuildingBridge,
-  'Illuminator':   IconBulb,
-  'Activator':     IconPlayerPlay,
-  'Pioneer':       IconCompass,
-  'Builder':       IconHammer,
-  'Optimizer':     IconAdjustments,
-  'Finisher':      IconFlag,
-  'Meaning Maker': IconAnchor,
-  'Truth Seeker':  IconEye,
-  'Empath':        IconHeart,
-  'Intuitive':     IconHandStop,
-  'Guardian':      IconShieldLock,
-};
-
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function formatDate(iso: string): string {
@@ -188,75 +154,10 @@ export default function IdentityPage() {
   const router = useRouter();
   const [pageState, setPageState]   = useState<PageState>('loading');
   const [artifactId, setArtifactId] = useState<string | null>(null);
-  const chartRef                     = useRef<HTMLCanvasElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chartInstanceRef             = useRef<any>(null);
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
   const reportDate = genPhase.phase === 'ready' ? genPhase.createdAt : '';
-
-  // Chart.js init when report is ready
-  useEffect(() => {
-    if (!report?.domain_profile) return;
-    const dp = report.domain_profile;
-
-    const initChart = () => {
-      if (!chartRef.current) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Chart = (window as any).Chart;
-      if (!Chart) return;
-      if (chartInstanceRef.current) chartInstanceRef.current.destroy();
-      chartInstanceRef.current = new Chart(chartRef.current, {
-        type: 'radar',
-        data: {
-          labels: ['Visioning', 'Thinking', 'Driving', 'Sensing', 'Connecting'],
-          datasets: [{
-            data: [dp.Visioning, dp.Thinking, dp.Driving, dp.Sensing, dp.Connecting],
-            borderColor: '#C60567',
-            backgroundColor: 'rgba(198,5,103,0.08)',
-            pointBackgroundColor: '#C60567',
-            borderWidth: 2,
-            pointRadius: 4,
-          }],
-        },
-        options: {
-          responsive: true,
-          scales: {
-            r: {
-              min: 0,
-              max: 100,
-              ticks: { display: false },
-              grid: { color: 'rgba(0,0,0,0.06)' },
-              pointLabels: { font: { size: 11, weight: '600' }, color: '#6E6E6E' },
-            },
-          },
-          plugins: { legend: { display: false } },
-        },
-      });
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).Chart) {
-      initChart();
-    } else {
-      const existing = document.getElementById('chartjs-cdn');
-      if (!existing) {
-        const script = document.createElement('script');
-        script.id  = 'chartjs-cdn';
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
-        script.onload = initChart;
-        document.head.appendChild(script);
-      } else {
-        existing.addEventListener('load', initChart);
-      }
-    }
-
-    return () => {
-      if (chartInstanceRef.current) chartInstanceRef.current.destroy();
-      chartInstanceRef.current = null;
-    };
-  }, [report?.domain_profile]);
 
   // Main load — finds the artifact ID and hands polling to useGenerationStatus
   useEffect(() => {
@@ -422,7 +323,6 @@ export default function IdentityPage() {
   } = report;
 
   const [nameLine1, nameLine2] = splitNamedIdentity(cover.named_identity);
-  const SignatureIcon = SIGNATURE_ICONS[(primary_constellation[0]?.name ?? '') as SignatureName] ?? IconShield;
 
   return (
     <div className="flow-container">
@@ -431,21 +331,7 @@ export default function IdentityPage() {
         {/* ── Section 0: Cover ─────────────────────────────── */}
         <div className="report-cover">
           <p className="eyebrow">Identity Signature Report</p>
-          <div style={{ position: 'relative', width: '80px', height: '88px', margin: '0 auto' }}>
-            <svg width="80" height="88" viewBox="0 0 80 88">
-              <defs>
-                <linearGradient id="shield-grad" x1="24" y1="4" x2="56" y2="84" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#FE5618" />
-                  <stop offset="50%" stopColor="#C60567" />
-                  <stop offset="100%" stopColor="#510085" />
-                </linearGradient>
-              </defs>
-              <path d="M40 4 L72 16 L72 48 Q72 72 40 84 Q8 72 8 48 L8 16 Z" fill="url(#shield-grad)" />
-            </svg>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <SignatureIcon size={28} color="rgba(255,255,255,0.95)" stroke={1.5} />
-            </div>
-          </div>
+          <IdentityBadge primarySignatureName={primary_constellation[0]?.name} />
           <h1>
             {nameLine2 ? <>{nameLine1}<br />{nameLine2}</> : nameLine1}
           </h1>
@@ -490,22 +376,7 @@ export default function IdentityPage() {
             <p className="eyebrow">SIGNATURE PROFILE</p>
 
             <div className="card">
-              <p className="card-sub-label">Primary Signatures</p>
-              {primary_constellation.map((sig, i) => (
-                <div key={sig.name} className="sig-row">
-                  <div className="sig-num-circle">{i + 1}</div>
-                  <div className="sig-info">
-                    <div className="sig-name-meta">
-                      <span className="sig-name">{sig.name}</span>
-                      <span className="sig-breakdown">{sig.domain}</span>
-                    </div>
-                    <div className="sig-bar-track">
-                      <div className="sig-bar-fill" style={{ width: `${(sig.score / 25) * 100}%` }} />
-                    </div>
-                  </div>
-                  <span className="sig-score-label">{sig.score}</span>
-                </div>
-              ))}
+              <PrimarySignatureBars signatures={primary_constellation} />
             </div>
 
             <div className="card">
@@ -529,7 +400,7 @@ export default function IdentityPage() {
 
             <div className="card">
               <p className="card-sub-label">Identity Profile</p>
-              <canvas ref={chartRef} className="identity-chart-canvas" />
+              <DomainRadarChart domainProfile={domain_profile} />
             </div>
           </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import GatedState from '@/components/GatedState';
+import IdentityCard from '@/components/IdentityCard';
 
 type MetaBundle = {
   content: string;
@@ -48,6 +49,12 @@ export default function DashboardPage() {
   return (
     <div className="flow-container page-inner">
       <h2>Dashboard</h2>
+
+      {/* Card order: Identity -> Momentum -> Project (2026-07-21 dashboard-brainstorm decision) */}
+      <IdentityCard />
+      {/* Momentum card renders here next (consistency dial, mentor-conversations count, tasks-completed count) */}
+      {/* Project card renders here next (project name header, Completed/Open lists) */}
+
       {metaBundleLoading ? (
         <p className="mentor-list-empty">Loading…</p>
       ) : metaBundle ? (
