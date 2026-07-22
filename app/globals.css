@@ -1578,6 +1578,29 @@ p {
   gap: var(--space-16);
 }
 
+/* ── DASHBOARD: MOMENTUM CARD ── */
+.momentum-stats-row {
+  display: flex;
+  gap: var(--space-24);
+}
+
+.momentum-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.momentum-stat-value {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.momentum-stat-label {
+  font-size: var(--font-size-label);
+  color: var(--color-text-secondary);
+}
+
 /* ── SPACING UTILITIES ───────────────────────────── */
 /* Placed last so they win against component classes' own margin/gap
    rules at equal specificity (e.g. .section-title's margin-bottom). */
