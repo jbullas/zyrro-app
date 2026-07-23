@@ -1,6 +1,6 @@
-import { after } from 'next/server';
 import { createClient as createSupabaseAdmin, type User } from '@supabase/supabase-js';
-import { generateIdentityReport, DiscoveryAnswer } from '@/lib/generate-identity-report';
+import { DiscoveryAnswer } from '@/lib/generate-identity-report';
+import { completeDiscovery } from '@/lib/complete-discovery';
 import { QUESTIONS } from '@/lib/identity-questions';
 
 function createServiceClient() {
@@ -21,22 +21,27 @@ function createServiceClient() {
 export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
   const admin = createServiceClient();
 
-  // If a live artifact exists, nothing to do — covers double-click and quick retries
-  const { data: existing } = await admin
-    .from('artifacts')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('type', 'identity_report')
-    .in('status', ['generating', 'ready'])
-    .maybeSingle();
-
-  if (existing) return false;
-
   const rawAnswers = (user.user_metadata?.discovery_answers ?? []) as Array<{
     question_number: number;
     answer_text: string;
   }>;
   const name = (user.user_metadata?.display_name ?? '') as string;
+
+  // #20: a State-3 user's very first /auth/callback hit (and every one after
+  // it, since they never signed up with answers in metadata) has nothing here
+  // to generate from. Without this guard, this would create a garbage
+  // generating/ready identity_report row on empty input, and that row would
+  // then block the *real* generation once the user actually completes the
+  // questionnaire later via completeDiscovery() (POST /api/complete-discovery)
+  // — completeDiscovery's own idempotency check has no way to tell
+  // "legitimate" from "garbage," so the fix has to be not creating the
+  // garbage row at all.
+  if (rawAnswers.length === 0) {
+    await admin
+      .from('profiles')
+      .upsert({ user_id: user.id, name }, { onConflict: 'user_id' });
+    return false;
+  }
 
   const answers: DiscoveryAnswer[] = rawAnswers.map(a => ({
     question_number: a.question_number,
@@ -48,47 +53,5 @@ export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
     .from('profiles')
     .upsert({ user_id: user.id, name }, { onConflict: 'user_id' });
 
-  // Only insert discovery_answers once; skip if already present (retry-safe)
-  const { count } = await admin
-    .from('discovery_answers')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id);
-
-  if ((count ?? 0) === 0 && answers.length > 0) {
-    await admin
-      .from('discovery_answers')
-      .insert(answers.map(a => ({ ...a, user_id: user.id })));
-  }
-
-  // identity_report is now append-only (#59) — the unique index no longer blocks
-  // inserting alongside prior ready/failed rows, so this delete is no longer
-  // needed to avoid a collision. Kept anyway: a failed row has no meaningful
-  // content (LLM call never completed), so it's noise, not history worth
-  // retaining. A concurrent call that wins the insert race below will be the
-  // sole generation run; the losing call's insert errors out (unique index,
-  // now scoped to status = 'generating') and we return false.
-  await admin
-    .from('artifacts')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('type', 'identity_report')
-    .eq('status', 'failed');
-
-  const { data: artifact, error: insertError } = await admin
-    .from('artifacts')
-    .insert({
-      user_id: user.id,
-      type: 'identity_report',
-      access_level: 'free',
-      status: 'generating',
-      content: {},
-    })
-    .select('id')
-    .single();
-
-  if (insertError || !artifact) return false;
-
-  const artifactId = artifact.id;
-  after(() => generateIdentityReport({ artifactId, answers, name }));
-  return true;
+  return completeDiscovery(user.id, answers, name);
 }

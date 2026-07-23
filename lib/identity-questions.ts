@@ -65,3 +65,28 @@ export const QUESTIONS: Array<{ number: number; question: string; hint: string }
     hint: 'Don\'t overthink it. What comes to mind first?',
   },
 ];
+
+export interface MergedAnswer {
+  number: number;
+  question: string;
+  hint: string;
+  answer: string;
+}
+
+/**
+ * Joins discovery_answers rows against QUESTIONS in canonical order — question
+ * text/hint always come from QUESTIONS, never the DB (see #20 brief: question
+ * text is never duplicated into the DB). Missing rows render as blank answers
+ * rather than being omitted, so the returned array always has all 13 entries.
+ */
+export function mergeAnswersWithQuestions(
+  rows: Array<{ question_number: number; answer_text: string }>
+): MergedAnswer[] {
+  const answerByNumber = new Map(rows.map(r => [r.question_number, r.answer_text]));
+  return QUESTIONS.map(q => ({
+    number: q.number,
+    question: q.question,
+    hint: q.hint,
+    answer: answerByNumber.get(q.number) ?? '',
+  }));
+}

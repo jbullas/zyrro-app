@@ -39,7 +39,10 @@ export default function BottomNav() {
     <nav className="w-full flex-shrink-0 sticky bottom-0 z-50 bottom-nav">
       <div className="nav-inner">
         {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          // /start (logged in, States 2 & 3 — #20) has no NAV_ITEMS entry of its
+          // own; it's a stage of the Identity flow, so it highlights that item.
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            || (item.href === '/identity' && pathname === '/start');
           const Icon = item.icon;
 
           return (

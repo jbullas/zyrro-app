@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconArrowRight } from '@tabler/icons-react';
-import { QUESTIONS } from '@/lib/identity-questions';
+import { QUESTIONS, mergeAnswersWithQuestions, type MergedAnswer } from '@/lib/identity-questions';
 import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
 import LinkButton from '@/components/LinkButton';
 import BackButton from '@/components/BackButton';
+import QuestionAnswerList from '@/components/QuestionAnswerList';
 
 const DELIVERABLES = [
   'Your Named Identity',
@@ -18,6 +19,11 @@ const DELIVERABLES = [
 ];
 
 type Screen = 'intro' | 'question' | 'contact' | 'check-email';
+
+// #20: auth-awareness layered on top of the pre-existing anonymous flow.
+// 'checking' while auth + discovery_answers are being resolved; 'anonymous'
+// is the untouched State 1; 'state2'/'state3' below.
+type Mode = 'checking' | 'anonymous' | 'state2' | 'state3';
 
 export default function StartPage() {
   const router = useRouter();
@@ -31,6 +37,47 @@ export default function StartPage() {
   const [email, setEmail] = useState('');
   const [contactError, setContactError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const [mode, setMode] = useState<Mode>('checking');
+  const [qaItems, setQaItems] = useState<MergedAnswer[]>([]);
+  const [submitError, setSubmitError] = useState('');
+
+  // #20 State 2/3 branch: resolve auth + discovery_answers once on mount.
+  // Kept as its own effect, entirely separate from the localStorage-prefill
+  // effect below, so State 1's existing behavior is untouched either way.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveMode() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (!cancelled) setMode('anonymous');
+        return;
+      }
+
+      const { data: rows, error } = await supabase
+        .from('discovery_answers')
+        .select('question_number, answer_text')
+        .eq('user_id', user.id);
+
+      if (cancelled) return;
+
+      // On a query error, fall through to State 3 rather than State 1 — this
+      // user is already authenticated, so the anonymous signUp() flow would
+      // be actively wrong for them (it would try to create a second
+      // account). State 3's submit path still works off a real session.
+      if (error || !rows || rows.length === 0) {
+        setMode('state3');
+        return;
+      }
+
+      setQaItems(mergeAnswersWithQuestions(rows));
+      setMode('state2');
+    }
+
+    resolveMode();
+    return () => { cancelled = true; };
+  }, [supabase]);
 
   useEffect(() => {
     const stored = localStorage.getItem('zyrro_discovery_answers');
@@ -82,9 +129,37 @@ export default function StartPage() {
   function handleContinue() {
     saveToStorage(answers);
     if (questionIndex === 12) {
-      setScreen('contact');
+      if (mode === 'state3') {
+        handleFinishState3();
+      } else {
+        setScreen('contact');
+      }
     } else {
       setQuestionIndex(qi => qi + 1);
+    }
+  }
+
+  // #20 State 3: final step skips the contact/signUp() screen entirely —
+  // already authenticated, so the answers go straight to the live session
+  // via POST /api/complete-discovery instead.
+  async function handleFinishState3() {
+    setSubmitError('');
+    setSubmitting(true);
+    const payload = QUESTIONS.map((q, i) => ({
+      question_number: q.number,
+      answer_text: (answers[i] || '').slice(0, 1000),
+    }));
+    try {
+      const res = await fetch('/api/complete-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: payload }),
+      });
+      if (!res.ok) throw new Error('Submission failed');
+      router.push('/identity');
+    } catch {
+      setSubmitError('Something went wrong. Please try again.');
+      setSubmitting(false);
     }
   }
 
@@ -133,6 +208,25 @@ export default function StartPage() {
       email,
       options: { emailRedirectTo: window.location.origin + '/auth/callback' },
     });
+  }
+
+  // ── #20: resolving auth + discovery_answers ─────────────────────────
+  if (mode === 'checking') return null;
+
+  // ── #20 State 2: already completed, read-only ────────────────────────
+  if (mode === 'state2') {
+    return (
+      <div className="flow-container">
+        <div className="report-scroll">
+          <div className="report-cover">
+            <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
+            <h1>You&rsquo;ve already answered these.</h1>
+            <p>Your 13 discovery answers, for reference.</p>
+          </div>
+          <QuestionAnswerList items={qaItems} />
+        </div>
+      </div>
+    );
   }
 
   // ── CONTACT COLLECTION ─────────────────────────────────────────────
@@ -305,11 +399,13 @@ export default function StartPage() {
           </div>
         </div>
 
+        {submitError && <p className="form-error">{submitError}</p>}
+
         {/* Navigation buttons */}
         <div className="row-between">
           <BackButton onClick={handleBack} />
-          <SecondaryButton onClick={handleContinue} disabled={!canContinue}>
-            {questionIndex === 12 ? 'Finish' : 'Continue'}
+          <SecondaryButton onClick={handleContinue} disabled={!canContinue || submitting}>
+            {submitting ? 'Submitting…' : (questionIndex === 12 ? 'Finish' : 'Continue')}
             <IconArrowRight size={16} stroke={2} />
           </SecondaryButton>
         </div>

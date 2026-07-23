@@ -1601,6 +1601,14 @@ p {
   color: var(--color-text-secondary);
 }
 
+/* ── /start STATE 2 (READ-ONLY Q&A) ──────────────── */
+
+.qa-answer-text {
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-top: var(--space-12);
+}
+
 /* ── SPACING UTILITIES ───────────────────────────── */
 /* Placed last so they win against component classes' own margin/gap
    rules at equal specificity (e.g. .section-title's margin-bottom). */
