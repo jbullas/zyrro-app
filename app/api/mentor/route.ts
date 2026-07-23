@@ -8,6 +8,7 @@ import type {
   PathOptionsArtifactContent,
   PathPlanArtifactContent,
 } from "@/lib/artifact-schemas";
+import { getCurrentArtifact } from "@/lib/artifacts";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -25,15 +26,12 @@ async function buildContextBlock(userId: string): Promise<string> {
   const supabase = createServiceClient();
   const parts: string[] = [];
 
-  const { data: reportArtifact } = await supabase
-    .from("artifacts")
-    .select("content")
-    .eq("user_id", userId)
-    .eq("type", "identity_report")
-    .eq("status", "ready")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: reportArtifact } = await getCurrentArtifact<{ content: unknown }>(
+    supabase,
+    userId,
+    "identity_report",
+    { status: "ready", select: "content" },
+  );
 
   const report = reportArtifact?.content as IdentitySignatureReportArtifactContent | null;
 

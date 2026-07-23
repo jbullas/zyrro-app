@@ -14,8 +14,9 @@ function createServiceClient() {
  * Idempotent generation kickoff. Returns true if generation was started,
  * false if a live artifact (generating/ready) already exists.
  *
- * Race safety: the partial unique index on identity_report artifacts causes a
- * duplicate insert to error; we swallow that error so concurrent calls are harmless.
+ * Race safety: the partial unique index on identity_report artifacts (scoped to
+ * status = 'generating', #59) causes a second concurrent insert to error; we
+ * swallow that error so concurrent calls are harmless.
  */
 export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
   const admin = createServiceClient();
@@ -59,9 +60,13 @@ export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
       .insert(answers.map(a => ({ ...a, user_id: user.id })));
   }
 
-  // Consistent strategy: delete failed artifact, then insert fresh.
-  // A concurrent call that wins the insert race will be the sole generation run;
-  // the losing call's insert errors out (unique index) and we return false.
+  // identity_report is now append-only (#59) — the unique index no longer blocks
+  // inserting alongside prior ready/failed rows, so this delete is no longer
+  // needed to avoid a collision. Kept anyway: a failed row has no meaningful
+  // content (LLM call never completed), so it's noise, not history worth
+  // retaining. A concurrent call that wins the insert race below will be the
+  // sole generation run; the losing call's insert errors out (unique index,
+  // now scoped to status = 'generating') and we return false.
   await admin
     .from('artifacts')
     .delete()

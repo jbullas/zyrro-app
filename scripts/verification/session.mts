@@ -110,10 +110,15 @@ export async function seedArtifact(
 ): Promise<string> {
   // Hitting /auth/callback for a new user fires kickoffIdentityGeneration()
   // in the background (see lib/kickoff-identity-generation.ts), which inserts
-  // its own 'generating' identity_report row. artifacts_one_identity_report_per_user
-  // allows only one identity_report row per user regardless of status, so a
-  // synthetic seed of that type must clear whatever the background kickoff
-  // already created before inserting the caller's content.
+  // its own identity_report row. identity_report is append-only (#59) — the
+  // unique index no longer blocks a second row outright — but seedArtifact's
+  // contract is a single deterministic row per call, and the background
+  // kickoff's row can land as 'generating', 'ready', or 'failed' by the time
+  // this runs (its timing relative to test setup isn't guaranteed). Delete by
+  // type only, not status, so a lucky-fast kickoff can't leave a stale
+  // duplicate behind regardless of what status it resolved to. Tests that
+  // specifically want coexisting historical rows should insert directly
+  // rather than go through this guard.
   if (params.type === 'identity_report') {
     await supabase.from('artifacts').delete().eq('user_id', userId).eq('type', 'identity_report');
   }

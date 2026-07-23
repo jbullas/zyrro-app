@@ -8,6 +8,7 @@ import { hasPaidEntitlement } from '@/lib/entitlements';
 import { getChatCompletion } from '@/lib/llm';
 import { PATH_OPTIONS_PROMPT } from '@/lib/prompts/path-options';
 import type { PathOptionsArtifactContent } from '@/lib/artifact-schemas';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 function createServiceClient() {
   return createSupabaseAdmin(
@@ -75,26 +76,23 @@ export async function POST(_req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  const { data: identityArtifact } = await supabase
-    .from('artifacts')
-    .select('content')
-    .eq('user_id', user.id)
-    .eq('type', 'identity_report')
-    .eq('status', 'ready')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: identityArtifact } = await getCurrentArtifact<{ content: unknown }>(
+    supabase,
+    user.id,
+    'identity_report',
+    { status: 'ready', select: 'content' },
+  );
 
   if (!identityArtifact) {
     return NextResponse.json({ error: 'Identity report not found' }, { status: 404 });
   }
 
-  const { data: existing } = await supabase
-    .from('artifacts')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('type', 'path_options')
-    .maybeSingle();
+  const { data: existing } = await getCurrentArtifact<{ id: string }>(
+    supabase,
+    user.id,
+    'path_options',
+    { select: 'id' },
+  );
 
   let artifactId: string;
 

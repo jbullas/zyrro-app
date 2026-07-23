@@ -11,6 +11,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { generateIdentityReport } from '@/lib/generate-identity-report';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 // ── Args ──────────────────────────────────────────────────────────────────────
 const email = process.argv[2];
@@ -52,14 +53,12 @@ const { data: answers, error: answersError } = await supabase
 if (answersError) { console.error('answers fetch failed:', answersError); process.exit(1); }
 
 // ── 4. Existing artifact ──────────────────────────────────────────────────────
-const { data: artifact, error: artifactError } = await supabase
-  .from('artifacts')
-  .select('id, status')
-  .eq('user_id', userId)
-  .eq('type', 'identity_report')
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
+const { data: artifact, error: artifactError } = await getCurrentArtifact<{ id: string; status: string }>(
+  supabase,
+  userId,
+  'identity_report',
+  { select: 'id, status' },
+);
 if (artifactError) { console.error('artifact fetch failed:', artifactError); process.exit(1); }
 
 // ── Info dump ─────────────────────────────────────────────────────────────────

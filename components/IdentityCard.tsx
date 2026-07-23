@@ -7,6 +7,7 @@ import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import type { DomainProfile } from '@/lib/artifact-schemas';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 type CardState = 'loading' | 'no-artifact' | 'pending' | 'ready';
 
@@ -30,14 +31,12 @@ export default function IdentityCard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { if (!cancelled) setState('no-artifact'); return; }
 
-      const { data, error } = await supabase
-        .from('artifacts')
-        .select('status, content')
-        .eq('user_id', user.id)
-        .eq('type', 'identity_report')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data, error } = await getCurrentArtifact<{ status: string; content: unknown }>(
+        supabase,
+        user.id,
+        'identity_report',
+        { select: 'status, content' },
+      );
 
       if (cancelled) return;
 

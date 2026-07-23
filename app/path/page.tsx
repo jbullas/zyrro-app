@@ -12,6 +12,7 @@ import ConstellationCard from '@/components/ConstellationCard';
 import ChipRow from '@/components/ChipRow';
 import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 type PageState = 'loading' | 'anonymous' | 'verifying' | 'unpaid' | 'has-artifact';
 
@@ -56,14 +57,12 @@ export default function PathPage() {
     let cancelled = false;
 
     async function loadPathOptions(uid: string) {
-      const { data } = await supabase
-        .from('artifacts')
-        .select('id')
-        .eq('user_id', uid)
-        .eq('type', 'path_options')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data } = await getCurrentArtifact<{ id: string }>(
+        supabase,
+        uid,
+        'path_options',
+        { select: 'id' },
+      );
 
       if (cancelled) return;
 
@@ -128,15 +127,12 @@ export default function PathPage() {
           .maybeSingle();
 
         if (!entitlement) {
-          const { data: artifact } = await supabase
-            .from('artifacts')
-            .select('content')
-            .eq('user_id', user.id)
-            .eq('type', 'identity_report')
-            .eq('status', 'ready')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          const { data: artifact } = await getCurrentArtifact<{ content: unknown }>(
+            supabase,
+            user.id,
+            'identity_report',
+            { status: 'ready', select: 'content' },
+          );
 
           if (!cancelled) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

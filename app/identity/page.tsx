@@ -13,6 +13,7 @@ import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import { useGenerationStatus } from '@/lib/generation-status';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
@@ -165,14 +166,12 @@ export default function IdentityPage() {
     let cancelled  = false;
 
     async function loadArtifact(userId: string) {
-      const { data, error } = await supabase
-        .from('artifacts')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('type', 'identity_report')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data, error } = await getCurrentArtifact<{ id: string }>(
+        supabase,
+        userId,
+        'identity_report',
+        { select: 'id' },
+      );
 
       if (cancelled) return;
       if (error) { router.push('/login'); return; }
@@ -254,15 +253,13 @@ export default function IdentityPage() {
     await fetch('/api/retry-generation', { method: 'POST' });
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase
-      .from('artifacts')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('type', 'identity_report')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) setArtifactId(data.id as string);
+    const { data } = await getCurrentArtifact<{ id: string }>(
+      supabase,
+      user.id,
+      'identity_report',
+      { select: 'id' },
+    );
+    if (data) setArtifactId(data.id);
   }
 
   // ── has-artifact: hook-driven generation states ────────────────────

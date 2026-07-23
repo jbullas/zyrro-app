@@ -3,6 +3,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { getChatCompletion } from '@/lib/llm';
 import { PATH_PLAN_PROMPT } from '@/lib/prompts/path-plan';
 import type { PathPlanArtifactContent, PathOption } from '@/lib/artifact-schemas';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 function createServiceClient() {
   return createSupabaseAdmin(
@@ -91,15 +92,12 @@ export async function generatePathPlan(
   if (!chosenOption) return null;
 
   // Resolve the identity report
-  const { data: identityArtifact } = await supabase
-    .from('artifacts')
-    .select('content')
-    .eq('user_id', userId)
-    .eq('type', 'identity_report')
-    .eq('status', 'ready')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: identityArtifact } = await getCurrentArtifact<{ content: unknown }>(
+    supabase,
+    userId,
+    'identity_report',
+    { status: 'ready', select: 'content' },
+  );
 
   if (!identityArtifact) return null;
 
