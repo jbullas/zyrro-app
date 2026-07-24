@@ -27,6 +27,16 @@ When the user sends **`session end`**, wrap up:
 
 Changelogs are append-only history. Never edit past entries.
 
+## Definition of Done
+
+A ticket can only be marked Done when one of these is true:
+
+1. **Every user-facing path in its scope was actually live-verified** — not typechecked, not confirmed by diff alone. "The code is provably unchanged" is supporting evidence, never a substitute for a passing live test.
+2. **Any leftover/untested piece is explicitly handed off to a different, named ticket** — logged in that ticket's description, not just mentioned in a changelog's "Next" section. A leftover only stops blocking the original ticket once it has a real ticket number owning it; a changelog note alone doesn't count as "taken over."
+3. **Miroslav explicitly accepts the risk of the untested gap.** This requires his direct, logged sign-off on the specific gap — not an agent's own judgment that the risk is probably low, however well reasoned. Log it verbatim on the ticket (what's untested, and that Miroslav accepted the risk) so it's visible as a deliberate call, not a silently skipped test.
+
+If none of these apply — some path is untested, nothing else has claimed it, and no one signed off on the risk — the ticket stays open (or gets an explicit non-Done status with a note on what's outstanding), even if a blocker like a rate limit is what's in the way.
+
 ## Planning-surface context
 
 - The claude.ai planning surface is blind to this repo. To refresh it, run `node scripts/make-bundle.mjs`, which writes `context-bundle.md` (gitignored) to attach to the planning chat.
