@@ -18,6 +18,16 @@ function createServiceClient() {
  * status = 'generating', #59) causes a second concurrent insert to error; we
  * swallow that error so concurrent calls are harmless.
  */
+function toDiscoveryAnswers(
+  rows: Array<{ question_number: number; answer_text: string }>
+): DiscoveryAnswer[] {
+  return rows.map(r => ({
+    question_number: r.question_number,
+    question_text: QUESTIONS.find(q => q.number === r.question_number)?.question ?? '',
+    answer_text: r.answer_text,
+  }));
+}
+
 export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
   const admin = createServiceClient();
 
@@ -40,18 +50,28 @@ export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
     await admin
       .from('profiles')
       .upsert({ user_id: user.id, name }, { onConflict: 'user_id' });
-    return false;
-  }
 
-  const answers: DiscoveryAnswer[] = rawAnswers.map(a => ({
-    question_number: a.question_number,
-    question_text: QUESTIONS.find(q => q.number === a.question_number)?.question ?? '',
-    answer_text: a.answer_text,
-  }));
+    // #72: a State-3 user (POST /api/complete-discovery) never has metadata
+    // answers — they authenticated first, then answered — but does have real
+    // discovery_answers DB rows. Check before giving up, so /identity's "Try
+    // again" can recover a failed generation from those rows instead of
+    // silently no-op'ing forever. A genuine State-1/2 user (or a fresh
+    // signup, whose first /auth/callback also lands here) has zero rows too,
+    // so this falls through to the unchanged `return false`.
+    const { data: dbRows } = await admin
+      .from('discovery_answers')
+      .select('question_number, answer_text')
+      .eq('user_id', user.id)
+      .order('question_number');
+
+    if (!dbRows || dbRows.length === 0) return false;
+
+    return completeDiscovery(user.id, toDiscoveryAnswers(dbRows), name);
+  }
 
   await admin
     .from('profiles')
     .upsert({ user_id: user.id, name }, { onConflict: 'user_id' });
 
-  return completeDiscovery(user.id, answers, name);
+  return completeDiscovery(user.id, toDiscoveryAnswers(rawAnswers), name);
 }
