@@ -75,15 +75,19 @@ async function buildContextBlock(userId: string): Promise<string> {
       parts.push(`Thesis: ${chosenPath.thesis}`);
     }
 
-    const { data: planArtifact } = await supabase
-      .from("artifacts")
-      .select("content")
-      .eq("user_id", userId)
-      .eq("type", "path_plan")
-      .eq("path_options_artifact_id", selection.path_options_artifact_id)
-      .eq("path_id", selection.path_id)
-      .eq("status", "ready")
-      .maybeSingle();
+    const { data: planArtifact } = await getCurrentArtifact<{ content: unknown }>(
+      supabase,
+      userId,
+      "path_plan",
+      {
+        match: {
+          path_options_artifact_id: selection.path_options_artifact_id,
+          path_id: selection.path_id,
+        },
+        status: "ready",
+        select: "content",
+      },
+    );
 
     const plan = planArtifact?.content as PathPlanArtifactContent | null;
 

@@ -11,6 +11,7 @@ import ChipRow from '@/components/ChipRow';
 import LimitsBlock from '@/components/LimitsBlock';
 import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'has-artifact';
 
@@ -46,14 +47,15 @@ export default function PlanPage() {
       pathOptionsArtifactId: string,
       pathId: string,
     ) {
-      const { data } = await supabase
-        .from('artifacts')
-        .select('id')
-        .eq('user_id', uid)
-        .eq('type', 'path_plan')
-        .eq('path_options_artifact_id', pathOptionsArtifactId)
-        .eq('path_id', pathId)
-        .maybeSingle();
+      const { data } = await getCurrentArtifact<{ id: string }>(
+        supabase,
+        uid,
+        'path_plan',
+        {
+          match: { path_options_artifact_id: pathOptionsArtifactId, path_id: pathId },
+          select: 'id',
+        },
+      );
 
       if (cancelled) return;
 

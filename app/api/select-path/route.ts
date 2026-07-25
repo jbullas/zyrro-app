@@ -6,6 +6,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
 import { generatePathPlan } from '@/lib/generate-path-plan';
+import { getCurrentArtifact } from '@/lib/artifacts';
 
 function createServiceClient() {
   return createSupabaseAdmin(
@@ -55,15 +56,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Return the existing ready plan immediately — no regeneration, no cost
-  const { data: existingPlan } = await supabase
-    .from('artifacts')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('type', 'path_plan')
-    .eq('path_options_artifact_id', path_options_artifact_id)
-    .eq('path_id', path_id)
-    .eq('status', 'ready')
-    .maybeSingle();
+  const { data: existingPlan } = await getCurrentArtifact<{ id: string }>(
+    supabase,
+    user.id,
+    'path_plan',
+    {
+      match: { path_options_artifact_id, path_id },
+      status: 'ready',
+      select: 'id',
+    },
+  );
 
   if (existingPlan) {
     return NextResponse.json({ artifact_id: existingPlan.id, reused: true });

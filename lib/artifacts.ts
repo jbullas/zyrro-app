@@ -13,22 +13,29 @@ export type ArtifactStatus = 'generating' | 'ready' | 'failed';
  * `opts.status` narrows to the latest row in a specific status (e.g.
  * 'ready', so an in-flight or failed regeneration attempt doesn't shadow
  * the last good version). `opts.select` overrides the default `*` column
- * list. Works with any Supabase client — browser, server, or service-role.
+ * list. `opts.match` adds extra equality filters beyond user_id+type — for
+ * artifact types like path_plan that are also scoped to a selection key
+ * (path_options_artifact_id + path_id). Works with any Supabase client —
+ * browser, server, or service-role.
  */
 export async function getCurrentArtifact<T = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any, any, any>,
   userId: string,
   type: ArtifactType,
-  opts: { status?: ArtifactStatus; select?: string } = {}
+  opts: { status?: ArtifactStatus; select?: string; match?: Record<string, string> } = {}
 ) {
   let query = supabase
     .from('artifacts')
     .select(opts.select ?? '*')
     .eq('user_id', userId)
-    .eq('type', type)
-    .order('created_at', { ascending: false })
-    .limit(1);
+    .eq('type', type);
+
+  if (opts.match) {
+    query = query.match(opts.match);
+  }
+
+  query = query.order('created_at', { ascending: false }).limit(1);
 
   if (opts.status) {
     query = query.eq('status', opts.status);

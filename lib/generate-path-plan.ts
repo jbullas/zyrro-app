@@ -101,50 +101,78 @@ export async function generatePathPlan(
 
   if (!identityArtifact) return null;
 
-  // Check for an existing plan artifact for this exact option
-  const { data: existing } = await supabase
+  // #71: path_plan is append-only, so more than one row can exist for the
+  // same selection key — resolve the current one via getCurrentArtifact
+  // (ordered by created_at) instead of a bare .maybeSingle() that would
+  // throw once a second row exists.
+  const { data: existing } = await getCurrentArtifact<{ id: string; status: string }>(
+    supabase,
+    userId,
+    'path_plan',
+    {
+      match: { path_options_artifact_id: pathOptionsArtifactId, path_id: pathId },
+      select: 'id, status',
+    },
+  );
+
+  if (existing && (existing.status === 'generating' || existing.status === 'ready')) {
+    // Already generating or ready — return the existing id without re-running
+    return existing.id;
+  }
+
+  // No current row, or the current row failed — #71: delete failed rows for
+  // this selection key (no informational content, same call #71 makes for
+  // path_options) then INSERT a fresh row, rather than resetting the old
+  // row's status in place.
+  await supabase
     .from('artifacts')
-    .select('id, status')
+    .delete()
     .eq('user_id', userId)
     .eq('type', 'path_plan')
     .eq('path_options_artifact_id', pathOptionsArtifactId)
     .eq('path_id', pathId)
-    .maybeSingle();
+    .eq('status', 'failed');
+
+  const { data: newArtifact, error } = await supabase
+    .from('artifacts')
+    .insert({
+      user_id: userId,
+      type: 'path_plan',
+      access_level: 'paid',
+      status: 'generating',
+      content: {},
+      path_options_artifact_id: pathOptionsArtifactId,
+      path_id: pathId,
+    })
+    .select('id')
+    .single();
 
   let artifactId: string;
 
-  if (existing) {
-    // Already generating or ready — return the existing id without re-running
-    if (existing.status === 'generating' || existing.status === 'ready') {
-      return existing.id;
-    }
-    // Failed — reset and retry
-    await supabase
-      .from('artifacts')
-      .update({ status: 'generating', content: {} })
-      .eq('id', existing.id);
-    artifactId = existing.id;
-  } else {
-    const { data: newArtifact, error } = await supabase
-      .from('artifacts')
-      .insert({
-        user_id: userId,
-        type: 'path_plan',
-        access_level: 'paid',
-        status: 'generating',
-        content: {},
-        path_options_artifact_id: pathOptionsArtifactId,
-        path_id: pathId,
-      })
-      .select('id')
-      .single();
-
-    if (error || !newArtifact) {
-      console.error('Path plan artifact insert error:', error);
+  if (error?.code === '23505') {
+    // Lost the #71 composite unique-index race against a concurrent call
+    // for this exact selection key — someone else's generation already
+    // started. Reuse that row's id (same reuse pattern as path_options'
+    // analogous race) rather than returning null, since select-path/route.ts
+    // treats a null return as a genuine failure and surfaces a 500.
+    const { data: current } = await getCurrentArtifact<{ id: string }>(
+      supabase,
+      userId,
+      'path_plan',
+      { match: { path_options_artifact_id: pathOptionsArtifactId, path_id: pathId }, select: 'id' },
+    );
+    if (!current) {
+      console.error('Path plan insert lost the generating-row race but no current row was found:', error);
       return null;
     }
-    artifactId = newArtifact.id;
+    return current.id;
   }
+
+  if (error || !newArtifact) {
+    console.error('Path plan artifact insert error:', error);
+    return null;
+  }
+  artifactId = newArtifact.id;
 
   after(() => runPlanGeneration(artifactId, identityArtifact.content, chosenOption));
 

@@ -87,38 +87,54 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: 'Identity report not found' }, { status: 404 });
   }
 
-  const { data: existing } = await getCurrentArtifact<{ id: string }>(
-    supabase,
-    user.id,
-    'path_options',
-    { select: 'id' },
-  );
+  // #71: path_options is append-only (matching #59's identity_report
+  // precedent) — always INSERT a new row so regenerating never destroys
+  // history. A prior failed attempt has no informational content, so it's
+  // deleted first (same call kickoffIdentityGeneration makes for #59)
+  // rather than left to accumulate.
+  await supabase
+    .from('artifacts')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('type', 'path_options')
+    .eq('status', 'failed');
+
+  const { data: newArtifact, error } = await supabase
+    .from('artifacts')
+    .insert({
+      user_id: user.id,
+      type: 'path_options',
+      access_level: 'paid',
+      status: 'generating',
+      content: {},
+    })
+    .select('id')
+    .single();
 
   let artifactId: string;
 
-  if (existing) {
-    await supabase
-      .from('artifacts')
-      .update({ status: 'generating', content: {} })
-      .eq('id', existing.id);
-    artifactId = existing.id;
-  } else {
-    const { data: newArtifact, error } = await supabase
-      .from('artifacts')
-      .insert({
-        user_id: user.id,
-        type: 'path_options',
-        access_level: 'paid',
-        status: 'generating',
-        content: {},
-      })
-      .select('id')
-      .single();
-
-    if (error || !newArtifact) {
-      console.error('Path options artifact insert error:', error);
+  if (error?.code === '23505') {
+    // Lost the #71 unique-index race against a concurrent call for this
+    // user (e.g. a double-click) — someone else's generation already
+    // started. Reuse that row's id rather than erroring, so the frontend
+    // still gets a valid artifact_id to poll. No status filter: the winner's
+    // row is guaranteed to be the newest for this user regardless of what
+    // it's since resolved to.
+    const { data: current } = await getCurrentArtifact<{ id: string }>(
+      supabase,
+      user.id,
+      'path_options',
+      { select: 'id' },
+    );
+    if (!current) {
+      console.error('Path options insert lost the generating-row race but no current row was found:', error);
       return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
     }
+    artifactId = current.id;
+  } else if (error || !newArtifact) {
+    console.error('Path options artifact insert error:', error);
+    return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
+  } else {
     artifactId = newArtifact.id;
   }
 
