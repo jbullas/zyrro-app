@@ -47,6 +47,9 @@ interface IdentityReport {
     report_metadata: string;
     identity_thesis: string;
   };
+  signature_profile_summary?: {
+    scoring_explanation: string;
+  };
   primary_constellation: PrimarySignatureEntry[];
   secondary_signature_analysis: SecondarySignatureEntry[];
   constellation_synthesis: {
@@ -310,6 +313,7 @@ export default function IdentityPage() {
 
   const {
     cover,
+    signature_profile_summary,
     primary_constellation,
     secondary_signature_analysis,
     constellation_synthesis,
@@ -371,6 +375,9 @@ export default function IdentityPage() {
           {/* Section 3: Signature Profile */}
           <div id="section-3" className="report-section">
             <p className="eyebrow">SIGNATURE PROFILE</p>
+            {signature_profile_summary?.scoring_explanation && (
+              <p>{signature_profile_summary.scoring_explanation}</p>
+            )}
 
             <div className="card">
               <PrimarySignatureBars signatures={primary_constellation} />
