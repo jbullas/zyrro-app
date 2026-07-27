@@ -183,8 +183,7 @@ Use this exact structure:
     ],
     "secondary_signatures": [
       { "name": "", "score": 0 }
-    ],
-    "scoring_explanation": ""
+    ]
   },
   "primary_constellation": [
     {
@@ -270,11 +269,6 @@ Exactly 5 entries. Name + score (1–25).
 
 ### signature_profile_summary.secondary_signatures
 Exactly 3 entries. Name + score (1–25).
-
-### signature_profile_summary.scoring_explanation
-80–150 words.
-Must explain Frequency × Intensity scoring model.
-Must explain the difference between Primary and Secondary signatures.
 
 ### primary_constellation
 Exactly 5 entries.

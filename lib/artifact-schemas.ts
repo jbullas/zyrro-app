@@ -106,7 +106,6 @@ export interface SignatureProfileEntry {
 export interface SignatureProfileSummary {
   primary_signatures: SignatureProfileEntry[];   // exactly 5
   secondary_signatures: SignatureProfileEntry[]; // exactly 3
-  scoring_explanation: string;                  // 80-150 words
 }
 
 export interface PrimarySignatureAnalysis {

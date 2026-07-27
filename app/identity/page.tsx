@@ -47,9 +47,6 @@ interface IdentityReport {
     report_metadata: string;
     identity_thesis: string;
   };
-  signature_profile_summary?: {
-    scoring_explanation: string;
-  };
   primary_constellation: PrimarySignatureEntry[];
   secondary_signature_analysis: SecondarySignatureEntry[];
   constellation_synthesis: {
@@ -93,6 +90,15 @@ const WHAT_THIS_REPORT_IS =
   'life and work history. They describe how you have consistently thought, acted, and perceived ' +
   'across multiple chapters of your life — not who you want to be, or who you were once. The report ' +
   'does not tell you what to do. It shows you what is already true about how you operate.';
+
+const SCORING_EXPLANATION =
+  'Each signature score reflects two dimensions: Frequency, how often the pattern shows up across ' +
+  'your history, and Intensity, how strongly it shows up when it does. The five highest-scoring ' +
+  'signatures form your Primary Constellation — the patterns that most consistently and forcefully ' +
+  'define how you operate. The next three are your Secondary Signatures: real, established patterns ' +
+  'that appear less often or with less force, but still shape how you think, act, and respond under ' +
+  'specific conditions. Together, the two groups describe not just what you do, but how reliably and ' +
+  'how strongly you do it.';
 
 const RESEARCH_PILLARS = [
   {
@@ -313,7 +319,6 @@ export default function IdentityPage() {
 
   const {
     cover,
-    signature_profile_summary,
     primary_constellation,
     secondary_signature_analysis,
     constellation_synthesis,
@@ -375,9 +380,7 @@ export default function IdentityPage() {
           {/* Section 3: Signature Profile */}
           <div id="section-3" className="report-section">
             <p className="eyebrow">SIGNATURE PROFILE</p>
-            {signature_profile_summary?.scoring_explanation && (
-              <p>{signature_profile_summary.scoring_explanation}</p>
-            )}
+            <p>{SCORING_EXPLANATION}</p>
 
             <div className="card">
               <PrimarySignatureBars signatures={primary_constellation} />
