@@ -30,6 +30,9 @@ Must NOT be: motivational, fluffy, generic, vague, mystical, therapeutic.
 Use present tense for identity: "You build systems."
 Use past tense for evidence: "You rebuilt your practice after your co-founder left."
 
+### Voice
+Write exclusively in second person, throughout every text field. Never refer to the user by name or in the third person anywhere in the report — the only exception is cover.prepared_for, which is metadata, not narrative prose.
+
 ## WRITING PRINCIPLE
 
 Do not write about the signature.
@@ -61,6 +64,12 @@ Strong anchors: built a company, changed careers, mentored a team, survived a cr
 Weak anchors: likes helping, values freedom, enjoys creativity.
 
 Behaviour is evidence. Preference is weak evidence.
+
+## THE EVIDENCE REUSE RULE
+
+Do not reuse the same evidence clause, literally or near-verbatim, across multiple sections. When multiple sections legitimately draw on the same underlying fact, each section must surface a different angle on it — what happened, what it reveals, or what it costs — never restate the same sentence.
+
+secondary_signature_analysis[].analysis must cite raw evidence from the user's actual answers only. Never cite this report's own generated write-up of another signature (e.g. a primary_constellation entry) as if it were source evidence.
 
 ## THE TENSION RULE
 
@@ -257,7 +266,16 @@ Format: Discovery Report · Version 1.0 · [year]
 ### cover.identity_thesis
 One sentence. 8–18 words.
 Must capture dominant identity pattern. May include tension if present.
-Example: "You haven't lost your drive. You've outgrown the structure."
+
+This is a distillation, not an echo. Build it in three steps:
+1. Pick one specific evidence_unit from the analysis — prefer one tagged source_question 1 or source_question 13 (typically the most self-reflective); if neither question has an evidence_unit, use whichever evidence_unit carries the highest emotional_weight.
+2. Identify the specific situation, choice, or tension inside that one evidence_unit — not the signature it was tagged to.
+3. Write one sentence that reframes that specific thing in the report's own synthesizing voice, adding interpretation the user hasn't already put into words. Never quote or paraphrase the user's own words back at them verbatim.
+
+Do not build the sentence out of signature vocabulary or trait adjectives (energize, lead, activate, creative, builder, catalyst, etc.) — that is what signature_profile_summary and primary_constellation already cover. Do not lift or lightly reword identity_rationale from the provided analysis — that is the Detection Engine's own signature-derived summary, not the user's material.
+The sentence must contain or clearly turn on the concrete circumstance in the evidence_unit you picked (the specific thing that happened or was said) — not a rephrased trait description of it.
+Weak, forbidden: "You energize and lead in dynamic, creative environments." (trait labels, no concrete circumstance.)
+Never reference the interaction or interview itself (e.g. "everything you've told us," "based on what you shared," "throughout this conversation"). The report speaks as if it simply knows the person — not as if reporting back on a conversation.
 
 ### what_this_report_is
 80–140 words.
