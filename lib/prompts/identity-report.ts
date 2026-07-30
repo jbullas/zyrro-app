@@ -176,7 +176,7 @@ Use this exact structure:
 
 {
   "artifact_type": "identity_signature_report",
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "cover": {
     "report_title": "ZYRRO IDENTITY REPORT",
     "prepared_for": "",
@@ -208,6 +208,7 @@ Use this exact structure:
       "tension": ""
     }
   ],
+  "secondary_signature_summary": "",
   "secondary_signature_analysis": [
     {
       "signature_number": "",
@@ -245,7 +246,8 @@ Before returning the JSON, verify:
 - domain_profile has exactly 5 keys
 - primary_constellation has exactly 5 entries
 - each primary_constellation entry has frequency, intensity, score, and confidence
-- secondary_signature_analysis has exactly 3 entries
+- secondary_signature_analysis has one entry per item in the Detection Engine's secondary_signatures list (0, 1, 2, or 3 — never padded, never fewer than what secondary_signatures actually contains)
+- secondary_signature_summary is present and non-empty regardless of how many secondary_signature_analysis entries exist
 If any check fails, complete the missing fields before returning.
 
 ## FIELD REQUIREMENTS
@@ -309,15 +311,87 @@ evidence_analysis: minimum 200 words, target 250 words.
   Must use recurrence language: repeatedly, consistently, across multiple chapters.
 tension: one sentence. Specific, behavioural friction this signature creates. Must be honest.
 
-### secondary_signature_analysis
-Exactly 3 entries.
+### secondary_signature_summary
+Always present, even when secondary_signature_analysis is empty. This is a real, specific
+synthesis of this person's secondary-signature landscape as detected — never a generic
+structural preamble, never a placeholder.
 
-signature_number: "06", "07", "08"
+If one or more secondary signatures exist: connect them to each other and to the primary
+constellation as latent capacities — capabilities that show up with less frequency or force
+than the Top 5, not separate identities.
+
+If zero secondary signatures exist: state plainly, grounded in the actual detection result,
+that no additional pattern surfaced with evidence strong enough to name. This is a confident
+statement of what the detection found, not an apology or a hedge. Do not use language that
+frames this as a shortfall, an incompleteness, or something the user is missing out on
+(forbidden tone: "unfortunately," "we couldn't find," "you may still have other patterns we
+just didn't detect"). The Top 5 primary signatures are the complete, sufficient picture in
+that case — say so.
+
+### secondary_signature_analysis
+One entry per item in the Detection Engine's secondary_signatures list — 0, 1, 2, or 3.
+Never invent an entry to reach a target count. Never draw from the broader signatures[]
+pool beyond what secondary_signatures already contains — the "up to 3" cap on candidates
+comes from upstream detection, not from this step.
+
+signature_number: "06", and "07"/"08" only if that many entries exist
 name: official signature name
 domain: official domain
 score: integer 1–25
 core_statement: 8–20 words
-analysis: 80–150 words. Must include where this signature appears, supporting evidence from the user's story, and why it matters as a latent capacity.
+analysis: compressed, comparative format — this is not a smaller version of evidence_analysis.
+
+  Source discipline: only cite evidence from evidence_units where secondary_signature_candidate
+    exactly equals this signature's name. Never draw on the general evidence_units pool, and
+    never cite an evidence_unit tagged to a different signature — including one of this
+    report's own primary_constellation entries — as if it supported this one, even when a real
+    detail from elsewhere in the person's answers would make a more specific-sounding sentence.
+    A detail being true somewhere in the person's answers is not the same as being evidence for
+    this signature. Do not borrow across signatures.
+
+  Evidence-depth tiers — before writing, count how many evidence_units are tagged
+  secondary_signature_candidate for this exact signature name. Write to that count, not to a
+  fixed target length:
+
+  - 2 or more tagged units: write the full compressed narrative described below.
+  - 0 or 1 tagged units: there usually isn't enough material to synthesize an honest narrative
+    from, and trying produces exactly the two failures this rule exists to prevent — a
+    near-verbatim restatement of the single clause, or a fabricated/borrowed detail standing in
+    for evidence that isn't there. Instead, write 1-2 plain sentences: name the pattern, note
+    that it surfaced through detection scoring with limited supporting evidence so far, and stop
+    — same confident, non-apologetic register as the zero-secondaries case in
+    secondary_signature_summary, just scoped to this one entry. Do not force the primary-signature
+    contrast below in this tier; only include it if it can be stated honestly without inventing
+    detail to support it.
+
+  For the 2-or-more tier:
+  No word floor: let genuinely thin evidence still produce a short section.
+  Ceiling: ~100–120 words. Must read as visibly, obviously shorter than evidence_analysis
+    (200+ words) — the compression should be immediately apparent on the page.
+  Must anchor to one specific evidence circumstance for this secondary — a concrete thing
+    the person described, not a general trait claim. Same distillation principle as
+    cover.identity_thesis, applied here: the evidence clause and the situation behind it are
+    not the same thing. The clause is the trait-level description the evidence was tagged
+    with ("reads a room fast," "gets short with clients"). The situation is what specifically
+    happened or was being navigated underneath that clause. Identify the situation, not the
+    clause, and re-express *that* in the report's own synthesizing voice, adding interpretation
+    the clause itself doesn't contain.
+    Weak, forbidden: "Your ability to read a room fast and build rapport quickly highlights
+    your Resonator signature." (this is the evidence clause with a signature label appended —
+    no situation, no interpretation, not synthesis.)
+    Test: if you deleted the trailing "...your [Name] signature" clause, would the remaining
+    sentence just be a trimmed copy of something in the evidence? If yes, rewrite it around
+    the situation instead.
+    This is not license to invent a situation that isn't there. The situation must still be
+    something the evidence for this secondary actually supports — do not manufacture a
+    specific-sounding detail, task, or scenario to avoid the appearance of quoting when the
+    real evidence doesn't contain one.
+  Must contrast against exactly one named primary signature, using the fixed phrase "your
+    primary [Name] signature" (e.g. "your primary Activator signature") — never "your [Name]
+    pattern," never the bare signature name alone.
+  Must draw the contrast from the secondary's own evidence, not from restating or paraphrasing
+    that primary signature's evidence_analysis text — see THE EVIDENCE REUSE RULE.
+  Plain text only. No bold, no markdown syntax of any kind — applies to both tiers.
 
 ### constellation_synthesis
 named_identity: The [Modifier] [Core] — identical to cover.named_identity
@@ -353,7 +427,8 @@ domain_profile MUST contain exactly 5 entries — Visioning, Thinking, Connectin
 
 Must always produce:
 - Exactly 5 primary_constellation entries
-- Exactly 3 secondary_signature_analysis entries
+- 0–3 secondary_signature_analysis entries, matching the Detection Engine's secondary_signatures list exactly — never padded, never fabricated
+- 1 secondary_signature_summary, always present regardless of that count
 - 1 named_identity consistent across cover and constellation_synthesis
 - 1 identity_thesis of 8–18 words
 - 1 constellation_synthesis of minimum 300 words

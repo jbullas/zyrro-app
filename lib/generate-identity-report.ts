@@ -77,6 +77,42 @@ export function sortByScoreDescending(items: unknown): void {
   });
 }
 
+/**
+ * Layer 2's prompt-level rule (0-1 tagged evidence_units → short fallback
+ * instead of a full narrative, see docs/briefs/82-secondary-compressed-format-brief.md)
+ * doesn't hold reliably — confirmed via real-user live verification: it wrote
+ * a confident, fabricated narrative for a secondary signature Detection
+ * Engine tagged zero evidence_units to (inventing "reflections on time and
+ * the risks of waiting for 'someday'" for a Futurist entry with no
+ * supporting evidence at all), and separately cross-borrowed another
+ * signature's tagged evidence in a different case. Three prompt-wording
+ * rounds didn't close this — same "inconsistent model compliance on a clear
+ * instruction" pattern as C5 (see docs/changelogs/2026-07-29.md) — so the
+ * zero-evidence case is enforced here in code instead of trusted to the
+ * prompt. Cross-signature borrowing isn't caught by this check (it requires
+ * *some* tagged evidence, just from the wrong signature); this only
+ * guarantees no signature is ever narrated with literally zero evidence
+ * behind it.
+ */
+export function enforceSecondaryEvidenceFloor(
+  secondaryAnalysis: unknown,
+  evidenceUnits: unknown
+): void {
+  if (!Array.isArray(secondaryAnalysis) || !Array.isArray(evidenceUnits)) return;
+
+  for (const entry of secondaryAnalysis) {
+    if (!entry || typeof entry !== 'object' || typeof (entry as { name?: unknown }).name !== 'string') continue;
+    const name = (entry as { name: string }).name;
+    const hasEvidence = evidenceUnits.some(
+      (u) => u && typeof u === 'object' && (u as { secondary_signature_candidate?: unknown }).secondary_signature_candidate === name
+    );
+    if (!hasEvidence) {
+      (entry as { analysis: string }).analysis =
+        `${name} surfaced through detection scoring, but no specific evidence was tagged to it strongly enough to describe here — the score and domain above are the fuller picture for this pattern right now.`;
+    }
+  }
+}
+
 export async function generateIdentityReport({
   artifactId,
   answers,
@@ -138,6 +174,11 @@ export async function generateIdentityReport({
     // Defense in depth: code owns domain_profile now, not the LLM — overwrite
     // again in case Layer 2 didn't copy analysis.domain_profile faithfully.
     report.domain_profile = analysis.domain_profile;
+
+    // Layer 2 doesn't reliably respect the zero-evidence fallback tier — see
+    // enforceSecondaryEvidenceFloor's doc comment. Runs after sorting since
+    // it only rewrites analysis text, not order.
+    enforceSecondaryEvidenceFloor(report.secondary_signature_analysis, analysis.evidence_units);
 
     // Step C — Update artifact to ready
     await supabase

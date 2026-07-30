@@ -124,7 +124,7 @@ export interface SecondarySignatureAnalysis {
   domain: DomainName;
   score: number;              // 1-25
   core_statement: string;     // 8-20 words
-  analysis: string;           // 80-150 words
+  analysis: string;           // no floor, ceiling ~100-120 words; compressed, comparative format
 }
 
 export interface ConstellationSynthesis {
@@ -142,12 +142,13 @@ export interface HowYouOperate {
 
 export interface IdentitySignatureReportArtifactContent {
   artifact_type: "identity_signature_report";
-  schema_version: "1.0";
+  schema_version: "1.0" | "1.1";
   cover: ReportCover;
   what_this_report_is: string;                                // 80-140 words
   signature_profile_summary: SignatureProfileSummary;
   primary_constellation: PrimarySignatureAnalysis[];          // exactly 5
-  secondary_signature_analysis: SecondarySignatureAnalysis[]; // exactly 3
+  secondary_signature_summary: string;                        // always present, even when secondary_signature_analysis is empty
+  secondary_signature_analysis: SecondarySignatureAnalysis[]; // 0-3, matches Detection Engine's secondary_signatures — no forced count
   constellation_synthesis: ConstellationSynthesis;
   how_you_operate: HowYouOperate;
   energisers: string[];      // 6-10 items

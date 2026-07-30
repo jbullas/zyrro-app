@@ -48,6 +48,7 @@ interface IdentityReport {
     identity_thesis: string;
   };
   primary_constellation: PrimarySignatureEntry[];
+  secondary_signature_summary: string;
   secondary_signature_analysis: SecondarySignatureEntry[];
   constellation_synthesis: {
     named_identity: string;
@@ -95,10 +96,10 @@ const SCORING_EXPLANATION =
   'Each signature score reflects two dimensions: Frequency, how often the pattern shows up across ' +
   'your history, and Intensity, how strongly it shows up when it does. The five highest-scoring ' +
   'signatures form your Primary Constellation — the patterns that most consistently and forcefully ' +
-  'define how you operate. The next three are your Secondary Signatures: real, established patterns ' +
-  'that appear less often or with less force, but still shape how you think, act, and respond under ' +
-  'specific conditions. Together, the two groups describe not just what you do, but how reliably and ' +
-  'how strongly you do it.';
+  'define how you operate. Beyond the Top 5, any pattern that still cleared the evidence bar appears ' +
+  'as a Secondary Signature: a real, established pattern that shows up less often or with less force, ' +
+  'but still shapes how you think, act, and respond under specific conditions. Together, these describe ' +
+  'not just what you do, but how reliably and how strongly you do it.';
 
 const RESEARCH_PILLARS = [
   {
@@ -320,6 +321,7 @@ export default function IdentityPage() {
   const {
     cover,
     primary_constellation,
+    secondary_signature_summary,
     secondary_signature_analysis,
     constellation_synthesis,
     how_you_operate,
@@ -386,24 +388,26 @@ export default function IdentityPage() {
               <PrimarySignatureBars signatures={primary_constellation} />
             </div>
 
-            <div className="card">
-              <p className="card-sub-label">Secondary Signatures</p>
-              {secondary_signature_analysis.map((sig, i) => (
-                <div key={sig.name} className="sig-row">
-                  <div className="sig-num-circle-muted">{i + 6}</div>
-                  <div className="sig-info">
-                    <div className="sig-name-meta">
-                      <span className="sig-name">{sig.name}</span>
-                      <span className="sig-breakdown">{sig.domain}</span>
+            {secondary_signature_analysis.length > 0 && (
+              <div className="card">
+                <p className="card-sub-label">Secondary Signatures</p>
+                {secondary_signature_analysis.map((sig, i) => (
+                  <div key={sig.name} className="sig-row">
+                    <div className="sig-num-circle-muted">{i + 6}</div>
+                    <div className="sig-info">
+                      <div className="sig-name-meta">
+                        <span className="sig-name">{sig.name}</span>
+                        <span className="sig-breakdown">{sig.domain}</span>
+                      </div>
+                      <div className="sig-bar-track">
+                        <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
+                      </div>
                     </div>
-                    <div className="sig-bar-track">
-                      <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
-                    </div>
+                    <span className="sig-score-label-muted">{sig.score}</span>
                   </div>
-                  <span className="sig-score-label-muted">{sig.score}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <div className="card">
               <p className="card-sub-label">Identity Profile</p>
@@ -456,6 +460,7 @@ export default function IdentityPage() {
           {/* Section 5: Secondary Signatures */}
           <div id="section-5" className="report-section">
             <p className="eyebrow">SECONDARY SIGNATURES</p>
+            <p>{secondary_signature_summary}</p>
             {secondary_signature_analysis.map((sig, i) => (
               <ConstellationCard
                 key={sig.name}
