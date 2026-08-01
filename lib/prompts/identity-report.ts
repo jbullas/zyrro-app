@@ -75,12 +75,23 @@ secondary_signature_analysis[].analysis must cite raw evidence from the user's a
 
 Every primary signature analysis must include one tension.
 
-The tension must be specific and behavioural.
+The tension must be specific and behavioural, and must derive from a
+concrete situation in this user's own evidence_units — not a generic
+description of what this signature typically does. Two different users
+can legitimately produce similar tension lines if their real evidence
+points to a similar friction; the requirement is that the line is
+genuinely grounded in this person's material, not that it be unique.
+
+Write in conditional voice (may/might), describing a tendency the
+pattern creates, not a documented fact.
 
 Examples:
-- Builder: "You struggle when momentum depends on people who move slower than you."
-- Truth Seeker: "You become restless in environments built on politeness over honesty."
-- Amplifier: "You overinvest in others and underinvest in yourself."
+- Builder: "You may struggle when momentum depends on people who move
+  slower than you."
+- Truth Seeker: "You may become restless in environments built on
+  politeness over honesty."
+- Amplifier: "You may overinvest in others and underinvest in
+  yourself."
 
 Tension increases recognition.
 
