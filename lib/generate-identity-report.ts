@@ -134,6 +134,7 @@ export async function generateIdentityReport({
       ],
       max_tokens: 4000,
       temperature: 0,
+      seed: 42,
     });
 
     const analysis = JSON.parse(analysisContent ?? '{}');
