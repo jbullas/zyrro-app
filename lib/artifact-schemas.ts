@@ -157,6 +157,18 @@ export interface IdentitySignatureReportArtifactContent {
   derived_from_signature_analysis: boolean;
 }
 
+// Identity Reframe (artifact type: "identity_reframe")
+//
+// #98: the free-tier pitch content, previously generated inside
+// path_options. Deliberately just these four fields — the this/therefore
+// hook and any renamed sections are #99's concern.
+export interface IdentityReframeArtifactContent {
+  recap: string;
+  meaning: string;
+  reframe: string;
+  why: string;
+}
+
 // Path Options (artifact type: "path_options")
 
 export type StretchType = 'Natural' | 'Adjacent' | 'Reinvention';
@@ -171,10 +183,6 @@ export interface PathOption {
 }
 
 export interface PathOptionsArtifactContent {
-  recap: string;
-  meaning: string;
-  reframe: string;
-  why: string;
   options: PathOption[];       // exactly 4
 }
 

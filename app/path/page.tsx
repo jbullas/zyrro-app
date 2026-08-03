@@ -10,18 +10,11 @@ import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ConstellationCard from '@/components/ConstellationCard';
 import ChipRow from '@/components/ChipRow';
-import type { PathOptionsArtifactContent, PathOption, StretchType } from '@/lib/artifact-schemas';
+import type { PathOptionsArtifactContent, PathOption, StretchType, IdentityReframeArtifactContent } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 
-type PageState = 'loading' | 'anonymous' | 'verifying' | 'unpaid' | 'has-artifact';
-
-const OFFER_FEATURES = [
-  { title: 'Your Meaning',      body: 'Why your current situation makes complete sense given who you are.' },
-  { title: 'Your Reframe',      body: 'How to see your Identity Signatures as assets, not limitations.' },
-  { title: 'Four Path Options', body: 'Each aligned to your constellation — not generic career advice.' },
-  { title: 'Your Plan',         body: 'A tailored action plan built around the path you choose.' },
-];
+type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'has-artifact';
 
 function stretchClass(stretch: StretchType): string {
   switch (stretch) {
@@ -47,14 +40,46 @@ export default function PathPage() {
   const [nameOptions, setNameOptions]               = useState<{ name: string; rationale: string }[]>([]);
   const [selectedName, setSelectedName]             = useState<string | null>(null);
   const [customName, setCustomName]                 = useState('');
+  const [reframeArtifactId, setReframeArtifactId]   = useState<string | null>(null);
+  const [reframeStartFailed, setReframeStartFailed] = useState(false);
 
   // pathOptionsArtifactId doubles as the hook's artifact ID
   const genPhase   = useGenerationStatus(pathOptionsArtifactId);
   const pathOptions = genPhase.phase === 'ready' ? genPhase.content as PathOptionsArtifactContent : null;
 
+  // #98: unpaid pitch — same eager-generation, unconditional-trigger shape as
+  // /identity's, minus the click gate (the pitch *is* the page here).
+  const reframeGenPhase = useGenerationStatus(reframeArtifactId);
+  const reframeContent = reframeGenPhase.phase === 'ready' ? reframeGenPhase.content as IdentityReframeArtifactContent : null;
+
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
+
+    async function loadOrStartReframe(uid: string) {
+      const { data } = await getCurrentArtifact<{ id: string }>(
+        supabase,
+        uid,
+        'identity_reframe',
+        { select: 'id' },
+      );
+
+      if (cancelled) return;
+
+      if (data) {
+        setReframeArtifactId(data.id as string);
+        return;
+      }
+
+      const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
+      if (cancelled) return;
+      if (res.ok) {
+        const { artifact_id } = await res.json() as { artifact_id: string };
+        setReframeArtifactId(artifact_id);
+      } else {
+        setReframeStartFailed(true);
+      }
+    }
 
     async function loadPathOptions(uid: string) {
       const { data } = await getCurrentArtifact<{ id: string }>(
@@ -117,6 +142,23 @@ export default function PathPage() {
 
       if (cancelled) return;
 
+      // #98: no identity_report yet is a distinct state — the unpaid pitch
+      // below renders real identity_reframe content now, and that content
+      // can't exist without identity_report, so there's nothing to
+      // gracefully fall back to. Explicit check before the entitlement
+      // check, same pattern as the 'anonymous' state.
+      const { data: reportArtifact } = await getCurrentArtifact<{ content: unknown }>(
+        supabase,
+        user.id,
+        'identity_report',
+        { status: 'ready', select: 'content' },
+      );
+
+      if (!reportArtifact) {
+        if (!cancelled) setPageState('no-report');
+        return;
+      }
+
       if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
         const { data: entitlement } = await supabase
           .from('entitlements')
@@ -127,18 +169,12 @@ export default function PathPage() {
           .maybeSingle();
 
         if (!entitlement) {
-          const { data: artifact } = await getCurrentArtifact<{ content: unknown }>(
-            supabase,
-            user.id,
-            'identity_report',
-            { status: 'ready', select: 'content' },
-          );
-
           if (!cancelled) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const name = (artifact?.content as any)?.cover?.named_identity ?? null;
+            const name = (reportArtifact.content as any)?.cover?.named_identity ?? null;
             setNamedIdentity(name);
             setPageState('unpaid');
+            await loadOrStartReframe(user.id);
           }
           return;
         }
@@ -195,6 +231,18 @@ export default function PathPage() {
       setPathOptionsArtifactId(artifact_id);
     } else {
       setStartFailed(true);
+    }
+  }
+
+  async function handleRetryReframe() {
+    setReframeStartFailed(false);
+    setReframeArtifactId(null);
+    const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
+    if (res.ok) {
+      const { artifact_id } = await res.json() as { artifact_id: string };
+      setReframeArtifactId(artifact_id);
+    } else {
+      setReframeStartFailed(true);
     }
   }
 
@@ -263,6 +311,18 @@ export default function PathPage() {
     );
   }
 
+  // ── No identity_report yet ──────────────────────────────────────────
+  if (pageState === 'no-report') {
+    return (
+      <MessageState
+        eyebrow="YOUR PATH"
+        heading="Your Path is generated from your Identity Report."
+        body="Finish your Identity Report first — your Path will be ready once it is."
+        cta={<PrimaryButton href="/identity">Go to your Identity Report</PrimaryButton>}
+      />
+    );
+  }
+
   // ── has-artifact: hook-driven generation states ───────────────────
   if (pageState === 'has-artifact') {
     if (startFailed) {
@@ -320,11 +380,47 @@ export default function PathPage() {
     // phase === 'ready': fall through to report render below
   }
 
-  // ── Unpaid: offer page ────────────────────────────────────────────
+  // ── Unpaid: identity_reframe pitch ─────────────────────────────────
   if (pageState === 'unpaid') {
     const headline = namedIdentity
       ? `See where ${namedIdentity} is heading.`
       : 'See where your identity is pointing.';
+
+    if (reframeStartFailed || reframeGenPhase.phase === 'failed') {
+      return (
+        <MessageState
+          eyebrow="YOUR PATH"
+          heading="Something went wrong."
+          body="We couldn’t prepare your preview. Please try again."
+          cta={<PrimaryButton onClick={handleRetryReframe}>Try again</PrimaryButton>}
+        />
+      );
+    }
+
+    if (reframeGenPhase.phase === 'idle' || reframeGenPhase.phase === 'spinner') {
+      return (
+        <GeneratingState
+          heading="Your preview is being prepared."
+          description={
+            reframeGenPhase.phase === 'spinner' && reframeGenPhase.variant === 'late'
+              ? 'Still working — this is taking a little longer than usual…'
+              : 'This usually takes about a minute.'
+          }
+        />
+      );
+    }
+
+    if (reframeGenPhase.phase === 'come-back-later') {
+      return (
+        <GeneratingState
+          spinner={false}
+          description="This is taking longer than expected — you can leave this page and come back in a few minutes. It’ll be here when it’s ready."
+        />
+      );
+    }
+
+    if (!reframeContent) return null;
+    const { recap, meaning, reframe, why } = reframeContent;
 
     return (
       <>
@@ -334,28 +430,17 @@ export default function PathPage() {
 
             <h1>{headline}</h1>
 
-            <p>
-              Your Identity Report showed you how you&rsquo;re wired. Path & Plan shows you
-              what to do with it — four options aligned to your signatures, and a tailored
-              plan built around the one you choose.
-            </p>
+            <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
+            <p>{recap}</p>
 
-            <div className="deliverables-list">
-              {OFFER_FEATURES.map(f => (
-                <div key={f.title} className="offer-row">
-                  <div className="deliverable-icon">
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.6"
-                        strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <div>
-                    <span className="deliverable-label" style={{ fontWeight: 700 }}>{f.title}</span>
-                    <p style={{ margin: '2px 0 0', fontSize: '14px' }}>{f.body}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="eyebrow">WHAT THIS MEANS FOR WHAT&rsquo;S NEXT</p>
+            <p>{meaning}</p>
+
+            <p className="eyebrow">WHERE YOUR STORY IS POINTING</p>
+            <p>{reframe}</p>
+
+            <p className="eyebrow">WHY THE REFRAME HOLDS</p>
+            <p>{why}</p>
 
             {process.env.NEXT_PUBLIC_PRICE_DISPLAY && (
               <div className="stats-pill">
@@ -393,7 +478,7 @@ export default function PathPage() {
   // ── Ready: full report ────────────────────────────────────────────
   if (!pathOptions) return null;
 
-  const { recap, meaning, reframe, why, options } = pathOptions;
+  const { options } = pathOptions;
 
   return (
     <>
@@ -485,31 +570,7 @@ export default function PathPage() {
 
           <div className="report-sections">
 
-            {/* Section 1: Recap */}
-            <div className="report-section">
-              <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
-              <p>{recap}</p>
-            </div>
-
-            {/* Section 2: Meaning */}
-            <div className="report-section">
-              <p className="eyebrow">WHAT THIS MEANS FOR WHAT&rsquo;S NEXT</p>
-              <p>{meaning}</p>
-            </div>
-
-            {/* Section 3: Reframe */}
-            <div className="report-section">
-              <p className="eyebrow">WHERE YOUR STORY IS POINTING</p>
-              <p>{reframe}</p>
-            </div>
-
-            {/* Section 4: Why */}
-            <div className="report-section">
-              <p className="eyebrow">WHY THE REFRAME HOLDS</p>
-              <p>{why}</p>
-            </div>
-
-            {/* Section 5: Options */}
+            {/* Section 1: Options */}
             <div className="report-section">
               <p className="eyebrow">YOUR PATH OPTIONS</p>
               {options.map((option, i) => (

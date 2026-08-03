@@ -16,10 +16,11 @@ import path from 'node:path';
 
 export const STORAGE_STATE_DIR = path.join(process.cwd(), '.verification-runs');
 
-export type ArtifactType = 'identity_report' | 'path_options' | 'path_plan';
+export type ArtifactType = 'identity_report' | 'identity_reframe' | 'path_options' | 'path_plan';
 
 const ARTIFACT_ACCESS_LEVEL: Record<ArtifactType, 'free' | 'paid'> = {
   identity_report: 'free',
+  identity_reframe: 'free',
   path_options: 'paid',
   path_plan: 'paid',
 };

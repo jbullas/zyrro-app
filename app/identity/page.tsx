@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
@@ -14,6 +14,7 @@ import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import type { IdentityReframeArtifactContent } from '@/lib/artifact-schemas';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
@@ -165,20 +166,93 @@ export default function IdentityPage() {
   const router = useRouter();
   const [pageState, setPageState]   = useState<PageState>('loading');
   const [artifactId, setArtifactId] = useState<string | null>(null);
+  const [userId, setUserId]         = useState<string | null>(null);
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
   const reportDate = genPhase.phase === 'ready' ? genPhase.createdAt : '';
+
+  // #98: "What does this mean?" pitch (identity_reframe) — generation fires
+  // eagerly the moment the report finishes rendering, independent of the
+  // click; the click only gates visibility (see reframeRevealed below).
+  const [reframeArtifactId, setReframeArtifactId] = useState<string | null>(null);
+  const [reframeRevealed, setReframeRevealed]     = useState(false);
+  const [checkoutLoading, setCheckoutLoading]     = useState(false);
+  const reframeFired = useRef(false);
+
+  const reframeGenPhase = useGenerationStatus(reframeArtifactId);
+  const reframe = reframeGenPhase.phase === 'ready' ? reframeGenPhase.content as IdentityReframeArtifactContent : null;
+
+  useEffect(() => {
+    if (genPhase.phase !== 'ready' || !userId || reframeFired.current) return;
+    reframeFired.current = true;
+
+    const supabase = createClient();
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await getCurrentArtifact<{ id: string }>(
+        supabase,
+        userId,
+        'identity_reframe',
+        { select: 'id' },
+      );
+      if (cancelled) return;
+      if (data) {
+        setReframeArtifactId(data.id as string);
+        return;
+      }
+      const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
+      if (cancelled) return;
+      if (res.ok) {
+        const { artifact_id } = await res.json() as { artifact_id: string };
+        setReframeArtifactId(artifact_id);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [genPhase.phase, userId]);
+
+  async function handleRevealReframe() {
+    setReframeRevealed(true);
+  }
+
+  async function handleRetryReframe() {
+    setReframeArtifactId(null);
+    const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
+    if (res.ok) {
+      const { artifact_id } = await res.json() as { artifact_id: string };
+      setReframeArtifactId(artifact_id);
+    }
+  }
+
+  async function handleCheckout() {
+    if (!userId) return;
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const { url, error } = await res.json() as { url?: string; error?: string };
+      if (error || !url) throw new Error(error ?? 'No checkout URL');
+      window.location.href = url;
+    } catch (err) {
+      console.error('Checkout failed:', err);
+      setCheckoutLoading(false);
+    }
+  }
 
   // Main load — finds the artifact ID and hands polling to useGenerationStatus
   useEffect(() => {
     const supabase = createClient();
     let cancelled  = false;
 
-    async function loadArtifact(userId: string) {
+    async function loadArtifact(uid: string) {
       const { data, error } = await getCurrentArtifact<{ id: string }>(
         supabase,
-        userId,
+        uid,
         'identity_report',
         { select: 'id' },
       );
@@ -207,6 +281,7 @@ export default function IdentityPage() {
       }
 
       if (cancelled) return;
+      setUserId(user.id);
 
       const { count, error } = await readAnswersCount(user.id);
       if (cancelled) return;
@@ -524,20 +599,55 @@ export default function IdentityPage() {
 
         </div>{/* end .report-sections */}
 
-        {/* Section 11: Limits of This Report */}
-        <LimitsBlock
-          id="section-11"
-          eyebrow="LIMITS OF THIS REPORT"
-          heading="This report shows you how you operate. It doesn't show you why you feel stuck."
-          body="You now have a precise picture of your identity patterns. But knowing how you operate doesn’t resolve the gap between how you operate and how your life is actually structured right now. That gap is costing you — in energy, in output, and in the quiet sense that something important is misaligned."
-          bullets={[
-            'This report does not explain what your pattern is pointing toward',
-            'It does not identify what you’ve outgrown or why it feels stuck',
-            'It does not show you which direction fits who you’ve become',
-            'It does not give you a path or a plan',
-          ]}
-          cta={<PrimaryButton href="/path">See what your pattern is pointing toward →</PrimaryButton>}
-        />
+        {/* Section 11: What does this mean? (click-gated identity_reframe pitch) */}
+        <div id="section-11" className="report-section">
+          {!reframeRevealed && (
+            <LimitsBlock
+              eyebrow="WHAT DOES THIS MEAN?"
+              body="You now have a precise picture of your identity patterns. There’s more to what it’s pointing toward."
+              cta={<PrimaryButton onClick={handleRevealReframe}>What does this mean? →</PrimaryButton>}
+            />
+          )}
+
+          {reframeRevealed && (reframeGenPhase.phase === 'idle' || reframeGenPhase.phase === 'spinner') && (
+            <div className="limits-block" style={{ textAlign: 'center' }}>
+              <div className="spin spinner" />
+            </div>
+          )}
+
+          {reframeRevealed && reframeGenPhase.phase === 'come-back-later' && (
+            <div className="limits-block">
+              <p className="limits-body">This is taking longer than expected — check back in a few minutes.</p>
+            </div>
+          )}
+
+          {reframeRevealed && reframeGenPhase.phase === 'failed' && (
+            <div className="limits-block">
+              <p className="limits-body">Something went wrong preparing this.</p>
+              <PrimaryButton onClick={handleRetryReframe}>Try again</PrimaryButton>
+            </div>
+          )}
+
+          {reframeRevealed && reframe && (
+            <div className="limits-block">
+              <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
+              <p>{reframe.recap}</p>
+
+              <p className="eyebrow">WHAT THIS MEANS FOR WHAT&rsquo;S NEXT</p>
+              <p>{reframe.meaning}</p>
+
+              <p className="eyebrow">WHERE YOUR STORY IS POINTING</p>
+              <p>{reframe.reframe}</p>
+
+              <p className="eyebrow">WHY THE REFRAME HOLDS</p>
+              <p>{reframe.why}</p>
+
+              <PrimaryButton onClick={handleCheckout} disabled={checkoutLoading}>
+                {checkoutLoading ? 'Redirecting…' : 'Get My Path & Plan'}
+              </PrimaryButton>
+            </div>
+          )}
+        </div>
 
       </div>{/* end .report-scroll */}
     </div>

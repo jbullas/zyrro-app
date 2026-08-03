@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type ArtifactType = 'identity_report' | 'path_options' | 'path_plan';
+export type ArtifactType = 'identity_report' | 'identity_reframe' | 'path_options' | 'path_plan';
 export type ArtifactStatus = 'generating' | 'ready' | 'failed';
 
 /**

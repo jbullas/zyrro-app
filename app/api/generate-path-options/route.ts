@@ -19,7 +19,6 @@ function createServiceClient() {
 
 function validatePathOptions(data: unknown): data is PathOptionsArtifactContent {
   const d = data as PathOptionsArtifactContent;
-  if (!d?.recap || !d.meaning || !d.reframe || !d.why) return false;
   if (!Array.isArray(d.options) || d.options.length !== 4) return false;
   const required = ['id', 'name', 'thesis', 'body', 'signatures_engaged', 'stretch'];
   if (!d.options.every(o => required.every(f => f in (o as object)))) return false;
@@ -28,7 +27,7 @@ function validatePathOptions(data: unknown): data is PathOptionsArtifactContent 
   return true;
 }
 
-async function runGeneration(artifactId: string, identityReport: unknown) {
+async function runGeneration(artifactId: string, identityReport: unknown, identityReframe: unknown) {
   const supabase = createServiceClient();
 
   try {
@@ -36,7 +35,7 @@ async function runGeneration(artifactId: string, identityReport: unknown) {
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: PATH_OPTIONS_PROMPT },
-        { role: 'user', content: JSON.stringify(identityReport) },
+        { role: 'user', content: JSON.stringify({ identity_report: identityReport, identity_reframe: identityReframe }) },
       ],
       max_tokens: 6000,
       temperature: 0,
@@ -85,6 +84,23 @@ export async function POST(_req: NextRequest) {
 
   if (!identityArtifact) {
     return NextResponse.json({ error: 'Identity report not found' }, { status: 404 });
+  }
+
+  // #98: options generation now takes the identity_reframe pitch as context
+  // so it doesn't contradict what the user already read. This should always
+  // exist by the time a paying user reaches here (it's fired eagerly off
+  // identity_report completion) — if it doesn't, that's a race the client
+  // should retry rather than silently generating options with no reframe
+  // context.
+  const { data: reframeArtifact } = await getCurrentArtifact<{ content: unknown }>(
+    supabase,
+    user.id,
+    'identity_reframe',
+    { status: 'ready', select: 'content' },
+  );
+
+  if (!reframeArtifact) {
+    return NextResponse.json({ error: 'Identity reframe not ready' }, { status: 409 });
   }
 
   // #71: path_options is append-only (matching #59's identity_report
@@ -138,7 +154,7 @@ export async function POST(_req: NextRequest) {
     artifactId = newArtifact.id;
   }
 
-  after(() => runGeneration(artifactId, identityArtifact.content));
+  after(() => runGeneration(artifactId, identityArtifact.content, reframeArtifact.content));
 
   return NextResponse.json({ artifact_id: artifactId });
 }
