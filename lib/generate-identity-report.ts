@@ -181,6 +181,18 @@ export async function generateIdentityReport({
     // it only rewrites analysis text, not order.
     enforceSecondaryEvidenceFloor(report.secondary_signature_analysis, analysis.evidence_units);
 
+    // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
+    // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed
+    // cards, mentor longitudinal tracking) can see this after generation
+    // completes otherwise. Going-forward only, no backfill (see #62 brief).
+    report.raw_signature_analysis = {
+      signatures: analysis.signatures ?? [],
+      primary_constellation: analysis.primary_constellation ?? [],
+      secondary_signatures: analysis.secondary_signatures ?? [],
+      emerging_signatures: analysis.emerging_signatures ?? [],
+      suppressed_signatures: analysis.suppressed_signatures ?? [],
+    };
+
     // Step C — Update artifact to ready
     await supabase
       .from('artifacts')

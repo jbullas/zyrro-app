@@ -142,7 +142,7 @@ export interface HowYouOperate {
 
 export interface IdentitySignatureReportArtifactContent {
   artifact_type: "identity_signature_report";
-  schema_version: "1.0" | "1.1";
+  schema_version: "1.0" | "1.1" | "1.2";
   cover: ReportCover;
   what_this_report_is: string;                                // 80-140 words
   signature_profile_summary: SignatureProfileSummary;
@@ -155,6 +155,16 @@ export interface IdentitySignatureReportArtifactContent {
   friction_points: string[]; // 6-10 items
   domain_profile: DomainProfile;
   derived_from_signature_analysis: boolean;
+  // #62: Layer 1's full Detection Engine output, persisted going-forward only
+  // (existing reports predate this field and won't have it — no backfill,
+  // since Layer 1 is non-deterministic even at temperature 0, see #93).
+  raw_signature_analysis?: {
+    signatures: SignatureScore[];
+    primary_constellation: string[];   // names only, Layer 1's list
+    secondary_signatures: string[];
+    emerging_signatures: string[];
+    suppressed_signatures: string[];
+  };
 }
 
 // Identity Reframe (artifact type: "identity_reframe")
