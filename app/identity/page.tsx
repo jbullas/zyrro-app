@@ -73,26 +73,6 @@ interface IdentityReport {
   };
 }
 
-const TOC_ITEMS = [
-  { num: '01', title: 'What this report is',   id: 'section-2' },
-  { num: '02', title: 'Signature profile',      id: 'section-3' },
-  { num: '03', title: 'Primary signatures',     id: 'section-4' },
-  { num: '04', title: 'Secondary signatures',   id: 'section-5' },
-  { num: '05', title: 'Constellation synthesis',id: 'section-6' },
-  { num: '06', title: 'How you operate',        id: 'section-7' },
-  { num: '07', title: 'Energisers',             id: 'section-8' },
-  { num: '08', title: 'Friction points',        id: 'section-9' },
-  { num: '09', title: 'Research foundation',    id: 'section-10' },
-  { num: '10', title: 'Limits of this report',  id: 'section-11' },
-];
-
-const WHAT_THIS_REPORT_IS =
-  'This is pattern recognition — not personality typing, not a career assessment, not coaching. ' +
-  'Your Identity Signatures are stable, recurring operating patterns detected from your actual ' +
-  'life and work history. They describe how you have consistently thought, acted, and perceived ' +
-  'across multiple chapters of your life — not who you want to be, or who you were once. The report ' +
-  'does not tell you what to do. It shows you what is already true about how you operate.';
-
 const SCORING_EXPLANATION =
   'Each signature score reflects two dimensions: Frequency, how often the pattern shows up across ' +
   'your history, and Intensity, how strongly it shows up when it does. The five highest-scoring ' +
@@ -101,25 +81,6 @@ const SCORING_EXPLANATION =
   'as a Secondary Signature: a real, established pattern that shows up less often or with less force, ' +
   'but still shapes how you think, act, and respond under specific conditions. Together, these describe ' +
   'not just what you do, but how reliably and how strongly you do it.';
-
-const RESEARCH_PILLARS = [
-  {
-    title: 'Narrative Identity Theory — McAdams (1993)',
-    body:  'Your Identity Signature Report is grounded in narrative identity research, which holds that identity is constructed through the stories we tell about ourselves across time. The patterns detected in your report reflect recurring themes across your personal narrative — not isolated moments, but the operating logic that appears consistently across different chapters of your life.',
-  },
-  {
-    title: 'Flow Theory — Csikszentmihalyi (1990)',
-    body:  'Flow research identifies states of peak performance where skill meets challenge. Your Energisers map directly to the conditions most likely to produce your flow states — environments and activities that align with your signature operating patterns. Misalignment between your signatures and your current context produces the friction described in this report.',
-  },
-  {
-    title: 'Self-Determination Theory — Deci & Ryan (1985)',
-    body:  'SDT establishes that sustained motivation requires autonomy, competence, and relatedness. Your Identity Signatures reveal which environments support these three needs and which work against them. The Stress Pattern section identifies what specifically threatens your sense of competence and autonomy under pressure.',
-  },
-  {
-    title: 'Neural Patterning — Doidge (2007)',
-    body:  'Neuroplasticity research confirms that repeated patterns of thought and behaviour become hardwired over time. The signatures identified in your report are not preferences or values — they are neural grooves formed through years of consistent activation. They describe how your brain has learned to process and respond to the world.',
-  },
-];
 
 const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label: string }[] = [
   { key: 'work_style',         label: 'WORK STYLE' },
@@ -156,10 +117,6 @@ function bandClass(band: string): string {
     case 'moderate': return 'band-moderate';
     default:         return 'band-weak';
   }
-}
-
-function scrollTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 }
 
 export default function IdentityPage() {
@@ -423,39 +380,26 @@ export default function IdentityPage() {
           <p className="prepared-for-line">{reportDate ? formatDate(reportDate) : ''}</p>
         </div>
 
-        {/* ── Sections 1–10 ────────────────────────────────── */}
+        {/* #100 Stage 1 (2026-08-04): reordered into Cover / Signatures /
+            How You Operate / What's Next — see brief for the target order
+            and the removal list (TOC, What This Report Is, Research
+            Foundation all dropped; content preserved for #91 in
+            docs/content/identity-static-content-for-91.md, not rendered). */}
         <div className="report-sections">
 
-          {/* Section 1: Table of Contents */}
-          <div id="section-1" className="report-section">
+          {/* ── Cover (cont'd): Constellation Synthesis — an extension of
+              Identity Thesis, so it lives with Cover rather than standing
+              alone (2026-08-04 decision). ─────────────────────────────── */}
+          <div className="report-section">
+            <p className="eyebrow">CONSTELLATION SYNTHESIS</p>
             <div className="card">
-              <p className="eyebrow">IN THIS REPORT</p>
-              <div className="toc-rows-wrap">
-                {TOC_ITEMS.map(item => (
-                  <button
-                    key={item.num}
-                    className="toc-row"
-                    onClick={() => scrollTo(item.id)}
-                  >
-                    <span className="toc-num">{item.num}</span>
-                    <span className="toc-title">{item.title}</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C60567" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                ))}
-              </div>
+              <h3 className="named-identity mb-12">{constellation_synthesis.named_identity}</h3>
+              <p>{constellation_synthesis.synthesis}</p>
             </div>
           </div>
 
-          {/* Section 2: What This Report Is */}
-          <div id="section-2" className="report-section">
-            <p className="eyebrow">WHAT THIS REPORT IS</p>
-            <p>{WHAT_THIS_REPORT_IS}</p>
-          </div>
-
-          {/* Section 3: Signature Profile */}
-          <div id="section-3" className="report-section">
+          {/* ── Cover (cont'd): Signature Profile — score list + radar ─── */}
+          <div className="report-section">
             <p className="eyebrow">SIGNATURE PROFILE</p>
             <p>{SCORING_EXPLANATION}</p>
 
@@ -490,8 +434,8 @@ export default function IdentityPage() {
             </div>
           </div>
 
-          {/* Section 4: Primary Constellation Deep Analysis */}
-          <div id="section-4" className="report-section">
+          {/* ── Signatures: Primary ──────────────────────────────────── */}
+          <div className="report-section">
             <p className="eyebrow">PRIMARY SIGNATURES</p>
             {primary_constellation.map((sig, i) => {
               const band = getScoreBand(sig.score);
@@ -532,8 +476,8 @@ export default function IdentityPage() {
             })}
           </div>
 
-          {/* Section 5: Secondary Signatures */}
-          <div id="section-5" className="report-section">
+          {/* ── Signatures: Secondary ────────────────────────────────── */}
+          <div className="report-section">
             <p className="eyebrow">SECONDARY SIGNATURES</p>
             <p>{secondary_signature_summary}</p>
             {secondary_signature_analysis.map((sig, i) => (
@@ -550,17 +494,10 @@ export default function IdentityPage() {
             ))}
           </div>
 
-          {/* Section 6: Constellation Synthesis */}
-          <div id="section-6" className="report-section">
-            <p className="eyebrow">CONSTELLATION SYNTHESIS</p>
-            <div className="card">
-              <h3 className="named-identity mb-12">{constellation_synthesis.named_identity}</h3>
-              <p>{constellation_synthesis.synthesis}</p>
-            </div>
-          </div>
-
-          {/* Section 7: How You Operate */}
-          <div id="section-7" className="report-section">
+          {/* ── How You Operate — Energisers and Friction Points folded in
+              here rather than standing alone as separate top-level sections
+              (2026-08-04 decision). ────────────────────────────────────── */}
+          <div className="report-section">
             <p className="eyebrow">HOW YOU OPERATE</p>
             <div className="card">
               {HOW_OPERATE_LABELS.map(({ key, label }) => (
@@ -570,37 +507,19 @@ export default function IdentityPage() {
                 </div>
               ))}
             </div>
-          </div>
 
-          {/* Section 8: Energisers */}
-          <div id="section-8" className="report-section">
             <p className="eyebrow">ENERGISERS</p>
             <ChipRow items={energisers} wrapperClassName="chips-wrap" />
-          </div>
 
-          {/* Section 9: Friction Points */}
-          <div id="section-9" className="report-section">
             <p className="eyebrow">FRICTION POINTS</p>
             <ChipRow items={friction_points} wrapperClassName="chips-wrap" itemClassName="chip-friction" />
           </div>
 
-          {/* Section 10: Research Foundation */}
-          <div id="section-10" className="report-section">
-            <p className="eyebrow">RESEARCH FOUNDATION</p>
-            <div className="card">
-              {RESEARCH_PILLARS.map(pillar => (
-                <div key={pillar.title} className="research-row">
-                  <p className="research-title">{pillar.title}</p>
-                  <p className="research-body">{pillar.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
         </div>{/* end .report-sections */}
 
-        {/* Section 11: What does this mean? (click-gated identity_reframe pitch) */}
-        <div id="section-11" className="report-section">
+        {/* What's Next: click-gated identity_reframe pitch (#98) — unchanged
+            behavior/position, per #100 Stage 1's protected exception. */}
+        <div className="report-section">
           {!reframeRevealed && (
             <LimitsBlock
               eyebrow="WHAT DOES THIS MEAN?"
