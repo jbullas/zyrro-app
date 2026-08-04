@@ -406,11 +406,96 @@ analysis: compressed, comparative format — this is not a smaller version of ev
 
 ### constellation_synthesis
 named_identity: The [Modifier] [Core] — identical to cover.named_identity
-synthesis: minimum 300 words, target 350 words.
-Must explain how the Top 5 signatures interact as one integrated operating system.
-Must describe: operating style, decision style, energy style, leadership style, relational style.
-This is not five separate summaries. It is one coherent identity picture.
+synthesis: Structure as exactly 3 sentences, each with a distinct,
+non-overlapping job. Target 60-90 words total, hard ceiling 95 words — if
+writing a genuine sentence 3 would push past 95 words, end at 2 sentences
+instead of overrunning the ceiling. A shorter, complete 2-sentence
+synthesis beats a longer one that pads to hit a sentence count.
+
+Sentence 1 — name one specific concrete behavior or situation where this
+pattern shows up, different from anything identity_thesis describes.
+Ground it in something evidence-specific, not a restated capability.
+Sentence 2 — name a second, different way the pattern shows up — a
+different context, trigger, or behavior than sentence 1, still never
+overlapping identity_thesis's verb/object.
+Sentence 3 — name something that is still true about this pattern even
+now, or a tension/cost that comes with it — a forward- or present-tense
+observation, not a summary of sentences 1-2.
+Each sentence must stand on its own as new information. If you cannot
+think of a genuinely distinct third fact, do not pad — end at 2 sentences
+rather than manufacture a restatement for the third.
+
+Functions as a direct extension of identity_thesis. Do NOT reuse or lightly
+reword any key phrase from identity_thesis — if identity_thesis says the
+person "transforms chaos into order," the synthesis must not repeat
+"transform chaos into order" or a close paraphrase of it anywhere in any
+of the 3 sentences, not only the first. Avoid abstract capability language
+("this dynamic approach allows you to navigate complex challenges," "this
+ability empowers you to...") — stay concrete and specific, grounded in how
+the pattern actually plays out.
+Sentence 1 is the highest-risk point for accidentally restating
+identity_thesis, because it is the natural continuation of the same idea.
+Before writing it, identify identity_thesis's main verb and its object
+(what is being done, to what). Sentence 1 must not share that verb or
+object, or a synonym standing in for either — it must open on a different
+concrete behavior or situation entirely, not a rephrasing of the thesis's
+action.
+Do NOT name or restate the identity anywhere in the synthesis — not at
+the opening, and not reintroduced mid-paragraph either. This includes
+"As [Named Identity]...", "Your identity as [Named Identity] is...",
+"[Named Identity] is characterized by...", or any construction, anywhere
+in the text, that re-announces who they are. It is already the largest
+text on the page immediately above this field; repeating it anywhere
+wastes the word budget. Begin directly with observed behavior instead,
+with "You" as the subject of the first sentence.
+Do NOT name any individual signature (e.g. Optimizer, Guardian, Architect,
+etc.) — at this point in the report the reader has not yet been
+introduced to any named signature, so referencing one by name is
+meaningless to them. Describe behavior and pattern only, never signature
+vocabulary.
+Do NOT describe operating style, decision style, energy style, leadership
+style, or relational style — how_you_operate covers all of this in depth
+later; restating it here is redundant, not reinforcing.
 Must NOT be generic. Must be earned through evidence.
+
+Approved example (74 words — opens with "You," extends rather than
+restates the thesis, no signature names, no style-category descriptions):
+"You don't just manage complexity — you actively seek it out, drawn to
+environments where the stakes are real and the margin for error is thin.
+Once you're in, you push for full mastery: understanding every part of a
+system, keeping the people around you safe within it, and following every
+task through to a clean finish. Even as retirement nears, that pull
+toward new challenges hasn't faded — it's simply found new places to
+land."
+
+Mapped to the structure above: Sentence 1 = "You don't just manage
+complexity..." (a specific situation the pattern seeks out). Sentence 2 =
+"Once you're in, you push for full mastery..." (a different concrete way
+the pattern plays out once engaged). Sentence 3 = "Even as retirement
+nears..." (a present-tense observation of what's still true now, not a
+summary of sentences 1-2).
+
+Disqualified patterns — real generated outputs have failed this way
+before and must not be repeated. These are described rather than quoted
+verbatim, on purpose: do not treat the wording below as a template to
+lightly rephrase, only as a pattern to avoid entirely.
+- Opening with a construction that names the identity and then defines
+  it, e.g. a sentence structured as "[possessive] identity as [Named
+  Identity] is characterized by...". This both re-announces the identity
+  and, because the sentence still needs a predicate, tends to pull that
+  predicate straight from identity_thesis's own wording rather than
+  introducing anything new.
+- An opening sentence whose verb and object are the same action
+  identity_thesis already named, just with a couple of words swapped or
+  softened (e.g. thesis names one specific transformation the person
+  drives, and the synthesis's first sentence names that identical
+  transformation again in slightly different words instead of moving to
+  a new, unstated behavior).
+- A sentence built entirely around a vague capability claim — "this
+  [quality] allows/enables/empowers you to [handle/navigate/manage]
+  [challenges/complexity]" — with no specific action, situation, or
+  evidence-grounded behavior filling in what is actually being handled
+  or how.
 
 ### how_you_operate
 Five fields. Each minimum 120 words. Each grounded in the user's actual patterns.
@@ -442,7 +527,7 @@ Must always produce:
 - 1 secondary_signature_summary, always present regardless of that count
 - 1 named_identity consistent across cover and constellation_synthesis
 - 1 identity_thesis of 8–18 words
-- 1 constellation_synthesis of minimum 300 words
+- 1 constellation_synthesis of minimum 60 words (target 75-90)
 - 5 how_you_operate fields each of minimum 120 words
 - 6–10 energisers
 - 6–10 friction_points

@@ -113,6 +113,94 @@ export function enforceSecondaryEvidenceFloor(
   }
 }
 
+// 4, not the "5+" originally proposed — this session's real Run 1 failure
+// ("transform chaos into order" lifted verbatim from identity_thesis) is
+// itself only 4 words, and would slip past a 5-word threshold entirely.
+// Confirmed via a standalone test against that exact real output before
+// wiring this in: 4 catches it with no false positive against an unrelated
+// (non-overlapping) synthesis sentence.
+const CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS = 4;
+
+function normalizeWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function hasOverlappingPhrase(candidateWords: string[], referenceWords: string[], minWords: number): boolean {
+  if (candidateWords.length < minWords || referenceWords.length < minWords) return false;
+  for (let i = 0; i <= candidateWords.length - minWords; i++) {
+    const window = candidateWords.slice(i, i + minWords).join(' ');
+    for (let j = 0; j <= referenceWords.length - minWords; j++) {
+      if (referenceWords.slice(j, j + minWords).join(' ') === window) return true;
+    }
+  }
+  return false;
+}
+
+function splitSentences(text: string): string[] {
+  const matches = text.match(/[^.!?]+[.!?]+(\s+|$)/g);
+  if (matches) return matches.map(s => s.trim()).filter(Boolean);
+  return text.trim() ? [text.trim()] : [];
+}
+
+/**
+ * #102: constellation_synthesis's prompt rules (see lib/prompts/identity-report.ts)
+ * explicitly forbid reusing any key phrase from cover.identity_thesis — confirmed via
+ * live verification (2026-08-04) that Layer 2 does not reliably follow this: across 4
+ * distinct prompt-wording attempts (first-sentence-only rule, any-sentence rule, a
+ * structural 3-sentence template) and 8 real generations, at least one sentence per run
+ * still lifted a 5+ word run verbatim or near-verbatim from identity_thesis. Same
+ * "inconsistent model compliance on a clear instruction" pattern as
+ * enforceSecondaryEvidenceFloor above — closed here in code rather than via further
+ * prompt iteration, per Miroslav's approval (2026-08-04) to expand this ticket beyond
+ * its original prompt-only scope for exactly this failure profile.
+ *
+ * Detects any shared run of `CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS`+ consecutive
+ * words (case-insensitive, punctuation-insensitive) between a synthesis sentence and
+ * identity_thesis, and drops that sentence rather than trying to rewrite it — there's
+ * no deterministic way to turn a restatement into new content, only to remove it. If
+ * every sentence overlaps and this empties the synthesis entirely, logs a warning (this
+ * would mean the whole field was just a thesis restatement) but still persists whatever
+ * remains rather than blocking generation.
+ */
+export function enforceConstellationSynthesisNonOverlap(
+  constellationSynthesis: unknown,
+  identityThesis: unknown
+): void {
+  if (
+    !constellationSynthesis ||
+    typeof constellationSynthesis !== 'object' ||
+    typeof (constellationSynthesis as { synthesis?: unknown }).synthesis !== 'string' ||
+    typeof identityThesis !== 'string' ||
+    !identityThesis.trim()
+  ) return;
+
+  const entry = constellationSynthesis as { synthesis: string };
+  const thesisWords = normalizeWords(identityThesis);
+  if (thesisWords.length < CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS) return;
+
+  const sentences = splitSentences(entry.synthesis);
+  if (sentences.length === 0) return;
+
+  const kept = sentences.filter(
+    sentence => !hasOverlappingPhrase(normalizeWords(sentence), thesisWords, CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS)
+  );
+
+  if (kept.length === sentences.length) return;
+
+  if (kept.length === 0) {
+    console.warn(
+      `constellation_synthesis: every sentence overlapped identity_thesis by ${CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS}+ words — synthesis emptied entirely. ` +
+      `identity_thesis="${identityThesis}" original_synthesis="${entry.synthesis}"`
+    );
+  }
+
+  entry.synthesis = kept.join(' ');
+}
+
 export async function generateIdentityReport({
   artifactId,
   answers,
@@ -180,6 +268,12 @@ export async function generateIdentityReport({
     // enforceSecondaryEvidenceFloor's doc comment. Runs after sorting since
     // it only rewrites analysis text, not order.
     enforceSecondaryEvidenceFloor(report.secondary_signature_analysis, analysis.evidence_units);
+
+    // #102: Layer 2 doesn't reliably keep constellation_synthesis from
+    // restating identity_thesis — see enforceConstellationSynthesisNonOverlap's
+    // doc comment. Runs after sorting/domain_profile since it only rewrites
+    // constellation_synthesis.synthesis, nothing positional.
+    enforceConstellationSynthesisNonOverlap(report.constellation_synthesis, report.cover?.identity_thesis);
 
     // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
     // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed
