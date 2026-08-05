@@ -90,13 +90,6 @@ const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label:
   { key: 'stress_pattern',     label: 'STRESS PATTERN' },
 ];
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-
 function splitNamedIdentity(namedIdentity: string): [string, string] {
   const idx = namedIdentity.lastIndexOf(' ');
   if (idx === -1) return [namedIdentity, ''];
@@ -127,7 +120,6 @@ export default function IdentityPage() {
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
-  const reportDate = genPhase.phase === 'ready' ? genPhase.createdAt : '';
 
   // #98: "What does this mean?" pitch (identity_reframe) — generation fires
   // eagerly the moment the report finishes rendering, independent of the
@@ -375,9 +367,9 @@ export default function IdentityPage() {
           <h1>
             {nameLine2 ? <>{nameLine1}<br />{nameLine2}</> : nameLine1}
           </h1>
-          <p className="identity-thesis">{cover.identity_thesis}</p>
           <p className="cover-context-line">{cover.prepared_for} · {cover.identity_context}</p>
-          <p className="prepared-for-line">{reportDate ? formatDate(reportDate) : ''}</p>
+          <p className="identity-thesis">{cover.identity_thesis}</p>
+          <p>{constellation_synthesis.synthesis}</p>
         </div>
 
         {/* #100 Stage 1 (2026-08-04): reordered into Cover / Signatures /
@@ -386,17 +378,6 @@ export default function IdentityPage() {
             Foundation all dropped; content preserved for #91 in
             docs/content/identity-static-content-for-91.md, not rendered). */}
         <div className="report-sections">
-
-          {/* ── Cover (cont'd): Constellation Synthesis — an extension of
-              Identity Thesis, so it lives with Cover rather than standing
-              alone (2026-08-04 decision). ─────────────────────────────── */}
-          <div className="report-section">
-            <p className="eyebrow">CONSTELLATION SYNTHESIS</p>
-            <div className="card">
-              <h3 className="named-identity mb-12">{constellation_synthesis.named_identity}</h3>
-              <p>{constellation_synthesis.synthesis}</p>
-            </div>
-          </div>
 
           {/* ── Cover (cont'd): Signature Profile — score list + radar ─── */}
           <div className="report-section">
