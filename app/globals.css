@@ -52,6 +52,8 @@
   --color-text-secondary:  #6E6E6E;
   --color-grad-2:          #C60567;
   --color-nav-inactive:    #CCCCCC;
+  --color-success:         #1E8E5A;
+  --color-failure:         #D8483B;
   --font-size-subheading:  17px;
   --font-size-body:        16px;
   --font-size-label:       13px;
@@ -1263,36 +1265,39 @@ p {
 
 .chip-friction {
   padding: 6px 12px;
-  background: rgba(254,86,24,0.07);
-  border: 0.5px solid rgba(254,86,24,0.25);
+  background: rgba(216,72,59,0.08);
+  border: 0.5px solid rgba(216,72,59,0.28);
   border-radius: 999px;
   font-size: 13px;
   font-weight: 500;
-  color: #1E1E1E;
+  color: #8C2F26;
 }
 
-/* ── Research Foundation ── */
-
-.research-row {
-  padding-bottom: 14px;
-  border-bottom: 0.5px solid rgba(0,0,0,0.07);
+.chip-energiser {
+  padding: 6px 12px;
+  background: rgba(30,142,90,0.10);
+  border: 0.5px solid rgba(30,142,90,0.30);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #155E3B;
 }
 
-.research-row:last-child { border-bottom: none; padding-bottom: 0; }
-.research-row + .research-row { padding-top: 14px; }
+/* ── Documentation-style text — replaces the old .research-* classes,
+   which were removed as part of #100 Stage 2 (their only consumer, the
+   old Research Foundation section, was removed in #100 Stage 1). ── */
 
-.research-title {
+.doc-label {
   font-size: 14px;
   font-weight: 700;
   color: #1E1E1E;
   margin: 0 0 6px;
 }
 
-.research-body {
+.doc-text {
   font-size: 14px;
   color: #6E6E6E;
   line-height: 1.6;
-  margin: 0;
 }
 
 /* ── Limits block ── */
