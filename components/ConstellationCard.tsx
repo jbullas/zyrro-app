@@ -10,16 +10,18 @@ type ConstellationCardProps = {
 
 export default function ConstellationCard({ badge, muted, title, meta, pill, children }: ConstellationCardProps) {
   return (
-    <div className="constellation-card">
+    <div className="card constellation-card">
       <div className="constellation-card-header">
         <div className={muted ? 'constellation-badge-muted' : 'constellation-badge'}>{badge}</div>
         <div className="constellation-header-info">
-          <div className="constellation-sig-name">{title}</div>
+          <h3>{title}</h3>
           <div className="constellation-sig-meta">{meta}</div>
         </div>
         {pill}
       </div>
-      {children}
+      <div className="constellation-card-body">
+        {children}
+      </div>
     </div>
   );
 }

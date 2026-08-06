@@ -116,37 +116,37 @@ const FRICTION_POINTS_EXPLANATION =
   'are the specific frictions your patterns predict for you.';
 
 const WHAT_THIS_REPORT_IS =
-  'This is pattern recognition — not personality typing, not a career assessment, not coaching. ' +
+  'This is pattern recognition, not personality typing, not a career assessment, and not coaching. ' +
   'Your Identity Signatures are stable, recurring operating patterns detected from your actual ' +
   'life and work history. They describe how you have consistently thought, acted, and perceived ' +
-  'across multiple chapters of your life — not who you want to be, or who you were once. The report ' +
+  'across multiple chapters of your life, not who you want to be, or who you were once. The report ' +
   'does not tell you what to do. It shows you what is already true about how you operate.';
 
 const RESEARCH_PILLARS = [
   {
-    title: 'Narrative Identity Theory — McAdams (1993)',
-    body:  'Your Identity Signature Report is grounded in narrative identity research, which holds that identity is constructed through the stories we tell about ourselves across time. The patterns detected in your report reflect recurring themes across your personal narrative — not isolated moments, but the operating logic that appears consistently across different chapters of your life.',
+    title: 'Narrative Identity Theory, McAdams (1993)',
+    body:  'Your Identity Signature Report is grounded in narrative identity research, which holds that identity is constructed through the stories we tell about ourselves across time. The patterns detected in your report reflect recurring themes across your personal narrative: not isolated moments, but the operating logic that appears consistently across different chapters of your life.',
   },
   {
-    title: 'Flow Theory — Csikszentmihalyi (1990)',
-    body:  'Flow research identifies states of peak performance where skill meets challenge. Your Energisers map directly to the conditions most likely to produce your flow states — environments and activities that align with your signature operating patterns. Misalignment between your signatures and your current context produces the friction described in this report.',
+    title: 'Flow Theory, Csikszentmihalyi (1990)',
+    body:  'Flow research identifies states of peak performance where skill meets challenge. Your Energisers map directly to the conditions most likely to produce your flow states: environments and activities that align with your signature operating patterns. Misalignment between your signatures and your current context produces the friction described in this report.',
   },
   {
-    title: 'Self-Determination Theory — Deci & Ryan (1985)',
+    title: 'Self-Determination Theory, Deci & Ryan (1985)',
     body:  'SDT establishes that sustained motivation requires autonomy, competence, and relatedness. Your Identity Signatures reveal which environments support these three needs and which work against them. The Stress Pattern section identifies what specifically threatens your sense of competence and autonomy under pressure.',
   },
   {
-    title: 'Neural Patterning — Doidge (2007)',
-    body:  'Neuroplasticity research confirms that repeated patterns of thought and behaviour become hardwired over time. The signatures identified in your report are not preferences or values — they are neural grooves formed through years of consistent activation. They describe how your brain has learned to process and respond to the world.',
+    title: 'Neural Patterning, Doidge (2007)',
+    body:  'Neuroplasticity research confirms that repeated patterns of thought and behaviour become hardwired over time. The signatures identified in your report are not preferences or values. They are neural grooves formed through years of consistent activation. They describe how your brain has learned to process and respond to the world.',
   },
 ];
 
 const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label: string }[] = [
-  { key: 'work_style',         label: 'WORK STYLE' },
-  { key: 'thinking_style',     label: 'THINKING STYLE' },
-  { key: 'relationship_style', label: 'RELATIONSHIP STYLE' },
-  { key: 'decision_style',     label: 'DECISION STYLE' },
-  { key: 'stress_pattern',     label: 'STRESS PATTERN' },
+  { key: 'work_style',         label: 'Work Style' },
+  { key: 'thinking_style',     label: 'Thinking Style' },
+  { key: 'relationship_style', label: 'Relationship Style' },
+  { key: 'decision_style',     label: 'Decision Style' },
+  { key: 'stress_pattern',     label: 'Stress Pattern' },
 ];
 
 function splitNamedIdentity(namedIdentity: string): [string, string] {
@@ -431,29 +431,30 @@ export default function IdentityPage() {
           <p>{constellation_synthesis.synthesis}</p>
         </div>
 
-        {/* #100 Stage 2 (2026-08-05 full restructure): Domain Profile /
-            Primary Signatures / Secondary Signatures / How You Operate /
-            Energisers / Friction Points, each a standalone top-level
-            section with its own fixed .doc-text explanation after its
-            card(s) — see docs/briefs/100-full-restructure-brief.md. */}
+        {/* #100 Stage 2 (2026-08-05 full restructure, refined 2026-08-06):
+            Domain Profile / Primary Signatures / Secondary Signatures / How
+            You Operate / Energisers / Friction Points, each a standalone
+            top-level section with its own fixed .documentation explanation
+            near its card(s) — see docs/briefs/100-full-restructure-brief.md
+            and docs/briefs/100-card-consistency-brief.md. */}
         <div className="report-sections">
 
           {/* ── Domain Profile ───────────────────────────────────────── */}
           <div className="report-section">
             <p className="eyebrow">DOMAIN PROFILE</p>
             <div className="card">
-              <h3>Domain Profile</h3>
               <DomainRadarChart domainProfile={domain_profile} />
             </div>
-            <p className="doc-text">{DOMAIN_PROFILE_EXPLANATION}</p>
+            <p className="documentation">{DOMAIN_PROFILE_EXPLANATION}</p>
           </div>
 
           {/* ── Primary Signatures — bar chart card + deep-dive cards ─── */}
           <div className="report-section">
             <p className="eyebrow">PRIMARY SIGNATURES</p>
             <div className="card">
-              <PrimarySignatureBars signatures={primary_constellation} />
+              <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
             </div>
+            <p className="documentation">{PRIMARY_SIGNATURES_EXPLANATION}</p>
             {primary_constellation.map((sig, i) => {
               const band = getScoreBand(sig.score);
               return (
@@ -465,10 +466,10 @@ export default function IdentityPage() {
                   pill={<span className={`score-band-pill ${bandClass(band)}`}>{band}</span>}
                 >
                   <p className="core-statement">{sig.core_statement}</p>
-                  <p className="evidence-analysis">{sig.evidence_analysis}</p>
+                  <p>{sig.evidence_analysis}</p>
                   <div className="tension-block">
                     <span className="tension-label">TENSION</span>
-                    <p className="tension-text">{sig.tension}</p>
+                    <p>{sig.tension}</p>
                   </div>
                   <div className="scoring-chips">
                     <div className="score-chip">
@@ -491,7 +492,6 @@ export default function IdentityPage() {
                 </ConstellationCard>
               );
             })}
-            <p className="doc-text">{PRIMARY_SIGNATURES_EXPLANATION}</p>
           </div>
 
           {/* ── Secondary Signatures — only when non-empty ────────────── */}
@@ -516,6 +516,7 @@ export default function IdentityPage() {
                   </div>
                 ))}
               </div>
+              <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
               {secondary_signature_analysis.map((sig, i) => (
                 <ConstellationCard
                   key={sig.name}
@@ -525,10 +526,9 @@ export default function IdentityPage() {
                   meta={`${sig.domain} · ${sig.score}`}
                 >
                   <p className="core-statement">{sig.core_statement}</p>
-                  <p className="evidence-analysis">{sig.analysis}</p>
+                  <p>{sig.analysis}</p>
                 </ConstellationCard>
               ))}
-              <p className="doc-text">{SECONDARY_SIGNATURES_EXPLANATION}</p>
             </div>
           )}
 
@@ -538,24 +538,24 @@ export default function IdentityPage() {
             {HOW_OPERATE_LABELS.map(({ key, label }) => (
               <div key={key} className="card">
                 <h3>{label}</h3>
-                <p className="operate-text">{how_you_operate[key]}</p>
+                <p>{how_you_operate[key]}</p>
               </div>
             ))}
-            <p className="doc-text">{HOW_YOU_OPERATE_EXPLANATION}</p>
+            <p className="documentation">{HOW_YOU_OPERATE_EXPLANATION}</p>
           </div>
 
           {/* ── Energisers ─────────────────────────────────────────────  */}
           <div className="report-section">
             <p className="eyebrow">ENERGISERS</p>
             <ChipRow items={energisers} wrapperClassName="chips-wrap" itemClassName="chip-energiser" />
-            <p className="doc-text">{ENERGISERS_EXPLANATION}</p>
+            <p className="documentation">{ENERGISERS_EXPLANATION}</p>
           </div>
 
           {/* ── Friction Points ────────────────────────────────────────  */}
           <div className="report-section">
             <p className="eyebrow">FRICTION POINTS</p>
             <ChipRow items={friction_points} wrapperClassName="chips-wrap" itemClassName="chip-friction" />
-            <p className="doc-text">{FRICTION_POINTS_EXPLANATION}</p>
+            <p className="documentation">{FRICTION_POINTS_EXPLANATION}</p>
           </div>
 
         </div>{/* end .report-sections */}
@@ -614,16 +614,15 @@ export default function IdentityPage() {
         {/* Bottom documentation: What This Report Is / Research Foundation
             — reinstated from docs/content/identity-static-content-for-91.md
             per #100's restructure brief, resolves #91's placement question. */}
-        <div className="report-section" style={{ borderTop: '0.5px solid rgba(0,0,0,0.07)' }}>
-          <p className="doc-label">What this report is</p>
-          <p className="doc-text">{WHAT_THIS_REPORT_IS}</p>
+        <div className="report-footer documentation">
+          <h2>About This Report</h2>
 
-          <p className="doc-label">Research foundation</p>
+          <h3>What this report is</h3>
+          <p>{WHAT_THIS_REPORT_IS}</p>
+
+          <h3>Research foundation</h3>
           {RESEARCH_PILLARS.map((pillar) => (
-            <div key={pillar.title}>
-              <p className="doc-label">{pillar.title}</p>
-              <p className="doc-text">{pillar.body}</p>
-            </div>
+            <p key={pillar.title}><em>{pillar.title}.</em> {pillar.body}</p>
           ))}
         </div>
 

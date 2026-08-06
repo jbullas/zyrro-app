@@ -1,11 +1,13 @@
 type PrimarySignatureBarsProps = {
   signatures: { name: string; domain: string; score: number }[];
+  showLabel?: boolean; // default true — /identity passes false, the
+                        // dashboard IdentityCard keeps its default
 };
 
-export default function PrimarySignatureBars({ signatures }: PrimarySignatureBarsProps) {
+export default function PrimarySignatureBars({ signatures, showLabel = true }: PrimarySignatureBarsProps) {
   return (
     <>
-      <p className="card-sub-label">Primary Signatures</p>
+      {showLabel && <p className="card-sub-label">Primary Signatures</p>}
       {signatures.map((sig, i) => (
         <div key={sig.name} className="sig-row">
           <div className="sig-num-circle">{i + 1}</div>
