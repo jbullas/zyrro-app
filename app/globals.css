@@ -893,7 +893,8 @@ p {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 8px 18px 0;
+  border-top: 0.5px solid rgba(0,0,0,0.07);
+  padding: 28px 18px 0;
 }
 
 .report-section {
@@ -910,7 +911,7 @@ p {
 .report-footer {
   border-top: 0.5px solid rgba(0,0,0,0.07);
   margin-top: 12px;
-  padding-top: 24px;
+  padding: 24px 18px 0;
 }
 
 .identity-thesis {
@@ -1095,6 +1096,10 @@ p {
   padding: 18px; /* same value .card already uses, kept in sync deliberately */
 }
 
+.constellation-card-body > * + * {
+  margin-top: 16px;
+}
+
 .constellation-card-header {
   display: flex;
   align-items: center;
@@ -1166,7 +1171,7 @@ p {
 }
 
 .core-statement {
-  margin: 14px 16px 0;
+  margin: 0 16px; /* was: 14px 16px 0 — vertical spacing now owned by .constellation-card-body > * + * */
   padding: 12px 14px;
   border-left: 3px solid #C60567;
   background: #F7F6F3;
@@ -1182,13 +1187,19 @@ p {
   font-size: 14px;
   color: #6E6E6E;
   line-height: 1.65;
-  margin: 0;
+  /* no margin declared — horizontal inset already comes from the padding
+     above; margin-top is left to .constellation-card-body > * + * to own
+     when this isn't the first card child (an explicit margin: 0 here
+     would collide at equal specificity and win on source order, same
+     issue fixed for .tension-block/.scoring-chips). Falls back to the
+     initial 0 when it is the first child (e.g. /path), same net result. */
 }
 
-.constellation-card .evidence-analysis:last-child { padding-bottom: 14px; }
-
 .tension-block {
-  margin: 14px 16px 0;
+  margin-left: 16px; /* no margin-top declared — .constellation-card-body > * + *
+                         owns that; a `margin: 0 16px` shorthand here would set
+                         margin-top:0 at equal specificity and win on source order */
+  margin-right: 16px;
   padding: 12px 14px;
   border-left: 3px solid #FE5618;
   background: rgba(254,86,24,0.05);
@@ -1217,7 +1228,10 @@ p {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding: 14px 16px;
-  margin-top: 14px;
+  /* no margin-top declared — .constellation-card-body > * + * owns that;
+     an explicit margin-top: 0 here would win on source order at equal
+     specificity and cancel it. The border-top still provides its own
+     visual divider on top of that spacing. */
   border-top: 0.5px solid rgba(0,0,0,0.07);
 }
 
@@ -1315,6 +1329,9 @@ p {
   font-size: 13px;
   color: #6E6E6E;
   line-height: 1.6;
+}
+.documentation p + p {
+  margin-top: 12px;
 }
 .documentation h2 {
   font-size: 16px;
