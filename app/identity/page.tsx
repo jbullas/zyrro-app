@@ -385,28 +385,29 @@ export default function IdentityPage() {
             <p>{SCORING_EXPLANATION}</p>
 
             <div className="card">
-              <PrimarySignatureBars signatures={primary_constellation} numbered={false} />
-
-              {secondary_signature_analysis.length > 0 && (
-                <>
-                  <p className="card-sub-label">Secondary Signatures</p>
-                  {secondary_signature_analysis.map((sig) => (
-                    <div key={sig.name} className="sig-row">
-                      <div className="sig-info">
-                        <div className="sig-name-meta">
-                          <span className="sig-name">{sig.name}</span>
-                          <span className="sig-breakdown">{sig.domain}</span>
-                        </div>
-                        <div className="sig-bar-track">
-                          <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
-                        </div>
-                      </div>
-                      <span className="sig-score-label-muted">{sig.score}</span>
-                    </div>
-                  ))}
-                </>
-              )}
+              <PrimarySignatureBars signatures={primary_constellation} />
             </div>
+
+            {secondary_signature_analysis.length > 0 && (
+              <div className="card">
+                <p className="card-sub-label">Secondary Signatures</p>
+                {secondary_signature_analysis.map((sig, i) => (
+                  <div key={sig.name} className="sig-row">
+                    <div className="sig-num-circle-muted">{i + 6}</div>
+                    <div className="sig-info">
+                      <div className="sig-name-meta">
+                        <span className="sig-name">{sig.name}</span>
+                        <span className="sig-breakdown">{sig.domain}</span>
+                      </div>
+                      <div className="sig-bar-track">
+                        <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
+                      </div>
+                    </div>
+                    <span className="sig-score-label-muted">{sig.score}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="card">
               <p className="card-sub-label">Identity Profile</p>
