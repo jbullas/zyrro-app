@@ -142,7 +142,7 @@ export interface HowYouOperate {
 
 export interface IdentitySignatureReportArtifactContent {
   artifact_type: "identity_signature_report";
-  schema_version: "1.0" | "1.1" | "1.2";
+  schema_version: "1.0" | "1.1" | "1.2" | "1.3";
   cover: ReportCover;
   what_this_report_is: string;                                // 80-140 words
   signature_profile_summary: SignatureProfileSummary;
@@ -154,6 +154,10 @@ export interface IdentitySignatureReportArtifactContent {
   energisers: string[];      // 6-10 items
   friction_points: string[]; // 6-10 items
   domain_profile: DomainProfile;
+  // #103: Layer 2's own prose summary of domain_profile. Optional —
+  // undefined on every report generated before this shipped (no backfill,
+  // same non-determinism precedent as #62's raw_signature_analysis).
+  domain_profile_summary?: string;
   derived_from_signature_analysis: boolean;
   // #62: Layer 1's full Detection Engine output, persisted going-forward only
   // (existing reports predate this field and won't have it — no backfill,

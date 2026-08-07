@@ -71,6 +71,7 @@ interface IdentityReport {
     Driving: number;
     Sensing: number;
   };
+  domain_profile_summary?: string;
 }
 
 const DOMAIN_PROFILE_EXPLANATION =
@@ -411,6 +412,7 @@ export default function IdentityPage() {
     energisers,
     friction_points,
     domain_profile,
+    domain_profile_summary,
   } = report;
 
   const [nameLine1, nameLine2] = splitNamedIdentity(cover.named_identity);
@@ -444,6 +446,7 @@ export default function IdentityPage() {
             <p className="eyebrow">DOMAIN PROFILE</p>
             <div className="card">
               <DomainRadarChart domainProfile={domain_profile} />
+              {domain_profile_summary && <p>{domain_profile_summary}</p>}
             </div>
             <p className="documentation">{DOMAIN_PROFILE_EXPLANATION}</p>
           </div>

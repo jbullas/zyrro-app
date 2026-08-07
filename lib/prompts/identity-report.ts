@@ -250,6 +250,7 @@ Use this exact structure:
     "Driving": 0,
     "Sensing": 0
   },
+  "domain_profile_summary": "",
   "derived_from_signature_analysis": true
 }
 
@@ -259,6 +260,7 @@ Before returning the JSON, verify:
 - each primary_constellation entry has frequency, intensity, score, and confidence
 - secondary_signature_analysis has one entry per item in the Detection Engine's secondary_signatures list (0, 1, 2, or 3 — never padded, never fewer than what secondary_signatures actually contains)
 - secondary_signature_summary is present and non-empty regardless of how many secondary_signature_analysis entries exist
+- domain_profile_summary is present and non-empty
 If any check fails, complete the missing fields before returning.
 
 ## FIELD REQUIREMENTS
@@ -519,6 +521,15 @@ Must be honest. Friction increases recognition more than flattery does.
 ### domain_profile
 domain_profile MUST contain exactly 5 entries — Visioning, Thinking, Connecting, Driving, Sensing — all present in every response. Copy values exactly from the detection JSON domain_profile field. Never omit a domain. Never return fewer than 5 entries. If a domain is missing from the detection input, use 10 as the default value.
 
+### domain_profile_summary
+~80–110 words, hard ceiling 120. Do not pad to hit the target — a shorter, honest summary beats one that repeats itself.
+
+Ground this in which domains the primary_constellation and secondary_signature_analysis entries actually belong to — reason from that signature list, not from the raw numeric domain_profile scores. Those numbers are recalculated downstream from a different source and may not match what you're told here, so do not describe them precisely.
+
+Summarize where this person's strongest patterns cluster across the five domains, and what that concentration or spread means operationally — how it plays out in the way they work, not just where the points land.
+
+No signature names — this section renders before Primary Signatures on the page, so the reader hasn't been introduced to any named signature yet. Do not redefine what Visioning, Thinking, Connecting, Driving, or Sensing mean — that's fixed page copy shown alongside this text. Do not repeat cover.identity_thesis or constellation_synthesis content.
+
 ## STRUCTURAL CONSTRAINTS
 
 Must always produce:
@@ -531,6 +542,7 @@ Must always produce:
 - 5 how_you_operate fields each of minimum 120 words
 - 6–10 energisers
 - 6–10 friction_points
+- 1 domain_profile_summary of ~80-110 words
 
 ## FINAL QUALITY TEST
 
