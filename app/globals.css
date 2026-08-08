@@ -873,6 +873,12 @@ p {
   max-height: 260px;
 }
 
+/* Matches the 10px chart-to-text gap .report-section already gives
+   PrimarySignatureBars' card and its .documentation paragraph. */
+.identity-chart-canvas + p {
+  margin-top: 10px;
+}
+
 .report-scroll {
   flex: 1;
   overflow-y: auto;
