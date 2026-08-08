@@ -103,7 +103,7 @@ export default function StartPage() {
   function updateAnswer(value: string) {
     setAnswers(prev => {
       const next = [...prev];
-      next[questionIndex] = value.slice(0, 1000);
+      next[questionIndex] = value.slice(0, 5000);
       return next;
     });
   }
@@ -147,7 +147,7 @@ export default function StartPage() {
     setSubmitting(true);
     const payload = QUESTIONS.map((q, i) => ({
       question_number: q.number,
-      answer_text: (answers[i] || '').slice(0, 1000),
+      answer_text: (answers[i] || '').slice(0, 5000),
     }));
     try {
       const res = await fetch('/api/complete-discovery', {
@@ -177,17 +177,35 @@ export default function StartPage() {
         if (Array.isArray(parsed)) {
           discoveryAnswers = parsed.map(a => ({
             question_number: a.question_number,
-            answer_text: a.answer_text.slice(0, 1000),
+            answer_text: a.answer_text.slice(0, 5000),
           }));
         }
       } catch {}
+    }
+
+    // #106: stage answers server-side and pass only an opaque token through
+    // signUp()'s metadata — raw answers no longer go into the auth cookie.
+    let discoveryToken: string;
+    try {
+      const stageRes = await fetch('/api/stage-discovery-answers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: discoveryAnswers }),
+      });
+      if (!stageRes.ok) throw new Error('Staging failed');
+      const stageData = await stageRes.json() as { id: string };
+      discoveryToken = stageData.id;
+    } catch {
+      setContactError('Something went wrong. Please try again.');
+      setSubmitting(false);
+      return;
     }
 
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password: crypto.randomUUID(),
       options: {
-        data: { display_name: name, discovery_answers: discoveryAnswers },
+        data: { display_name: name, discovery_token: discoveryToken },
         emailRedirectTo: window.location.origin + '/auth/callback',
       },
     });
@@ -392,9 +410,9 @@ export default function StartPage() {
           />
           <div className="char-counter-row">
             <span
-              className={`char-counter${currentAnswer.length >= 900 ? ' char-counter--limit' : ''}`}
+              className={`char-counter${currentAnswer.length >= 4500 ? ' char-counter--limit' : ''}`}
             >
-              {currentAnswer.length}/1000
+              {currentAnswer.length}/5000
             </span>
           </div>
         </div>

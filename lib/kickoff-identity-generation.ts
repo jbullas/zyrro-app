@@ -31,10 +31,26 @@ function toDiscoveryAnswers(
 export async function kickoffIdentityGeneration(user: User): Promise<boolean> {
   const admin = createServiceClient();
 
-  const rawAnswers = (user.user_metadata?.discovery_answers ?? []) as Array<{
-    question_number: number;
-    answer_text: string;
-  }>;
+  let rawAnswers: Array<{ question_number: number; answer_text: string }> = [];
+
+  // #106: answers are staged server-side under an opaque token rather than
+  // carried in user_metadata directly (that blew past the auth cookie's
+  // header size limit). Resolve the token to its row, then delete it —
+  // raw free-text shouldn't sit indefinitely in an unowned table.
+  const discoveryToken = user.user_metadata?.discovery_token as string | undefined;
+  if (discoveryToken) {
+    const { data: pending } = await admin
+      .from('pending_discovery_answers')
+      .select('answers')
+      .eq('id', discoveryToken)
+      .maybeSingle();
+
+    if (pending) {
+      rawAnswers = pending.answers as Array<{ question_number: number; answer_text: string }>;
+      await admin.from('pending_discovery_answers').delete().eq('id', discoveryToken);
+    }
+  }
+
   const name = (user.user_metadata?.display_name ?? '') as string;
 
   // #20: a State-3 user's very first /auth/callback hit (and every one after
