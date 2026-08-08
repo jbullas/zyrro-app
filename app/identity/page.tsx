@@ -8,7 +8,6 @@ import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ConstellationCard from '@/components/ConstellationCard';
 import ChipRow from '@/components/ChipRow';
-import LimitsBlock from '@/components/LimitsBlock';
 import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
@@ -182,10 +181,9 @@ export default function IdentityPage() {
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
 
   // #98: "What does this mean?" pitch (identity_reframe) — generation fires
-  // eagerly the moment the report finishes rendering, independent of the
-  // click; the click only gates visibility (see reframeRevealed below).
+  // eagerly the moment the report finishes rendering, and renders as soon as
+  // it's ready, with no click gate in front of it.
   const [reframeArtifactId, setReframeArtifactId] = useState<string | null>(null);
-  const [reframeRevealed, setReframeRevealed]     = useState(false);
   const [checkoutLoading, setCheckoutLoading]     = useState(false);
   const reframeFired = useRef(false);
 
@@ -221,10 +219,6 @@ export default function IdentityPage() {
 
     return () => { cancelled = true; };
   }, [genPhase.phase, userId]);
-
-  async function handleRevealReframe() {
-    setReframeRevealed(true);
-  }
 
   async function handleRetryReframe() {
     setReframeArtifactId(null);
@@ -563,37 +557,30 @@ export default function IdentityPage() {
 
         </div>{/* end .report-sections */}
 
-        {/* What's Next: click-gated identity_reframe pitch (#98) — unchanged
-            behavior/position, per #100 Stage 1's protected exception. */}
+        {/* What's Next: identity_reframe pitch (#98) — renders unconditionally
+            as soon as reframeGenPhase produces content, no click gate. */}
         <div className="report-section">
-          {!reframeRevealed && (
-            <LimitsBlock
-              eyebrow="WHAT DOES THIS MEAN?"
-              body="You now have a precise picture of your identity patterns. There’s more to what it’s pointing toward."
-              cta={<PrimaryButton onClick={handleRevealReframe}>What does this mean? →</PrimaryButton>}
-            />
-          )}
-
-          {reframeRevealed && (reframeGenPhase.phase === 'idle' || reframeGenPhase.phase === 'spinner') && (
+          {(reframeGenPhase.phase === 'idle' || reframeGenPhase.phase === 'spinner') && (
             <div className="limits-block" style={{ textAlign: 'center' }}>
+              <p className="limits-body">Generating your next step…</p>
               <div className="spin spinner" />
             </div>
           )}
 
-          {reframeRevealed && reframeGenPhase.phase === 'come-back-later' && (
+          {reframeGenPhase.phase === 'come-back-later' && (
             <div className="limits-block">
               <p className="limits-body">This is taking longer than expected — check back in a few minutes.</p>
             </div>
           )}
 
-          {reframeRevealed && reframeGenPhase.phase === 'failed' && (
+          {reframeGenPhase.phase === 'failed' && (
             <div className="limits-block">
               <p className="limits-body">Something went wrong preparing this.</p>
               <PrimaryButton onClick={handleRetryReframe}>Try again</PrimaryButton>
             </div>
           )}
 
-          {reframeRevealed && reframe && (
+          {reframe && (
             <div className="limits-block">
               <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
               <p>{reframe.recap}</p>
