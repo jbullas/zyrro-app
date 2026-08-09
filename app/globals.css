@@ -1686,3 +1686,38 @@ p {
 .mb-32 { margin-bottom: var(--space-32); }
 
 .flex-1 { flex: 1; }
+
+/* ── #99 /identity reframe teaser (pull-quote + evidence bullets) ── */
+
+.reframe-pullquote {
+  border-left: 3px solid var(--color-accent);
+  padding: 4px 0 4px 16px;
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+}
+
+.reframe-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.reframe-bullets li {
+  padding-left: 16px;
+  position: relative;
+  color: var(--color-text-primary);
+}
+
+.reframe-bullets li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: var(--color-text-secondary);
+}

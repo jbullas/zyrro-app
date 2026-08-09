@@ -252,8 +252,9 @@ Use this exact structure:
   },
   "domain_profile_summary": "",
   "reframe_teaser": {
-    "shift": "",
-    "line": ""
+    "recap": "",
+    "reframe": "",
+    "why_bullets": ["", "", ""]
   },
   "derived_from_signature_analysis": true
 }
@@ -265,7 +266,7 @@ Before returning the JSON, verify:
 - secondary_signature_analysis has one entry per item in the Detection Engine's secondary_signatures list (0, 1, 2, or 3 — never padded, never fewer than what secondary_signatures actually contains)
 - secondary_signature_summary is present and non-empty regardless of how many secondary_signature_analysis entries exist
 - domain_profile_summary is present and non-empty
-- reframe_teaser.shift and reframe_teaser.line are both present and non-empty
+- reframe_teaser.recap, reframe_teaser.reframe, and all 3 reframe_teaser.why_bullets are present and non-empty
 If any check fails, complete the missing fields before returning.
 
 ## FIELD REQUIREMENTS
@@ -536,13 +537,28 @@ Summarize where this person's strongest patterns cluster across the five domains
 No signature names — this section renders before Primary Signatures on the page, so the reader hasn't been introduced to any named signature yet. Do not redefine what Visioning, Thinking, Connecting, Driving, or Sensing mean — that's fixed page copy shown alongside this text. Do not repeat cover.identity_thesis or constellation_synthesis content.
 
 ### reframe_teaser (field: "reframe_teaser")
-#113 placeholder instruction — functional, not final copy. #99 owns the real prompt-wording pass for this section.
 
-Purpose: a short teaser shown on the free /identity page, before any paywall. Two parts:
-1. shift — 30–50 words, present-tense, ties back to the pattern just described.
-2. line — 15–30 words, one declarative, shareable sentence stating the reframe (same idea as identity-reframe.ts's REFRAME section, just shorter).
+Purpose: the free-tier /identity page's bridge into the paid product. This is not a neutral recap — its job is to make the reader want to click through, by landing recognition and then leaving a live, open question in their mind about what comes next.
 
-No signature names. No pricing or forward-looking product language — this is recognition, not a pitch.
+British English spelling throughout all three fields below — e.g. "stabilise" not "stabilize," "energises" not "energizes," "revitalised" not "revitalized."
+
+**recap** (~50-60 words, never fewer than 45): Present-tense grounding in the pattern just described — concrete evidence, not abstraction. Build toward implying something has become static or exhausted (the systems already built no longer need active tending). No signature names. Before finalizing this field, count the words in your draft. If it is under 45 words, that draft is rejected — do not output it. Instead go back and add another concrete, evidence-grounded sentence (not filler adjectives, not restating the same point) until the count clears 45.
+
+**reframe** (~15-30 words, never fewer than 15): One declarative, shareable sentence — a statement, never a question, never ending in a question mark. Before finalizing, count its words. A draft under 15 words is incomplete — do not output it as-is; extend it by naming what specifically is missing, unresolved, or still open, rather than stopping once you've named the static/exhausted state.
+
+Do not model this sentence on any example text — none is given below on purpose, since past drafts of this instruction included one and every generation copied it verbatim or near-verbatim regardless of whether it was labeled as the right or wrong answer. Build the sentence fresh from this person's own evidence instead.
+
+Naming that the old pattern has ended or become unneeded, then stopping, is not enough — that names exhaustion but doesn't open a tension. The sentence must go one clause further and name what is now specifically missing, undecided, or still unaddressed as a result — not just that the old thing is over.
+
+The sentence must not contain any of these words or their close variants, in any form: "gap," "room," "chance," "freed" / "free up," "space," "opportunity," "opening," "possibility," "potential." These words resolve the sentence into an upside instead of leaving it open — a banned word appearing anywhere in the sentence means the draft is rejected and must be rewritten without it.
+
+Must end on a live, open tension, not a resolved or reassuring statement. Echo the *kind* of tension already established under the report's own signatures, without repeating any signature's tension line verbatim. No signature names.
+
+**why_bullets** (exactly 3, ~15-30 words each): Before finalizing each bullet, count its words. A bullet under 15 words is incomplete, not a valid draft — do not output it as-is. Extend every short bullet by adding the specific circumstance, stakes, or consequence around the cited fact (what it cost, what it made possible, what changed because of it) until it clears 15 words. This applies independently to each of the 3 bullets — fixing one does not exempt the others.
+  - Too short (11 words, stops at the bare fact): "You redesigned the receiving workflow, eliminating the backlog in six weeks."
+  - Extended (20 words, same fact plus its stakes/consequence): "You redesigned the receiving workflow in six weeks, clearing a backlog that had stalled the entire site's intake for months."
+
+Concrete, evidence-grounded content: each bullet must name a specific fact, moment, or detail actually present in the user's discovery answers or the evidence_units already extracted for them (e.g. a specific project, decision, conversation avoided, or turning point) — not a restated trait or general capability description. If a bullet could be true of this identity in the abstract without citing anything the user actually said, rewrite it. Where possible, draw each bullet from a different primary signature/evidence unit rather than repeating the same anecdote three times — but if one piece of evidence is genuinely the strongest support for a given point, reusing it is fine. Personalization from truth beats personalization from variety for its own sake. No signature names, no hedging — declarative, not tentative.
 
 ## STRUCTURAL CONSTRAINTS
 
@@ -557,7 +573,7 @@ Must always produce:
 - 6–10 energisers
 - 6–10 friction_points
 - 1 domain_profile_summary of ~80-110 words
-- 1 reframe_teaser with both shift (30-50 words) and line (15-30 words) present
+- 1 reframe_teaser with recap (~50-60 words), reframe (~15-30 words), and exactly 3 why_bullets present
 
 ## FINAL QUALITY TEST
 

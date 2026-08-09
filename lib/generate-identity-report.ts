@@ -201,6 +201,52 @@ export function enforceConstellationSynthesisNonOverlap(
   entry.synthesis = kept.join(' ');
 }
 
+const REFRAME_TEASER_RECAP_MIN_WORDS = 45;
+const REFRAME_TEASER_REFRAME_MIN_WORDS = 15;
+const REFRAME_TEASER_BULLET_MIN_WORDS = 15;
+
+function countWords(text: unknown): number {
+  return typeof text === 'string' ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}
+
+/**
+ * #99: the reframe_teaser prompt instructions (see lib/prompts/identity-report.ts)
+ * tell the model to self-check word counts against floors before finalizing
+ * each field, but that self-check isn't reliably honored in practice —
+ * confirmed via live verification, several real generations landed a few
+ * words under floor despite the explicit instruction. Log-only: flags the
+ * gap for review rather than silently shipping under-length content, but
+ * doesn't block generation or trigger a second LLM call — no regeneration
+ * loop, per Miroslav's call (2026-08-09) to keep this observability rather
+ * than a retry mechanism.
+ */
+function logReframeTeaserWordCountGaps(reframeTeaser: unknown): void {
+  if (!reframeTeaser || typeof reframeTeaser !== 'object') return;
+  const rt = reframeTeaser as { recap?: unknown; reframe?: unknown; why_bullets?: unknown };
+
+  const gaps: string[] = [];
+  const recapWords = countWords(rt.recap);
+  if (recapWords < REFRAME_TEASER_RECAP_MIN_WORDS) {
+    gaps.push(`recap: ${recapWords} words (floor ${REFRAME_TEASER_RECAP_MIN_WORDS})`);
+  }
+  const reframeWords = countWords(rt.reframe);
+  if (reframeWords < REFRAME_TEASER_REFRAME_MIN_WORDS) {
+    gaps.push(`reframe: ${reframeWords} words (floor ${REFRAME_TEASER_REFRAME_MIN_WORDS})`);
+  }
+  if (Array.isArray(rt.why_bullets)) {
+    rt.why_bullets.forEach((bullet, i) => {
+      const bulletWords = countWords(bullet);
+      if (bulletWords < REFRAME_TEASER_BULLET_MIN_WORDS) {
+        gaps.push(`why_bullets[${i}]: ${bulletWords} words (floor ${REFRAME_TEASER_BULLET_MIN_WORDS})`);
+      }
+    });
+  }
+
+  if (gaps.length > 0) {
+    console.warn('reframe_teaser landed under its word-count floor:', gaps.join('; '));
+  }
+}
+
 export async function generateIdentityReport({
   artifactId,
   answers,
@@ -274,6 +320,11 @@ export async function generateIdentityReport({
     // doc comment. Runs after sorting/domain_profile since it only rewrites
     // constellation_synthesis.synthesis, nothing positional.
     enforceConstellationSynthesisNonOverlap(report.constellation_synthesis, report.cover?.identity_thesis);
+
+    // #99: reframe_teaser's prompt-level word-count self-check isn't fully
+    // reliable — see logReframeTeaserWordCountGaps's doc comment. Log-only,
+    // doesn't rewrite or block anything.
+    logReframeTeaserWordCountGaps(report.reframe_teaser);
 
     // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
     // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed

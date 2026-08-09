@@ -141,8 +141,9 @@ export interface HowYouOperate {
 }
 
 export interface ReframeTeaser {
-  shift: string; // 30-50 words, present-tense
-  line: string;  // 15-30 words, shareable pull-quote
+  recap: string;         // ~50-60 words
+  reframe: string;       // ~15-30 words, shareable pull-quote
+  why_bullets: string[]; // exactly 3
 }
 
 export interface IdentitySignatureReportArtifactContent {

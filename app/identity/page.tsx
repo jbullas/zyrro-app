@@ -71,8 +71,9 @@ interface IdentityReport {
   };
   domain_profile_summary?: string;
   reframe_teaser?: {
-    shift: string;
-    line: string;
+    recap: string;
+    reframe: string;
+    why_bullets: string[];
   };
 }
 
@@ -494,16 +495,24 @@ export default function IdentityPage() {
 
         </div>{/* end .report-sections */}
 
-        {/* #113: reframe teaser — now generated as part of identity_report's
-            own Layer 2 call, so it's already in `report` by the time this
-            page renders. No second artifact fetch, no polling. The fuller
-            identity_reframe pitch (with CTA) now lives entirely on /path. */}
-        {reframe_teaser && (
+        {/* #99: reframe teaser — locked 7-component composition. Generated as
+            part of identity_report's own Layer 2 call (#113), so it's already
+            in `report` by the time this page renders. No second artifact
+            fetch, no polling. /path's own composition is a separate, still-
+            undecided question — nothing here anchors to it. */}
+        {reframe_teaser?.recap && reframe_teaser.reframe && Array.isArray(reframe_teaser.why_bullets) && (
           <div className="report-section">
-            <div className="limits-block">
-              <p>{reframe_teaser.shift}</p>
-              <p className="identity-thesis">{reframe_teaser.line}</p>
-            </div>
+            <p className="eyebrow">WHERE ARE YOU HEADING</p>
+            <p>{reframe_teaser.recap}</p>
+            <p className="reframe-pullquote">{reframe_teaser.reframe}</p>
+            <p className="eyebrow">WHY THIS HOLDS</p>
+            <ul className="reframe-bullets">
+              {reframe_teaser.why_bullets.map((bullet, i) => (
+                <li key={i}>{bullet}</li>
+              ))}
+            </ul>
+            <p>Click below to find out where that pattern could be taking you next.</p>
+            <PrimaryButton href="/path">Explore Your Path Options</PrimaryButton>
           </div>
         )}
 
