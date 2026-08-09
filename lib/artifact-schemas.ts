@@ -140,6 +140,11 @@ export interface HowYouOperate {
   stress_pattern: string;     // 80-150 words
 }
 
+export interface ReframeTeaser {
+  shift: string; // 30-50 words, present-tense
+  line: string;  // 15-30 words, shareable pull-quote
+}
+
 export interface IdentitySignatureReportArtifactContent {
   artifact_type: "identity_signature_report";
   schema_version: "1.0" | "1.1" | "1.2" | "1.3";
@@ -158,6 +163,11 @@ export interface IdentitySignatureReportArtifactContent {
   // undefined on every report generated before this shipped (no backfill,
   // same non-determinism precedent as #62's raw_signature_analysis).
   domain_profile_summary?: string;
+  // #113: free-tier /identity teaser, generated alongside the rest of Layer
+  // 2 (replaces the separate identity_reframe call that used to fire from
+  // /identity). Optional — undefined on every report generated before this
+  // shipped, same no-backfill precedent as domain_profile_summary above.
+  reframe_teaser?: ReframeTeaser;
   derived_from_signature_analysis: boolean;
   // #62: Layer 1's full Detection Engine output, persisted going-forward only
   // (existing reports predate this field and won't have it — no backfill,

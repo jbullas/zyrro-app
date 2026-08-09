@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import PrimaryButton from '@/components/PrimaryButton';
@@ -13,7 +13,6 @@ import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
-import type { IdentityReframeArtifactContent } from '@/lib/artifact-schemas';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
@@ -71,6 +70,10 @@ interface IdentityReport {
     Sensing: number;
   };
   domain_profile_summary?: string;
+  reframe_teaser?: {
+    shift: string;
+    line: string;
+  };
 }
 
 const DOMAIN_PROFILE_EXPLANATION =
@@ -179,73 +182,6 @@ export default function IdentityPage() {
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
-
-  // #98: "What does this mean?" pitch (identity_reframe) — generation fires
-  // eagerly the moment the report finishes rendering, and renders as soon as
-  // it's ready, with no click gate in front of it.
-  const [reframeArtifactId, setReframeArtifactId] = useState<string | null>(null);
-  const [checkoutLoading, setCheckoutLoading]     = useState(false);
-  const reframeFired = useRef(false);
-
-  const reframeGenPhase = useGenerationStatus(reframeArtifactId);
-  const reframe = reframeGenPhase.phase === 'ready' ? reframeGenPhase.content as IdentityReframeArtifactContent : null;
-
-  useEffect(() => {
-    if (genPhase.phase !== 'ready' || !userId || reframeFired.current) return;
-    reframeFired.current = true;
-
-    const supabase = createClient();
-    let cancelled = false;
-
-    (async () => {
-      const { data } = await getCurrentArtifact<{ id: string }>(
-        supabase,
-        userId,
-        'identity_reframe',
-        { select: 'id' },
-      );
-      if (cancelled) return;
-      if (data) {
-        setReframeArtifactId(data.id as string);
-        return;
-      }
-      const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
-      if (cancelled) return;
-      if (res.ok) {
-        const { artifact_id } = await res.json() as { artifact_id: string };
-        setReframeArtifactId(artifact_id);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [genPhase.phase, userId]);
-
-  async function handleRetryReframe() {
-    setReframeArtifactId(null);
-    const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
-    if (res.ok) {
-      const { artifact_id } = await res.json() as { artifact_id: string };
-      setReframeArtifactId(artifact_id);
-    }
-  }
-
-  async function handleCheckout() {
-    if (!userId) return;
-    setCheckoutLoading(true);
-    try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
-      });
-      const { url, error } = await res.json() as { url?: string; error?: string };
-      if (error || !url) throw new Error(error ?? 'No checkout URL');
-      window.location.href = url;
-    } catch (err) {
-      console.error('Checkout failed:', err);
-      setCheckoutLoading(false);
-    }
-  }
 
   // Main load — finds the artifact ID and hands polling to useGenerationStatus
   useEffect(() => {
@@ -407,6 +343,7 @@ export default function IdentityPage() {
     friction_points,
     domain_profile,
     domain_profile_summary,
+    reframe_teaser,
   } = report;
 
   const [nameLine1, nameLine2] = splitNamedIdentity(cover.named_identity);
@@ -557,49 +494,18 @@ export default function IdentityPage() {
 
         </div>{/* end .report-sections */}
 
-        {/* What's Next: identity_reframe pitch (#98) — renders unconditionally
-            as soon as reframeGenPhase produces content, no click gate. */}
-        <div className="report-section">
-          {(reframeGenPhase.phase === 'idle' || reframeGenPhase.phase === 'spinner') && (
-            <div className="limits-block" style={{ textAlign: 'center' }}>
-              <p className="limits-body">Generating your next step…</p>
-              <div className="spin spinner" />
-            </div>
-          )}
-
-          {reframeGenPhase.phase === 'come-back-later' && (
+        {/* #113: reframe teaser — now generated as part of identity_report's
+            own Layer 2 call, so it's already in `report` by the time this
+            page renders. No second artifact fetch, no polling. The fuller
+            identity_reframe pitch (with CTA) now lives entirely on /path. */}
+        {reframe_teaser && (
+          <div className="report-section">
             <div className="limits-block">
-              <p className="limits-body">This is taking longer than expected — check back in a few minutes.</p>
+              <p>{reframe_teaser.shift}</p>
+              <p className="identity-thesis">{reframe_teaser.line}</p>
             </div>
-          )}
-
-          {reframeGenPhase.phase === 'failed' && (
-            <div className="limits-block">
-              <p className="limits-body">Something went wrong preparing this.</p>
-              <PrimaryButton onClick={handleRetryReframe}>Try again</PrimaryButton>
-            </div>
-          )}
-
-          {reframe && (
-            <div className="limits-block">
-              <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
-              <p>{reframe.recap}</p>
-
-              <p className="eyebrow">WHAT THIS MEANS FOR WHAT&rsquo;S NEXT</p>
-              <p>{reframe.meaning}</p>
-
-              <p className="eyebrow">WHERE YOUR STORY IS POINTING</p>
-              <p>{reframe.reframe}</p>
-
-              <p className="eyebrow">WHY THE REFRAME HOLDS</p>
-              <p>{reframe.why}</p>
-
-              <PrimaryButton onClick={handleCheckout} disabled={checkoutLoading}>
-                {checkoutLoading ? 'Redirecting…' : 'Get My Path & Plan'}
-              </PrimaryButton>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Bottom documentation: What This Report Is / Research Foundation
             — reinstated from docs/content/identity-static-content-for-91.md

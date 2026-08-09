@@ -251,6 +251,10 @@ Use this exact structure:
     "Sensing": 0
   },
   "domain_profile_summary": "",
+  "reframe_teaser": {
+    "shift": "",
+    "line": ""
+  },
   "derived_from_signature_analysis": true
 }
 
@@ -261,6 +265,7 @@ Before returning the JSON, verify:
 - secondary_signature_analysis has one entry per item in the Detection Engine's secondary_signatures list (0, 1, 2, or 3 — never padded, never fewer than what secondary_signatures actually contains)
 - secondary_signature_summary is present and non-empty regardless of how many secondary_signature_analysis entries exist
 - domain_profile_summary is present and non-empty
+- reframe_teaser.shift and reframe_teaser.line are both present and non-empty
 If any check fails, complete the missing fields before returning.
 
 ## FIELD REQUIREMENTS
@@ -530,6 +535,15 @@ Summarize where this person's strongest patterns cluster across the five domains
 
 No signature names — this section renders before Primary Signatures on the page, so the reader hasn't been introduced to any named signature yet. Do not redefine what Visioning, Thinking, Connecting, Driving, or Sensing mean — that's fixed page copy shown alongside this text. Do not repeat cover.identity_thesis or constellation_synthesis content.
 
+### reframe_teaser (field: "reframe_teaser")
+#113 placeholder instruction — functional, not final copy. #99 owns the real prompt-wording pass for this section.
+
+Purpose: a short teaser shown on the free /identity page, before any paywall. Two parts:
+1. shift — 30–50 words, present-tense, ties back to the pattern just described.
+2. line — 15–30 words, one declarative, shareable sentence stating the reframe (same idea as identity-reframe.ts's REFRAME section, just shorter).
+
+No signature names. No pricing or forward-looking product language — this is recognition, not a pitch.
+
 ## STRUCTURAL CONSTRAINTS
 
 Must always produce:
@@ -543,6 +557,7 @@ Must always produce:
 - 6–10 energisers
 - 6–10 friction_points
 - 1 domain_profile_summary of ~80-110 words
+- 1 reframe_teaser with both shift (30-50 words) and line (15-30 words) present
 
 ## FINAL QUALITY TEST
 

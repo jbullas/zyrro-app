@@ -47,8 +47,9 @@ export default function PathPage() {
   const genPhase   = useGenerationStatus(pathOptionsArtifactId);
   const pathOptions = genPhase.phase === 'ready' ? genPhase.content as PathOptionsArtifactContent : null;
 
-  // #98: unpaid pitch — same eager-generation, unconditional-trigger shape as
-  // /identity's, minus the click gate (the pitch *is* the page here).
+  // #98/#113: unpaid pitch — eager, unconditional generation trigger. /path
+  // is now the sole trigger point for identity_reframe (moved off /identity
+  // in #113, which folded a short teaser into identity_report itself instead).
   const reframeGenPhase = useGenerationStatus(reframeArtifactId);
   const reframeContent = reframeGenPhase.phase === 'ready' ? reframeGenPhase.content as IdentityReframeArtifactContent : null;
 
