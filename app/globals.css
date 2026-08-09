@@ -1357,6 +1357,7 @@ p {
 
 /* ── Limits block ── */
 
+.cta-block,
 .limits-block {
   background: #2D0A45;
   border-radius: 14px;
@@ -1697,7 +1698,7 @@ p {
   font-style: italic;
   font-size: 20px;
   line-height: 1.4;
-  color: var(--color-text-primary);
+  color: #ffffff;
 }
 
 .reframe-bullets {
@@ -1712,12 +1713,12 @@ p {
 .reframe-bullets li {
   padding-left: 16px;
   position: relative;
-  color: var(--color-text-primary);
+  color: rgba(255,255,255,0.75);
 }
 
 .reframe-bullets li::before {
   content: '–';
   position: absolute;
   left: 0;
-  color: var(--color-text-secondary);
+  color: rgba(255,255,255,0.5);
 }

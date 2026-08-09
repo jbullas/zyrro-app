@@ -502,17 +502,19 @@ export default function IdentityPage() {
             undecided question — nothing here anchors to it. */}
         {reframe_teaser?.recap && reframe_teaser.reframe && Array.isArray(reframe_teaser.why_bullets) && (
           <div className="report-section">
-            <p className="eyebrow">WHERE ARE YOU HEADING</p>
-            <p>{reframe_teaser.recap}</p>
-            <p className="reframe-pullquote">{reframe_teaser.reframe}</p>
-            <p className="eyebrow">WHY THIS HOLDS</p>
-            <ul className="reframe-bullets">
-              {reframe_teaser.why_bullets.map((bullet, i) => (
-                <li key={i}>{bullet}</li>
-              ))}
-            </ul>
-            <p>Click below to find out where that pattern could be taking you next.</p>
-            <PrimaryButton href="/path">Explore Your Path Options</PrimaryButton>
+            <div className="cta-block">
+              <p className="eyebrow">WHERE ARE YOU HEADING</p>
+              <p>{reframe_teaser.recap}</p>
+              <p className="reframe-pullquote">{reframe_teaser.reframe}</p>
+              <p className="eyebrow">WHY THIS HOLDS</p>
+              <ul className="reframe-bullets">
+                {reframe_teaser.why_bullets.map((bullet, i) => (
+                  <li key={i}>{bullet}</li>
+                ))}
+              </ul>
+              <p>Click below to find out where that pattern could be taking you next.</p>
+              <PrimaryButton href="/path">Explore Your Path Options</PrimaryButton>
+            </div>
           </div>
         )}
 
