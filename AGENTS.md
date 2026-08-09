@@ -23,7 +23,19 @@ When the user sends **`session end`**, wrap up:
    - **Changed** — what was done this session.
    - **Decisions** — any decisions made, with a one-line why.
    - **Next** — what to pick up next session.
-2. Commit and push to `dev`.
+2. `docs/briefs/` should stay clean at all times, but the deletion
+   trigger must be scoped precisely — there's no access to the ticket
+   CSV, so ticket status can't be inferred from the folder alone. If
+   this session read and executed a brief from `docs/briefs/`, and that
+   ticket's implementation was committed and live-verified within this
+   same session, delete that specific brief file in its own separate
+   commit. Do not scan `docs/briefs/` for any other file — only the
+   brief(s) actually used this session. Before deleting, state which
+   ticket the brief belongs to and confirm explicitly that both
+   conditions hold (committed + live-verified, this session), as its
+   own message — then present the delete as a normal approval-gated
+   command, separate from the changelog/feature commits.
+3. Commit and push to `dev`.
 
 Changelogs are append-only history. Never edit past entries.
 
