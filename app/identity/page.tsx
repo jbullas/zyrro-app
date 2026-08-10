@@ -476,27 +476,27 @@ export default function IdentityPage() {
           {/* ── How You Operate — 5 separate cards ────────────────────── */}
           <div className="report-section">
             <p className="eyebrow">HOW YOU OPERATE</p>
+            <p className="documentation">{HOW_YOU_OPERATE_EXPLANATION}</p>
             {HOW_OPERATE_LABELS.map(({ key, label }) => (
               <div key={key} className="card">
                 <h3>{label}</h3>
                 <p>{how_you_operate[key]}</p>
               </div>
             ))}
-            <p className="documentation">{HOW_YOU_OPERATE_EXPLANATION}</p>
           </div>
 
           {/* ── Energisers ─────────────────────────────────────────────  */}
           <div className="report-section">
             <p className="eyebrow">ENERGISERS</p>
-            <ChipRow items={energisers} wrapperClassName="chips-wrap" itemClassName="chip-energiser" />
             <p className="documentation">{ENERGISERS_EXPLANATION}</p>
+            <ChipRow items={energisers} wrapperClassName="chips-wrap" itemClassName="chip-energiser" />
           </div>
 
           {/* ── Friction Points ────────────────────────────────────────  */}
           <div className="report-section">
             <p className="eyebrow">FRICTION POINTS</p>
-            <ChipRow items={friction_points} wrapperClassName="chips-wrap" itemClassName="chip-friction" />
             <p className="documentation">{FRICTION_POINTS_EXPLANATION}</p>
+            <ChipRow items={friction_points} wrapperClassName="chips-wrap" itemClassName="chip-friction" />
           </div>
 
         </div>{/* end .report-sections */}
