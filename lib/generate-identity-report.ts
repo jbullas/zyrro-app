@@ -312,6 +312,69 @@ function logReframeTeaserWordCountGaps(reframeTeaser: unknown): void {
   }
 }
 
+/**
+ * #112 Stage 3: reframe_teaser.recap is supposed to callback to the
+ * report's own established pattern/evidence (see the prompt's clarified
+ * EVIDENCE REUSE RULE) — reusing the same *fact* as identity_thesis or
+ * constellation_synthesis is expected, but real generations this stage
+ * showed it reusing the same *sentence*, near-verbatim (2026-08-10 Stage 3
+ * diagnosis: e.g. a real recap opened by restating constellation_synthesis's
+ * own sentence almost word for word).
+ *
+ * Deliberately log-only, not deletion, unlike enforceConstellationSynthesisNonOverlap
+ * above — recap sits close enough to its own 45-word floor
+ * (logReframeTeaserWordCountGaps) that stripping an overlapping sentence
+ * risks pushing it under floor: confirmed against a real captured recap
+ * this session (54 words across 3 sentences; removing the one sentence
+ * that overlapped constellation_synthesis would have left 36 words, under
+ * the 45-word floor). Reuses the same normalizeWords/hasOverlappingPhrase/
+ * splitSentences helpers enforceConstellationSynthesisNonOverlap uses,
+ * rather than building separate phrase-matching logic — extending that
+ * function itself to also strip from recap was considered and rejected
+ * for the floor-risk reason above, plus recap's job (grounding in the
+ * already-established pattern) makes some conceptual overlap intentional,
+ * unlike constellation_synthesis's relationship to identity_thesis.
+ */
+function logReframeTeaserRecapOverlap(
+  reframeTeaser: unknown,
+  identityThesis: unknown,
+  constellationSynthesis: unknown
+): void {
+  if (
+    !reframeTeaser ||
+    typeof reframeTeaser !== 'object' ||
+    typeof (reframeTeaser as { recap?: unknown }).recap !== 'string'
+  ) return;
+
+  const sentences = splitSentences((reframeTeaser as { recap: string }).recap);
+  if (sentences.length === 0) return;
+
+  const references: Array<{ label: string; words: string[] }> = [];
+  if (typeof identityThesis === 'string' && identityThesis.trim()) {
+    references.push({ label: 'identity_thesis', words: normalizeWords(identityThesis) });
+  }
+  const synthesisText = (constellationSynthesis as { synthesis?: unknown } | null)?.synthesis;
+  if (typeof synthesisText === 'string' && synthesisText.trim()) {
+    references.push({ label: 'constellation_synthesis', words: normalizeWords(synthesisText) });
+  }
+  if (references.length === 0) return;
+
+  const flagged: string[] = [];
+  for (const sentence of sentences) {
+    const sentenceWords = normalizeWords(sentence);
+    const overlapsWith = references.find(
+      ref => hasOverlappingPhrase(sentenceWords, ref.words, CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS)
+    );
+    if (overlapsWith) {
+      flagged.push(`"${sentence.trim()}" (overlaps ${overlapsWith.label})`);
+    }
+  }
+
+  if (flagged.length > 0) {
+    console.warn('reframe_teaser.recap: sentence(s) near-verbatim overlap with identity_thesis/constellation_synthesis:', flagged.join(' | '));
+  }
+}
+
 // #112 Stage 2: new targets set from Stage 1's real-generation audit
 // (2026-08-10 changelog) — the old floors (evidence_analysis 200,
 // how_you_operate 120) were never once cleared across 30 real samples
@@ -509,6 +572,11 @@ export async function generateIdentityReport({
     // reliable — see logReframeTeaserWordCountGaps's doc comment. Log-only,
     // doesn't rewrite or block anything.
     logReframeTeaserWordCountGaps(report.reframe_teaser);
+
+    // #112 Stage 3: log-only check for reframe_teaser.recap near-verbatim
+    // overlap with identity_thesis/constellation_synthesis — see
+    // logReframeTeaserRecapOverlap's doc comment.
+    logReframeTeaserRecapOverlap(report.reframe_teaser, report.cover?.identity_thesis, report.constellation_synthesis);
 
     // #112 Stage 2: log-only word-count floor + domain-name-mention checks
     // for evidence_analysis/how_you_operate/domain_profile_summary — see

@@ -71,6 +71,12 @@ Do not reuse the same evidence clause, literally or near-verbatim, across multip
 
 secondary_signature_analysis[].analysis must cite raw evidence from the user's actual answers only. Never cite this report's own generated write-up of another signature (e.g. a primary_constellation entry) as if it were source evidence.
 
+This rule applies report-wide, not only within primary_constellation — including how_you_operate and reframe_teaser, both written after most of the report's other content already exists and both at the highest risk of restating it. Before finalizing any field, check it against everything already written earlier in this same response. If a field would restate an idea, theme, or observation already made elsewhere — even reworded — replace it with a different angle grounded in different evidence, not a paraphrase of the same point.
+
+reframe_teaser is a deliberate exception on *content*, not on *wording*: its job is to callback to the report's own strongest evidence, so citing the same anecdote, signature, or fact already used elsewhere is expected and often correct — do not avoid a strong anecdote just because it already appeared earlier. What is not allowed is reusing the same sentence structure or near-identical phrasing already used to describe that fact — describe it in fresh, different concrete language even when the underlying fact is the same one already told.
+
+Avoid these overused connective phrases, found repeating across sections in real generations: "is evident in your," "you may become frustrated when," "you are not easily swayed by," "though it may sometimes lead to," "you thrive in environments where you can." These are filler transitions, not content — replace them with a direct, specific statement instead.
+
 ## THE TENSION RULE
 
 Every primary signature analysis must include one tension.
@@ -508,6 +514,8 @@ lightly rephrase, only as a pattern to avoid entirely.
 ### how_you_operate
 Five fields. Each minimum 120 words, target 150 words. Each grounded in the user's actual patterns.
 
+Highest risk of repetition in the whole report: these five fields are written immediately after 4-5 signature write-ups that already covered this person's patterns in depth, so it is easy to default to restating the dominant signature's theme five times in different words instead of adding anything new. Before finalizing each field, check it against primary_constellation's core_statements, evidence_analysis, and tension lines already written, and against the other how_you_operate fields already drafted in this same response. Each field must add a genuinely new observation or angle — a different behavior, situation, or consequence — not the same underlying trait restated under a new category label.
+
 work_style: how they actually work — pace, structure preferences, environment needs.
 thinking_style: how they process information and form conclusions.
 relationship_style: how they operate with other people — not ideals, observable patterns.
@@ -544,6 +552,10 @@ British English spelling throughout all three fields below — e.g. "stabilise" 
 
 **recap** (~50-60 words, never fewer than 45): Present-tense grounding in the pattern just described — concrete evidence, not abstraction. Build toward implying something has become static or exhausted (the systems already built no longer need active tending). No signature names. Before finalizing this field, count the words in your draft. If it is under 45 words, that draft is rejected — do not output it. Instead go back and add another concrete, evidence-grounded sentence (not filler adjectives, not restating the same point) until the count clears 45.
 
+Citing the same pattern, signature, or evidence already established earlier in the report is expected here — recap's job is to ground this teaser in what's already true, not to introduce something new. What is not allowed is reusing the same sentence structure or near-identical wording already used to state it earlier (in identity_thesis, constellation_synthesis, or any signature write-up) — describe the same underlying fact in fresh, different concrete language.
+
+Check every sentence you write for recap individually against every sentence already written in identity_thesis and constellation_synthesis — not only the first sentence of recap. A real failure observed in generation: recap's *second* sentence came out as a word-for-word copy of constellation_synthesis's second sentence, even though the first sentence was fine. If any recap sentence, at any position, is identical or near-identical word for word to a sentence already written in identity_thesis or constellation_synthesis, rewrite that sentence from scratch before finalizing.
+
 **reframe** (~15-30 words, never fewer than 15): One declarative, shareable sentence — a statement, never a question, never ending in a question mark. Before finalizing, count its words. A draft under 15 words is incomplete — do not output it as-is; extend it by naming what specifically is missing, unresolved, or still open, rather than stopping once you've named the static/exhausted state.
 
 Do not model this sentence on any example text — none is given below on purpose, since past drafts of this instruction included one and every generation copied it verbatim or near-verbatim regardless of whether it was labeled as the right or wrong answer. Build the sentence fresh from this person's own evidence instead.
@@ -559,6 +571,8 @@ Must end on a live, open tension, not a resolved or reassuring statement. Echo t
   - Extended (20 words, same fact plus its stakes/consequence): "You redesigned the receiving workflow in six weeks, clearing a backlog that had stalled the entire site's intake for months."
 
 Concrete, evidence-grounded content: each bullet must name a specific fact, moment, or detail actually present in the user's discovery answers or the evidence_units already extracted for them (e.g. a specific project, decision, conversation avoided, or turning point) — not a restated trait or general capability description. If a bullet could be true of this identity in the abstract without citing anything the user actually said, rewrite it. Where possible, draw each bullet from a different primary signature/evidence unit rather than repeating the same anecdote three times — but if one piece of evidence is genuinely the strongest support for a given point, reusing it is fine. Personalization from truth beats personalization from variety for its own sake. No signature names, no hedging — declarative, not tentative.
+
+Reusing the same evidence is about the underlying fact, not the wording: if a bullet cites the same anecdote already described elsewhere in the report (e.g. in a signature's evidence_analysis), it must still be phrased in genuinely different concrete language — a different sentence structure, not a trimmed or lightly reworded copy of how it was already told.
 
 ## STRUCTURAL CONSTRAINTS
 
