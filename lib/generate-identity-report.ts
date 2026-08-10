@@ -59,6 +59,33 @@ export function computeDomainProfile(signatures: unknown): DomainProfile {
 }
 
 /**
+ * Derives Primary/Secondary categorization from the Detection Engine's own
+ * scored `signatures[]` list, replacing Layer 1's own `primary_constellation`/
+ * `secondary_signatures` name-array judgment (see docs/briefs/110-detection-categorization-brief.md).
+ * Score itself (frequency × intensity) is reliable; only Layer 1's selection
+ * of who counts as Primary vs. Secondary from that score is not — this
+ * derives the selection deterministically from score instead. Secondary cap
+ * stays at 3 (positions 6-8 of the ranked list), matching the existing
+ * product decision.
+ */
+export function categorizePrimarySecondary(signatures: unknown): {
+  primary: string[];
+  secondary: string[];
+} {
+  const list: Array<{ name?: unknown; score?: unknown }> = Array.isArray(signatures)
+    ? signatures
+    : [];
+  const sorted = [...list]
+    .filter(s => typeof s.name === 'string' && typeof s.score === 'number' && Number.isFinite(s.score))
+    .sort((a, b) => (b.score as number) - (a.score as number));
+
+  return {
+    primary: sorted.slice(0, 5).map(s => s.name as string),
+    secondary: sorted.slice(5, 8).map(s => s.name as string),
+  };
+}
+
+/**
  * Sorts an array of { score } objects by score descending, in place. Used for
  * every score-ranked list the LLM emits (see docs/briefs/33-primary-signature-ordering.md)
  * since prompt "rank by score" instructions govern *selection*, not
@@ -247,6 +274,33 @@ function logReframeTeaserWordCountGaps(reframeTeaser: unknown): void {
   }
 }
 
+/**
+ * #110: Layer 2 receives the code-computed primary/secondary categorization
+ * as *given* input, but same "LLM compliance isn't 100% reliable" pattern as
+ * enforceSecondaryEvidenceFloor/logReframeTeaserWordCountGaps above — it may
+ * not faithfully write up exactly those names. Unlike domain_profile (a
+ * number, safely overwritable), primary_constellation/secondary_signature_analysis
+ * contain generated prose that can't be synthesized in code if Layer 2
+ * diverges — so this is a log-only check, not a rewrite.
+ */
+function logCategorizationComplianceGaps(
+  report: { primary_constellation?: unknown; secondary_signature_analysis?: unknown },
+  expected: { primary: string[]; secondary: string[] }
+): void {
+  const actualPrimary = Array.isArray(report.primary_constellation)
+    ? report.primary_constellation.map((s: { name?: unknown }) => s?.name)
+    : [];
+  const actualSecondary = Array.isArray(report.secondary_signature_analysis)
+    ? report.secondary_signature_analysis.map((s: { name?: unknown }) => s?.name)
+    : [];
+  if (JSON.stringify(actualPrimary) !== JSON.stringify(expected.primary)) {
+    console.warn('Layer 2 primary_constellation diverged from code-computed categorization', { expected: expected.primary, actual: actualPrimary });
+  }
+  if (JSON.stringify(actualSecondary) !== JSON.stringify(expected.secondary)) {
+    console.warn('Layer 2 secondary_signature_analysis diverged from code-computed categorization', { expected: expected.secondary, actual: actualSecondary });
+  }
+}
+
 export async function generateIdentityReport({
   artifactId,
   answers,
@@ -279,6 +333,15 @@ export async function generateIdentityReport({
     // copies a grounded number.
     analysis.domain_profile = computeDomainProfile(analysis.signatures ?? []);
 
+    // #110: primary_constellation/secondary_signatures are derived from the
+    // Detection Engine's own scored signatures[] list rather than trusted
+    // to Layer 1's own selection judgment — see categorizePrimarySecondary's
+    // doc comment. Same "overwrite before Layer 2 runs" pattern as
+    // domain_profile above.
+    const categorized = categorizePrimarySecondary(analysis.signatures ?? []);
+    analysis.primary_constellation = categorized.primary;
+    analysis.secondary_signatures = categorized.secondary;
+
     // Step B — Report Generation
     const reportContent = await getChatCompletion({
       response_format: { type: 'json_object' },
@@ -305,6 +368,11 @@ export async function generateIdentityReport({
     sortByScoreDescending(report.secondary_signature_analysis);
     sortByScoreDescending(report.signature_profile_summary?.primary_signatures);
     sortByScoreDescending(report.signature_profile_summary?.secondary_signatures);
+
+    // #110: log-only check for whether Layer 2 faithfully wrote up the
+    // code-computed categorization it was given — see
+    // logCategorizationComplianceGaps's doc comment.
+    logCategorizationComplianceGaps(report, categorized);
 
     // Defense in depth: code owns domain_profile now, not the LLM — overwrite
     // again in case Layer 2 didn't copy analysis.domain_profile faithfully.
