@@ -228,6 +228,44 @@ export function enforceConstellationSynthesisNonOverlap(
   entry.synthesis = kept.join(' ');
 }
 
+/**
+ * #112 Stage 1, Part B: the prompt separately bans abstract capability
+ * phrasing ("this ability allows/empowers you to...") but nothing checked
+ * for it — enforceConstellationSynthesisNonOverlap above only catches
+ * literal overlap with identity_thesis, and a real user's report (Leona,
+ * 2026-08-10 review) had a sentence that was a near-verbatim match to the
+ * prompt's own forbidden example without literally overlapping
+ * identity_thesis, so it slipped through uncaught.
+ *
+ * Log-only, not deletion — unlike the overlap check above, which works
+ * from exact shared text (low false-positive risk), this is a fuzzier
+ * phrase-pattern heuristic. Deleting a sentence on a heuristic match would
+ * leave constellation_synthesis (already only 3 sentences, ~60-90 words
+ * total) even shorter on a possibly-wrong call. Log-only surfaces the
+ * problem for review without risking that.
+ */
+const ABSTRACT_CAPABILITY_PATTERN =
+  /\b(this (ability|approach|dynamic|pattern|trait|quality))\b[^.]{0,30}\b(allows?|enables?|empowers?)\s+you\s+to\b/i;
+
+function logConstellationSynthesisAbstractLanguage(constellationSynthesis: unknown): void {
+  if (
+    !constellationSynthesis ||
+    typeof constellationSynthesis !== 'object' ||
+    typeof (constellationSynthesis as { synthesis?: unknown }).synthesis !== 'string'
+  ) return;
+
+  const entry = constellationSynthesis as { synthesis: string };
+  const sentences = splitSentences(entry.synthesis);
+  const flagged = sentences.filter(s => ABSTRACT_CAPABILITY_PATTERN.test(s));
+
+  if (flagged.length > 0) {
+    console.warn(
+      'constellation_synthesis: abstract capability language detected (prompt forbids "this ability allows/empowers you to..." phrasing):',
+      flagged.join(' | ')
+    );
+  }
+}
+
 const REFRAME_TEASER_RECAP_MIN_WORDS = 45;
 const REFRAME_TEASER_REFRAME_MIN_WORDS = 15;
 const REFRAME_TEASER_BULLET_MIN_WORDS = 15;
@@ -388,6 +426,13 @@ export async function generateIdentityReport({
     // doc comment. Runs after sorting/domain_profile since it only rewrites
     // constellation_synthesis.synthesis, nothing positional.
     enforceConstellationSynthesisNonOverlap(report.constellation_synthesis, report.cover?.identity_thesis);
+
+    // #112 Stage 1: log-only backstop for abstract capability phrasing the
+    // overlap check above can't catch (no literal overlap with
+    // identity_thesis) — see logConstellationSynthesisAbstractLanguage's
+    // doc comment. Runs after the overlap check so it inspects the
+    // already-cleaned synthesis, not pre-cleanup text.
+    logConstellationSynthesisAbstractLanguage(report.constellation_synthesis);
 
     // #99: reframe_teaser's prompt-level word-count self-check isn't fully
     // reliable — see logReframeTeaserWordCountGaps's doc comment. Log-only,
