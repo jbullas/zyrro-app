@@ -320,7 +320,7 @@ frequency: integer 1–5 — copy exactly from detection JSON, do not recalculat
 intensity: integer 1–5 — copy exactly from detection JSON, do not recalculate.
 confidence: "Low" | "Mid" | "High" — copy exactly from detection JSON, do not recalculate.
 core_statement: 8–20 words. Define the signature operationally.
-evidence_analysis: minimum 200 words, target 250 words.
+evidence_analysis: minimum 140 words, target 160 words.
   Must follow Pattern → Evidence → Meaning in this order.
   Pattern: what the signature fundamentally does, stated operationally.
   Evidence: anchor in the user's actual story. Minimum 2 real story details — career events, transitions, frustrations, choices. Not generic. Not hypothetical.
@@ -506,7 +506,7 @@ lightly rephrase, only as a pattern to avoid entirely.
   or how.
 
 ### how_you_operate
-Five fields. Each minimum 120 words. Each grounded in the user's actual patterns.
+Five fields. Each minimum 120 words, target 150 words. Each grounded in the user's actual patterns.
 
 work_style: how they actually work — pace, structure preferences, environment needs.
 thinking_style: how they process information and form conclusions.
@@ -528,13 +528,13 @@ Must be honest. Friction increases recognition more than flattery does.
 domain_profile MUST contain exactly 5 entries — Visioning, Thinking, Connecting, Driving, Sensing — all present in every response. Copy values exactly from the detection JSON domain_profile field. Never omit a domain. Never return fewer than 5 entries. If a domain is missing from the detection input, use 10 as the default value.
 
 ### domain_profile_summary
-~80–110 words, hard ceiling 120. Do not pad to hit the target — a shorter, honest summary beats one that repeats itself.
+90–120 words, loose guide — content quality and relevance matter more than hitting an exact count. Do not pad to hit the target — a shorter, honest summary beats one that repeats itself.
 
 Ground this in which domains the primary_constellation and secondary_signature_analysis entries actually belong to — reason from that signature list, not from the raw numeric domain_profile scores. Those numbers are recalculated downstream from a different source and may not match what you're told here, so do not describe them precisely.
 
-Summarize where this person's strongest patterns cluster across the five domains, and what that concentration or spread means operationally — how it plays out in the way they work, not just where the points land.
+Name all 5 domains' relative strength, not just the top 1 or 2 — state plainly which domains this person's patterns cluster strongest in and which are quiet, covering the full spread rather than stopping once the strongest point is named. Summarize what that concentration or spread means operationally — how it plays out in the way they work, not just where the points land.
 
-No signature names — this section renders before Primary Signatures on the page, so the reader hasn't been introduced to any named signature yet. Do not redefine what Visioning, Thinking, Connecting, Driving, or Sensing mean — that's fixed page copy shown alongside this text. Do not repeat cover.identity_thesis or constellation_synthesis content.
+No signature names — this section renders before Primary Signatures on the page, so the reader hasn't been introduced to any named signature yet. Do not redefine what Visioning, Thinking, Connecting, Driving, or Sensing mean — that's fixed page copy shown alongside this text. This field's job is the shape of the chart, not who the person is — do not repeat or reword cover.identity_thesis or constellation_synthesis content in any form.
 
 ### reframe_teaser (field: "reframe_teaser")
 
@@ -569,10 +569,10 @@ Must always produce:
 - 1 named_identity consistent across cover and constellation_synthesis
 - 1 identity_thesis of 8–18 words
 - 1 constellation_synthesis of minimum 60 words (target 75-90)
-- 5 how_you_operate fields each of minimum 120 words
+- 5 how_you_operate fields each of minimum 120 words (target 150)
 - 6–10 energisers
 - 6–10 friction_points
-- 1 domain_profile_summary of ~80-110 words
+- 1 domain_profile_summary of 90-120 words
 - 1 reframe_teaser with recap (~50-60 words), reframe (~15-30 words), and exactly 3 why_bullets present
 
 ## FINAL QUALITY TEST

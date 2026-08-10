@@ -312,6 +312,77 @@ function logReframeTeaserWordCountGaps(reframeTeaser: unknown): void {
   }
 }
 
+// #112 Stage 2: new targets set from Stage 1's real-generation audit
+// (2026-08-10 changelog) — the old floors (evidence_analysis 200,
+// how_you_operate 120) were never once cleared across 30 real samples
+// each, so they were lowered to what the fields actually produce rather
+// than kept as an unenforceable aspiration. domain_profile_summary's
+// floor moved up slightly (80→90) since its old range's ceiling was never
+// approached either. These are still just a floor for the log-only
+// check below, same "not a hard requirement to optimize for" framing as
+// the prompt's own new guidance — see logStage2WordCountAndDomainGaps.
+const EVIDENCE_ANALYSIS_MIN_WORDS = 140;
+const HOW_YOU_OPERATE_MIN_WORDS = 120;
+const DOMAIN_PROFILE_SUMMARY_MIN_WORDS = 90;
+const DOMAIN_NAMES = ['Visioning', 'Thinking', 'Connecting', 'Driving', 'Sensing'] as const;
+
+/**
+ * #112 Stage 2: same "prompt instruction isn't reliably honored" pattern as
+ * logReframeTeaserWordCountGaps above, applied to the three fields whose
+ * targets were revised this stage. Log-only, no retry loop, same
+ * convention as everywhere else in this file.
+ *
+ * Also checks domain_profile_summary names all 5 domains — a cheap,
+ * mechanical proxy for this stage's new "name all 5 domains' relative
+ * strength, not just the top 1-2" content rule, not a full quality check
+ * (doesn't verify the field actually describes relative strength, or that
+ * it avoids restating identity_thesis/constellation_synthesis — those need
+ * eyes-on review, not a regex).
+ */
+function logStage2WordCountAndDomainGaps(report: {
+  primary_constellation?: unknown;
+  how_you_operate?: unknown;
+  domain_profile_summary?: unknown;
+}): void {
+  const gaps: string[] = [];
+
+  if (Array.isArray(report.primary_constellation)) {
+    report.primary_constellation.forEach((sig, i) => {
+      const wc = countWords((sig as { evidence_analysis?: unknown } | null)?.evidence_analysis);
+      if (wc < EVIDENCE_ANALYSIS_MIN_WORDS) {
+        gaps.push(`primary_constellation[${i}].evidence_analysis: ${wc} words (floor ${EVIDENCE_ANALYSIS_MIN_WORDS})`);
+      }
+    });
+  }
+
+  if (report.how_you_operate && typeof report.how_you_operate === 'object') {
+    for (const [key, value] of Object.entries(report.how_you_operate as Record<string, unknown>)) {
+      const wc = countWords(value);
+      if (wc < HOW_YOU_OPERATE_MIN_WORDS) {
+        gaps.push(`how_you_operate.${key}: ${wc} words (floor ${HOW_YOU_OPERATE_MIN_WORDS})`);
+      }
+    }
+  }
+
+  const domainSummaryWords = countWords(report.domain_profile_summary);
+  if (domainSummaryWords < DOMAIN_PROFILE_SUMMARY_MIN_WORDS) {
+    gaps.push(`domain_profile_summary: ${domainSummaryWords} words (floor ${DOMAIN_PROFILE_SUMMARY_MIN_WORDS})`);
+  }
+
+  if (gaps.length > 0) {
+    console.warn('#112 Stage 2 word-count floor gap(s):', gaps.join('; '));
+  }
+
+  if (typeof report.domain_profile_summary === 'string') {
+    const missingDomains = DOMAIN_NAMES.filter(
+      name => !new RegExp(`\\b${name}\\b`, 'i').test(report.domain_profile_summary as string)
+    );
+    if (missingDomains.length > 0) {
+      console.warn(`domain_profile_summary: missing domain name mention(s): ${missingDomains.join(', ')}`);
+    }
+  }
+}
+
 /**
  * #110: Layer 2 receives the code-computed primary/secondary categorization
  * as *given* input, but same "LLM compliance isn't 100% reliable" pattern as
@@ -438,6 +509,11 @@ export async function generateIdentityReport({
     // reliable — see logReframeTeaserWordCountGaps's doc comment. Log-only,
     // doesn't rewrite or block anything.
     logReframeTeaserWordCountGaps(report.reframe_teaser);
+
+    // #112 Stage 2: log-only word-count floor + domain-name-mention checks
+    // for evidence_analysis/how_you_operate/domain_profile_summary — see
+    // logStage2WordCountAndDomainGaps's doc comment.
+    logStage2WordCountAndDomainGaps(report);
 
     // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
     // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed
