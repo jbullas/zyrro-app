@@ -376,20 +376,20 @@ export default function IdentityPage() {
           {/* ── Domain Profile ───────────────────────────────────────── */}
           <div className="report-section">
             <p className="eyebrow">DOMAIN PROFILE</p>
+            <p className="documentation">{DOMAIN_PROFILE_EXPLANATION}</p>
             <div className="card">
               <DomainRadarChart domainProfile={domain_profile} />
               {domain_profile_summary && <p>{domain_profile_summary}</p>}
             </div>
-            <p className="documentation">{DOMAIN_PROFILE_EXPLANATION}</p>
           </div>
 
           {/* ── Primary Signatures — bar chart card + deep-dive cards ─── */}
           <div className="report-section">
             <p className="eyebrow">PRIMARY SIGNATURES</p>
+            <p className="documentation">{PRIMARY_SIGNATURES_EXPLANATION}</p>
             <div className="card">
               <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
             </div>
-            <p className="documentation">{PRIMARY_SIGNATURES_EXPLANATION}</p>
             {primary_constellation.map((sig, i) => {
               const band = getScoreBand(sig.score);
               return (
@@ -429,43 +429,49 @@ export default function IdentityPage() {
             })}
           </div>
 
-          {/* ── Secondary Signatures — only when non-empty ────────────── */}
-          {secondary_signature_analysis.length > 0 && (
-            <div className="report-section">
-              <p className="eyebrow">SECONDARY SIGNATURES</p>
-              <p>{secondary_signature_summary}</p>
-              <div className="card">
-                {secondary_signature_analysis.map((sig, i) => (
-                  <div key={sig.name} className="sig-row">
-                    <div className="sig-num-circle-muted">{i + 6}</div>
-                    <div className="sig-info">
-                      <div className="sig-name-meta">
-                        <span className="sig-name">{sig.name}</span>
-                        <span className="sig-breakdown">{sig.domain}</span>
+          {/* ── Secondary Signatures — always renders, branches on empty ── */}
+          <div className="report-section">
+            <p className="eyebrow">SECONDARY SIGNATURES</p>
+            {secondary_signature_analysis.length === 0 ? (
+              <>
+                <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
+                <p>{secondary_signature_summary}</p>
+              </>
+            ) : (
+              <>
+                <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
+                <div className="card">
+                  {secondary_signature_analysis.map((sig, i) => (
+                    <div key={sig.name} className="sig-row">
+                      <div className="sig-num-circle-muted">{i + 6}</div>
+                      <div className="sig-info">
+                        <div className="sig-name-meta">
+                          <span className="sig-name">{sig.name}</span>
+                          <span className="sig-breakdown">{sig.domain}</span>
+                        </div>
+                        <div className="sig-bar-track">
+                          <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
+                        </div>
                       </div>
-                      <div className="sig-bar-track">
-                        <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
-                      </div>
+                      <span className="sig-score-label-muted">{sig.score}</span>
                     </div>
-                    <span className="sig-score-label-muted">{sig.score}</span>
-                  </div>
+                  ))}
+                </div>
+                {secondary_signature_analysis.map((sig, i) => (
+                  <ConstellationCard
+                    key={sig.name}
+                    badge={i + 6}
+                    muted
+                    title={sig.name}
+                    meta={`${sig.domain} · ${sig.score}`}
+                  >
+                    <p className="core-statement">{sig.core_statement}</p>
+                    <p>{sig.analysis}</p>
+                  </ConstellationCard>
                 ))}
-              </div>
-              <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
-              {secondary_signature_analysis.map((sig, i) => (
-                <ConstellationCard
-                  key={sig.name}
-                  badge={i + 6}
-                  muted
-                  title={sig.name}
-                  meta={`${sig.domain} · ${sig.score}`}
-                >
-                  <p className="core-statement">{sig.core_statement}</p>
-                  <p>{sig.analysis}</p>
-                </ConstellationCard>
-              ))}
-            </div>
-          )}
+              </>
+            )}
+          </div>
 
           {/* ── How You Operate — 5 separate cards ────────────────────── */}
           <div className="report-section">
