@@ -58,7 +58,7 @@ Layer 3 — Meaning: Explain why it matters. This is interpretation, not advice.
 
 Every major claim must be backed by evidence. No exceptions.
 
-Every primary signature analysis must include minimum 2 story anchors.
+Every primary signature analysis must cite what real evidence actually exists for it. Do not invent additional detail just to reach a count — a signature backed by only one real story anchor should read as honest and concise about that, not padded with a second, invented one.
 
 Strong anchors: built a company, changed careers, mentored a team, survived a crisis, led transformation.
 Weak anchors: likes helping, values freedom, enjoys creativity.
@@ -326,10 +326,10 @@ frequency: integer 1–5 — copy exactly from detection JSON, do not recalculat
 intensity: integer 1–5 — copy exactly from detection JSON, do not recalculate.
 confidence: "Low" | "Mid" | "High" — copy exactly from detection JSON, do not recalculate.
 core_statement: 8–20 words. Define the signature operationally.
-evidence_analysis: minimum 140 words, target 160 words.
+evidence_analysis: write a full paragraph, several sentences, proportionate to how much real evidence exists for this signature — not a single-sentence summary.
   Must follow Pattern → Evidence → Meaning in this order.
   Pattern: what the signature fundamentally does, stated operationally.
-  Evidence: anchor in the user's actual story. Minimum 2 real story details — career events, transitions, frustrations, choices. Not generic. Not hypothetical.
+  Evidence: anchor in the user's actual story, citing what real evidence exists — career events, transitions, frustrations, choices. Not generic. Not hypothetical. If only one real story detail was given for this signature, write to that one honestly — do not invent a second to satisfy a pattern of "multiple anchors." A thin-evidence signature should read as honest and concise, not padded.
   Meaning: why it matters. Interpretation only, never advice.
   Must use present tense for identity statements.
   Must use past tense for evidence.
@@ -392,7 +392,7 @@ analysis: compressed, comparative format — this is not a smaller version of ev
   For the 2-or-more tier:
   No word floor: let genuinely thin evidence still produce a short section.
   Ceiling: ~100–120 words. Must read as visibly, obviously shorter than evidence_analysis
-    (200+ words) — the compression should be immediately apparent on the page.
+    — the compression should be immediately apparent on the page.
   Must anchor to one specific evidence circumstance for this secondary — a concrete thing
     the person described, not a general trait claim. Same distillation principle as
     cover.identity_thesis, applied here: the evidence clause and the situation behind it are
@@ -536,7 +536,7 @@ Must be honest. Friction increases recognition more than flattery does.
 domain_profile MUST contain exactly 5 entries — Visioning, Thinking, Connecting, Driving, Sensing — all present in every response. Copy values exactly from the detection JSON domain_profile field. Never omit a domain. Never return fewer than 5 entries. If a domain is missing from the detection input, use 10 as the default value.
 
 ### domain_profile_summary
-90–120 words, loose guide — content quality and relevance matter more than hitting an exact count. Do not pad to hit the target — a shorter, honest summary beats one that repeats itself.
+A few sentences covering the full spread — content quality and relevance matter more than length. Do not pad — a shorter, honest summary beats one that repeats itself.
 
 Ground this in which domains the primary_constellation and secondary_signature_analysis entries actually belong to — reason from that signature list, not from the raw numeric domain_profile scores. Those numbers are recalculated downstream from a different source and may not match what you're told here, so do not describe them precisely.
 
@@ -567,8 +567,8 @@ The sentence must not contain any of these words or their close variants, in any
 Must end on a live, open tension, not a resolved or reassuring statement. Echo the *kind* of tension already established under the report's own signatures, without repeating any signature's tension line verbatim. No signature names.
 
 **why_bullets** (exactly 3, ~15-30 words each): Before finalizing each bullet, count its words. A bullet under 15 words is incomplete, not a valid draft — do not output it as-is. Extend every short bullet by adding the specific circumstance, stakes, or consequence around the cited fact (what it cost, what it made possible, what changed because of it) until it clears 15 words. This applies independently to each of the 3 bullets — fixing one does not exempt the others.
-  - Too short (11 words, stops at the bare fact): "You redesigned the receiving workflow, eliminating the backlog in six weeks."
-  - Extended (20 words, same fact plus its stakes/consequence): "You redesigned the receiving workflow in six weeks, clearing a backlog that had stalled the entire site's intake for months."
+
+No example is given here on purpose — a past version of this instruction included one and it was copied into real reports verbatim as if it were the user's own evidence, describing an event that never happened to them. Build each bullet fresh from this specific person's own evidence instead of modeling it on any template sentence.
 
 Concrete, evidence-grounded content: each bullet must name a specific fact, moment, or detail actually present in the user's discovery answers or the evidence_units already extracted for them (e.g. a specific project, decision, conversation avoided, or turning point) — not a restated trait or general capability description. If a bullet could be true of this identity in the abstract without citing anything the user actually said, rewrite it. Where possible, draw each bullet from a different primary signature/evidence unit rather than repeating the same anecdote three times — but if one piece of evidence is genuinely the strongest support for a given point, reusing it is fine. Personalization from truth beats personalization from variety for its own sake. No signature names, no hedging — declarative, not tentative.
 
@@ -586,7 +586,7 @@ Must always produce:
 - 5 how_you_operate fields each of minimum 120 words (target 150)
 - 6–10 energisers
 - 6–10 friction_points
-- 1 domain_profile_summary of 90-120 words
+- 1 domain_profile_summary, a few sentences covering the full spread
 - 1 reframe_teaser with recap (~50-60 words), reframe (~15-30 words), and exactly 3 why_bullets present
 
 ## FINAL QUALITY TEST
