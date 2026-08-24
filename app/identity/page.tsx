@@ -10,8 +10,10 @@ import ConstellationCard from '@/components/ConstellationCard';
 import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
+import QuestionAnswerList from '@/components/QuestionAnswerList';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import { mergeAnswersWithQuestions, type MergedAnswer } from '@/lib/identity-questions';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
@@ -185,6 +187,7 @@ export default function IdentityPage() {
   const [pageState, setPageState]   = useState<PageState>('loading');
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [userId, setUserId]         = useState<string | null>(null);
+  const [qaItems, setQaItems]       = useState<MergedAnswer[]>([]);
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
@@ -217,6 +220,16 @@ export default function IdentityPage() {
         .eq('user_id', uid);
     }
 
+    async function loadAnswers(uid: string) {
+      const { data: rows } = await supabase
+        .from('discovery_answers')
+        .select('question_number, answer_text')
+        .eq('user_id', uid);
+
+      if (cancelled) return;
+      if (rows) setQaItems(mergeAnswersWithQuestions(rows));
+    }
+
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -242,6 +255,7 @@ export default function IdentityPage() {
       }
 
       await loadArtifact(user.id);
+      await loadAnswers(user.id);
     }
 
     init();
@@ -548,6 +562,12 @@ export default function IdentityPage() {
           {RESEARCH_PILLARS.map((pillar) => (
             <p key={pillar.title}><em>{pillar.title}.</em> {pillar.body}</p>
           ))}
+        </div>
+
+        {/* ── Your Answers — read-only, same component as /start's State 2 ── */}
+        <div className="report-footer">
+          <p className="eyebrow">YOUR ANSWERS</p>
+          <QuestionAnswerList items={qaItems} />
         </div>
 
       </div>{/* end .report-scroll */}
