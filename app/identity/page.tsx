@@ -396,7 +396,7 @@ export default function IdentityPage() {
             <div className="card">
               <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
               {secondary_signature_analysis.length > 0 && (
-                <PrimarySignatureBars signatures={secondary_signature_analysis} showLabel={false} />
+                <PrimarySignatureBars signatures={secondary_signature_analysis} showLabel={false} startBadge={6} />
               )}
             </div>
           </div>
