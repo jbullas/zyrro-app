@@ -7,7 +7,6 @@ import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ConstellationCard from '@/components/ConstellationCard';
-import ChipRow from '@/components/ChipRow';
 import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
@@ -489,14 +488,22 @@ export default function IdentityPage() {
           <div className="report-section">
             <p className="eyebrow">ENERGISERS</p>
             <p className="documentation">{ENERGISERS_EXPLANATION}</p>
-            <ChipRow items={energisers} wrapperClassName="chips-wrap" itemClassName="chip-energiser" />
+            <div className="card">
+              <ul className="energiser-bullets">
+                {energisers.map(item => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
           </div>
 
           {/* ── Friction Points ────────────────────────────────────────  */}
           <div className="report-section">
             <p className="eyebrow">FRICTION POINTS</p>
             <p className="documentation">{FRICTION_POINTS_EXPLANATION}</p>
-            <ChipRow items={friction_points} wrapperClassName="chips-wrap" itemClassName="chip-friction" />
+            <div className="card">
+              <ul className="friction-bullets">
+                {friction_points.map(item => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
           </div>
 
         </div>{/* end .report-sections */}
