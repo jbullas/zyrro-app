@@ -490,7 +490,9 @@ export default function IdentityPage() {
             <p className="documentation">{ENERGISERS_EXPLANATION}</p>
             <div className="card">
               <ul className="energiser-bullets">
-                {energisers.map(item => <li key={item}>{item}</li>)}
+                {energisers.map(item => (
+                  <li key={item}><span className="bullet-icon">+</span><span>{item}</span></li>
+                ))}
               </ul>
             </div>
           </div>
@@ -501,7 +503,9 @@ export default function IdentityPage() {
             <p className="documentation">{FRICTION_POINTS_EXPLANATION}</p>
             <div className="card">
               <ul className="friction-bullets">
-                {friction_points.map(item => <li key={item}>{item}</li>)}
+                {friction_points.map(item => (
+                  <li key={item}><span className="bullet-icon">–</span><span>{item}</span></li>
+                ))}
               </ul>
             </div>
           </div>

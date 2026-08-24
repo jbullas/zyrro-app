@@ -1703,9 +1703,11 @@ p {
   color: rgba(255,255,255,0.5);
 }
 
-/* #115 /identity Energisers/Friction Points — same structural pattern as
-   .reframe-bullets, but on the light .card background instead of the
-   dark .cta-block. */
+/* #115 /identity Energisers/Friction Points — card-wrapped list, each
+   row a flex circle badge + text (not a ::before pseudo-element — a
+   pseudo-element can't reliably size/center a filled circle with a
+   character inside it). #115 follow-up: circle badge replaces the
+   plain +/− ::before character, same visual language as .sig-num-circle. */
 .energiser-bullets,
 .friction-bullets {
   list-style: none;
@@ -1718,20 +1720,31 @@ p {
 
 .energiser-bullets li,
 .friction-bullets li {
-  padding-left: 16px;
-  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
 }
 
-.energiser-bullets li::before {
-  content: '+';
-  position: absolute;
-  left: 0;
+.energiser-bullets li .bullet-icon,
+.friction-bullets li .bullet-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.energiser-bullets li .bullet-icon {
+  background: rgba(30,142,90,0.12);
   color: var(--color-success);
 }
 
-.friction-bullets li::before {
-  content: '–';
-  position: absolute;
-  left: 0;
+.friction-bullets li .bullet-icon {
+  background: rgba(216,72,59,0.10);
   color: var(--color-failure);
 }
