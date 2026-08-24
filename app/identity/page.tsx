@@ -85,6 +85,12 @@ const DOMAIN_PROFILE_EXPLANATION =
   'cluster there, a low score means fewer do. This is a summary view of the same evidence used to ' +
   'identify the signatures below.';
 
+const SIGNATURE_PROFILE_EXPLANATION =
+  'Signatures are specific, recurring patterns in how you think, act, and respond, detected ' +
+  'directly from your answers, not labels chosen for you. There are 25 possible signatures in ' +
+  'total. This chart shows every signature found in your answers, ranked from strongest to ' +
+  'weakest. What each one means, and the evidence behind it, is explained in the sections below.';
+
 const PRIMARY_SIGNATURES_EXPLANATION =
   'Your Primary Signatures are the patterns that most consistently and forcefully define how you ' +
   'operate. They are not preferences you’ve expressed, but patterns detected directly in what you ' +
@@ -383,13 +389,22 @@ export default function IdentityPage() {
             </div>
           </div>
 
-          {/* ── Primary Signatures — bar chart card + deep-dive cards ─── */}
+          {/* ── Signature Profile — combined Primary + Secondary bar chart ── */}
+          <div className="report-section">
+            <p className="eyebrow">SIGNATURE PROFILE</p>
+            <p className="documentation">{SIGNATURE_PROFILE_EXPLANATION}</p>
+            <div className="card">
+              <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
+              {secondary_signature_analysis.length > 0 && (
+                <PrimarySignatureBars signatures={secondary_signature_analysis} showLabel={false} />
+              )}
+            </div>
+          </div>
+
+          {/* ── Primary Signatures — deep-dive cards ─────────────────── */}
           <div className="report-section">
             <p className="eyebrow">PRIMARY SIGNATURES</p>
             <p className="documentation">{PRIMARY_SIGNATURES_EXPLANATION}</p>
-            <div className="card">
-              <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
-            </div>
             {primary_constellation.map((sig, i) => {
               const band = getScoreBand(sig.score);
               return (
@@ -435,28 +450,13 @@ export default function IdentityPage() {
             {secondary_signature_analysis.length === 0 ? (
               <>
                 <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
-                <p>{secondary_signature_summary}</p>
+                <div className="card">
+                  <p>{secondary_signature_summary}</p>
+                </div>
               </>
             ) : (
               <>
                 <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
-                <div className="card">
-                  {secondary_signature_analysis.map((sig, i) => (
-                    <div key={sig.name} className="sig-row">
-                      <div className="sig-num-circle-muted">{i + 6}</div>
-                      <div className="sig-info">
-                        <div className="sig-name-meta">
-                          <span className="sig-name">{sig.name}</span>
-                          <span className="sig-breakdown">{sig.domain}</span>
-                        </div>
-                        <div className="sig-bar-track">
-                          <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
-                        </div>
-                      </div>
-                      <span className="sig-score-label-muted">{sig.score}</span>
-                    </div>
-                  ))}
-                </div>
                 {secondary_signature_analysis.map((sig, i) => (
                   <ConstellationCard
                     key={sig.name}
