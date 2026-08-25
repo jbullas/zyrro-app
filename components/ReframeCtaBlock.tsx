@@ -26,7 +26,7 @@ export default function ReframeCtaBlock({
     .join('/');
 
   return (
-    <div className="report-section">
+    <div className="section">
       <div className="cta-header">
         <p className="eyebrow">NOW THAT YOU KNOW WHO YOU ARE</p>
         <h2>Find Out Where It&rsquo;s Pointing You</h2>

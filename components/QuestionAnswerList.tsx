@@ -8,7 +8,7 @@ interface QuestionAnswerListProps {
 // readOnly always true for now (#20) — #61 adds the false branch (textarea + save).
 export default function QuestionAnswerList({ items, readOnly = true }: QuestionAnswerListProps) {
   return (
-    <div className="report-sections">
+    <>
       {items.map(item => (
         <div key={item.number} className="card">
           <div className="flex-start-row gap-16">
@@ -21,6 +21,6 @@ export default function QuestionAnswerList({ items, readOnly = true }: QuestionA
           {readOnly && <p className="qa-answer-text">{item.answer || '—'}</p>}
         </div>
       ))}
-    </div>
+    </>
   );
 }

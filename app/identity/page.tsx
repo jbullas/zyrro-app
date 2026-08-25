@@ -387,10 +387,10 @@ export default function IdentityPage() {
 
   return (
     <div className="flow-container">
-      <div className="report-scroll">
+      <div className="scroll">
 
         {/* ── Section 0: Cover ─────────────────────────────── */}
-        <div className="report-cover">
+        <div className="section cover">
           <p className="eyebrow">Identity Signature Report</p>
           <IdentityBadge primarySignatureName={primary_constellation[0]?.name} />
           <h1>
@@ -407,10 +407,8 @@ export default function IdentityPage() {
             top-level section with its own fixed .documentation explanation
             near its card(s) — see docs/briefs/100-full-restructure-brief.md
             and docs/briefs/100-card-consistency-brief.md. */}
-        <div className="report-sections">
-
           {/* ── Domain Profile ───────────────────────────────────────── */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">DOMAIN PROFILE</p>
             <p className="documentation">{DOMAIN_PROFILE_EXPLANATION}</p>
             <div className="card">
@@ -420,7 +418,7 @@ export default function IdentityPage() {
           </div>
 
           {/* ── Signature Profile — combined Primary + Secondary bar chart ── */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">SIGNATURE PROFILE</p>
             <p className="documentation">{SIGNATURE_PROFILE_EXPLANATION}</p>
             <div className="card">
@@ -444,7 +442,7 @@ export default function IdentityPage() {
           </div>
 
           {/* ── Primary Signatures — deep-dive cards ─────────────────── */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">PRIMARY SIGNATURES</p>
             <p className="documentation">{PRIMARY_SIGNATURES_EXPLANATION}</p>
             {primary_constellation.map((sig, i) => {
@@ -487,7 +485,7 @@ export default function IdentityPage() {
           </div>
 
           {/* ── Secondary Signatures — always renders, branches on empty ── */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">SECONDARY SIGNATURES</p>
             {secondary_signature_analysis.length === 0 ? (
               <>
@@ -516,7 +514,7 @@ export default function IdentityPage() {
           </div>
 
           {/* ── How You Operate — 5 separate cards ────────────────────── */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">HOW YOU OPERATE</p>
             <p className="documentation">{HOW_YOU_OPERATE_EXPLANATION}</p>
             {HOW_OPERATE_LABELS.map(({ key, label }) => (
@@ -528,7 +526,7 @@ export default function IdentityPage() {
           </div>
 
           {/* ── Energisers ─────────────────────────────────────────────  */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">ENERGISERS</p>
             <p className="documentation">{ENERGISERS_EXPLANATION}</p>
             <div className="card">
@@ -541,7 +539,7 @@ export default function IdentityPage() {
           </div>
 
           {/* ── Friction Points ────────────────────────────────────────  */}
-          <div className="report-section">
+          <div className="section">
             <p className="eyebrow">FRICTION POINTS</p>
             <p className="documentation">{FRICTION_POINTS_EXPLANATION}</p>
             <div className="card">
@@ -553,16 +551,16 @@ export default function IdentityPage() {
             </div>
           </div>
 
-        </div>{/* end .report-sections */}
-
         {/* Reframe teaser CTA — locked 6-component composition, shared with
             /path (see docs/briefs/reframe-teaser-redesign-brief.md). Generated
             as part of identity_report's own Layer 2 call (#113), so it's
             already in `report` by the time this page renders. No second
             artifact fetch, no polling. ReframeCtaBlock supplies its own
-            outer .report-section wrapper (see
+            outer .section wrapper (see
             docs/briefs/cta-headline-restructure-brief.md) — no double-wrap
-            here. */}
+            here. Now a flat sibling of every other .section above (no more
+            .report-sections wrapper), per
+            docs/briefs/123-section-divider-consolidation-brief.md. */}
         {reframe_teaser?.recap && reframe_teaser.reframe && reframe_teaser.forward_frame && (
           <ReframeCtaBlock
             reframeTeaser={reframe_teaser}
@@ -575,7 +573,7 @@ export default function IdentityPage() {
         {/* Bottom documentation: What This Report Is / Research Foundation
             — reinstated from docs/content/identity-static-content-for-91.md
             per #100's restructure brief, resolves #91's placement question. */}
-        <div className="report-footer documentation">
+        <div className="section documentation">
           <h2>About This Report</h2>
 
           <h3>What this report is</h3>
@@ -588,12 +586,12 @@ export default function IdentityPage() {
         </div>
 
         {/* ── Your Answers — read-only, same component as /start's State 2 ── */}
-        <div className="report-footer">
+        <div className="section">
           <p className="eyebrow">YOUR ANSWERS</p>
           <QuestionAnswerList items={qaItems} />
         </div>
 
-      </div>{/* end .report-scroll */}
+      </div>{/* end .scroll */}
     </div>
   );
 }

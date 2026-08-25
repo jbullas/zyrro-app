@@ -459,16 +459,14 @@ export default function PathPage() {
       )}
 
       <div className="flow-container">
-        <div className="report-scroll">
+        <div className="scroll">
 
-          <div className="report-cover">
+          <div className="section cover">
             <p className="eyebrow">Your Path Options</p>
           </div>
 
-          <div className="report-sections">
-
-            {/* Section 1: Options */}
-            <div className="report-section">
+          {/* Section 1: Options */}
+          <div className="section">
               <p className="eyebrow">YOUR PATH OPTIONS</p>
               {options.map((option, i) => (
                 <ConstellationCard
@@ -494,9 +492,8 @@ export default function PathPage() {
                   </div>
                 </ConstellationCard>
               ))}
-            </div>
-
           </div>
+
         </div>
       </div>
     </>

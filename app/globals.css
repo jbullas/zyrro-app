@@ -873,32 +873,51 @@ p {
   max-height: 260px;
 }
 
-/* Matches the 10px chart-to-text gap .report-section already gives
+/* Matches the 10px chart-to-text gap .section already gives
    PrimarySignatureBars' card and its .documentation paragraph. */
 .identity-chart-canvas + p {
   margin-top: 10px;
 }
 
-.report-scroll {
+.scroll {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
   padding-bottom: 32px;
 }
 
-.report-cover {
-  padding: 36px 24px 28px;
+/* ── Section divider consolidation — see
+   docs/briefs/123-section-divider-consolidation-brief.md. Replaces the old
+   three-mechanism system (.report-sections' unconditional top border,
+   .report-section + .report-section adjacency, .report-footer's own
+   separate border) with one class: each .section owns a bottom divider,
+   suppressed on whichever one is actually last — no DOM-nesting-dependent
+   behavior, no first-child special case. ── */
+.section {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  text-align: center;
+  gap: 10px;
+  padding-left: 18px;
+  padding-right: 18px;
+  padding-bottom: 28px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.07);
+}
+
+/* :not(:has(~ .section)) rather than :last-child — /plan renders
+   LimitsBlock (a different, unrelated class) as a trailing sibling after
+   the last real .section, which broke :last-child there (LimitsBlock's
+   wrapper is the actual last DOM child, not the last .section). This
+   matches "no .section sibling anywhere after it," ignoring any
+   non-.section trailing element. */
+.section:not(:has(~ .section)) {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 /* ── CTA headline (eyebrow + h2), centered above .cta-block — see
    docs/briefs/cta-headline-restructure-brief.md. Same centered flex-column
-   pattern as .report-cover, gap matched to it (12px) since both are a
-   short eyebrow-led block on this page. ── */
+   pattern as .cover, gap matched to it (12px) since both are a short
+   eyebrow-led block on this page. ── */
 .cta-header {
   display: flex;
   flex-direction: column;
@@ -907,29 +926,20 @@ p {
   gap: 12px;
 }
 
-.report-sections {
+/* .cover composes with .section (className="section cover") — must stay
+   after .section in source order so its 24px horizontal padding wins the
+   cascade over .section's 18px (equal specificity single-class selectors;
+   source order decides ties). Bottom padding/divider intentionally come
+   from .section itself, unoverridden. */
+.cover {
+  padding-top: 36px;
+  padding-left: 24px;
+  padding-right: 24px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 12px;
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-  padding: 28px 18px 0;
-}
-
-.report-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.report-section + .report-section {
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-  padding-top: 28px;
-}
-
-.report-footer {
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-  margin-top: 12px;
-  padding: 24px 18px 0;
+  text-align: center;
 }
 
 .identity-thesis {

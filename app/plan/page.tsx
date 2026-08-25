@@ -246,22 +246,20 @@ export default function PlanPage() {
 
   return (
     <div className="flow-container">
-      <div className="report-scroll">
+      <div className="scroll">
 
-        <div className="report-cover">
+        <div className="section cover">
           <p className="eyebrow">Your Path Plan</p>
         </div>
 
-        <div className="report-sections">
+        {/* Plan Frame */}
+        <div className="section">
+          <p className="eyebrow">PLAN FRAME</p>
+          <p>{plan_frame}</p>
+        </div>
 
-          {/* Plan Frame */}
-          <div className="report-section">
-            <p className="eyebrow">PLAN FRAME</p>
-            <p>{plan_frame}</p>
-          </div>
-
-          {/* Full Path */}
-          <div className="report-section">
+        {/* Full Path */}
+        <div className="section">
             <p className="eyebrow">THE FULL PATH</p>
             {full_path.map(phase => (
               <ConstellationCard
@@ -288,21 +286,19 @@ export default function PlanPage() {
                 )}
               </ConstellationCard>
             ))}
-          </div>
+        </div>
 
-          {/* Start Here */}
-          <div className="report-section">
-            <p className="eyebrow">START HERE</p>
-            <div className="card">
-              {start_here.map((item, i) => (
-                <div key={i} className="start-here-action">
-                  <p className="start-here-action-text">{item.action}</p>
-                  <p className="start-here-action-why">{item.why}</p>
-                </div>
-              ))}
-            </div>
+        {/* Start Here */}
+        <div className="section">
+          <p className="eyebrow">START HERE</p>
+          <div className="card">
+            {start_here.map((item, i) => (
+              <div key={i} className="start-here-action">
+                <p className="start-here-action-text">{item.action}</p>
+                <p className="start-here-action-why">{item.why}</p>
+              </div>
+            ))}
           </div>
-
         </div>
 
         {/* Now Let's Implement It */}

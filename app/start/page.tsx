@@ -235,13 +235,15 @@ export default function StartPage() {
   if (mode === 'state2') {
     return (
       <div className="flow-container">
-        <div className="report-scroll">
-          <div className="report-cover">
+        <div className="scroll">
+          <div className="section cover">
             <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
             <h1>You&rsquo;ve already answered these.</h1>
             <p>Your 13 discovery answers, for reference.</p>
           </div>
-          <QuestionAnswerList items={qaItems} />
+          <div className="section">
+            <QuestionAnswerList items={qaItems} />
+          </div>
         </div>
       </div>
     );
