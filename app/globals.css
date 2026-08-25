@@ -915,18 +915,6 @@ p {
   padding-bottom: 0;
 }
 
-/* ── CTA headline (eyebrow + h2), centered above .cta-block — see
-   docs/briefs/cta-headline-restructure-brief.md. Same centered flex-column
-   pattern as .cover, gap matched to it (12px) since both are a short
-   eyebrow-led block on this page. ── */
-.cta-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-}
-
 /* .cover composes with .section (className="section cover") — must stay
    after .section in source order so its 24px horizontal padding wins the
    cascade over .section's 18px (equal specificity single-class selectors;
@@ -1360,7 +1348,6 @@ p {
 
 /* ── Limits block ── */
 
-.cta-block,
 .limits-block {
   background: #2D0A45;
   border-radius: 14px;
@@ -1369,6 +1356,79 @@ p {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* ── ReframeCtaBlock — see
+   docs/briefs/reframe-cta-markup-simplification-brief.md. Scoped rules
+   instead of borrowing the .limits- family / .cta-block (LimitsBlock's
+   own classes) — this component owns its own styling now. .card.cta is a compound
+   two-class selector so it overrides base .card regardless of source
+   order (border-radius inherited from .card unchanged at 14px; no margin
+   here on purpose — .section already supplies the equivalent horizontal
+   padding and vertical gap now that this card sits inside it, unlike
+   .limits-block which is not nested inside a .section). ── */
+.section.cta {
+  text-align: center;
+}
+
+.card.cta {
+  background: #2D0A45;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: none;
+  box-shadow: none;
+  text-align: left;
+}
+
+/* Scoped to .card.cta specifically, not the bare .cta ancestor — the
+   outer .section.cta wrapper also carries class "cta", so a bare ".cta p"
+   descendant selector would also match the eyebrow <p> next to it
+   (same specificity class as .eyebrow's own single-class selector, but
+   with an extra type selector it wins the tie and overrides the
+   eyebrow's pink color to this card's white). Confirmed via computed
+   style before fixing — not assumed. */
+.card.cta p {
+  font-size: 14px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.card.cta ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card.cta li {
+  font-size: 14px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
+  padding-left: 14px;
+  position: relative;
+}
+
+.card.cta li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: rgba(255,255,255,0.5);
+}
+
+.card.cta blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding: 4px 0 4px 16px;
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.4;
+  color: #ffffff;
 }
 
 .limits-eyebrow {
@@ -1690,21 +1750,6 @@ p {
 .mb-32 { margin-bottom: var(--space-32); }
 
 .flex-1 { flex: 1; }
-
-/* ── #99 /identity reframe teaser pull-quote — .limits-* classes (shared
-   with LimitsBlock) now cover the rest of the CTA composition, see
-   docs/briefs/reframe-teaser-redesign-brief.md ── */
-
-.reframe-pullquote {
-  border-left: 3px solid var(--color-accent);
-  padding: 4px 0 4px 16px;
-  margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-style: italic;
-  font-size: 20px;
-  line-height: 1.4;
-  color: #ffffff;
-}
 
 /* #115 /identity Energisers/Friction Points — card-wrapped list, each
    row a flex circle badge + text (not a ::before pseudo-element — a

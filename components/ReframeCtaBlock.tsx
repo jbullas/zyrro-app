@@ -26,28 +26,26 @@ export default function ReframeCtaBlock({
     .join('/');
 
   return (
-    <div className="section">
-      <div className="cta-header">
-        <p className="eyebrow">NOW THAT YOU KNOW WHO YOU ARE</p>
-        <h2>Find Out Where It&rsquo;s Pointing You</h2>
-      </div>
+    <div className="section cta">
+      <p className="eyebrow" style={{ textAlign: 'center' }}>NOW THAT YOU KNOW WHO YOU ARE</p>
+      <h2 style={{ textAlign: 'center' }}>Find Out Where It&rsquo;s Pointing You</h2>
 
-      <div className="cta-block">
-        <p className="limits-body">{reframeTeaser.recap}</p>
+      <div className="card cta">
+        <p>{reframeTeaser.recap}</p>
 
-        <p className="reframe-pullquote">{reframeTeaser.reframe}</p>
+        <blockquote>{reframeTeaser.reframe}</blockquote>
 
-        <p className="limits-body">{reframeTeaser.forward_frame}</p>
+        <p>{reframeTeaser.forward_frame}</p>
 
-        <ul className="limits-bullets">
-          <li className="limits-bullet">
+        <ul>
+          <li>
             4 genuinely different directions{constellationLabel ? ` your ${constellationLabel} constellation` : ' your constellation'} could take next, each grounded in your own evidence
           </li>
-          <li className="limits-bullet">Why each one fits, and what it would actually cost you to pursue it</li>
-          <li className="limits-bullet">A 7-day plan to start moving on whichever one you choose</li>
+          <li>Why each one fits, and what it would actually cost you to pursue it</li>
+          <li>A 7-day plan to start moving on whichever one you choose</li>
         </ul>
 
-        <p className="limits-body">$49, one-time.</p>
+        <p>$49, one-time.</p>
 
         <PrimaryButton onClick={onCheckout} disabled={checkoutLoading}>
           {checkoutLoading ? 'Redirecting…' : 'Explore Your Path Options — $49'}
