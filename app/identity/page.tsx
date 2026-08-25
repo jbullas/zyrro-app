@@ -425,9 +425,21 @@ export default function IdentityPage() {
             <p className="documentation">{SIGNATURE_PROFILE_EXPLANATION}</p>
             <div className="card">
               <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
-              {secondary_signature_analysis.length > 0 && (
-                <PrimarySignatureBars signatures={secondary_signature_analysis} showLabel={false} startBadge={6} />
-              )}
+              {secondary_signature_analysis.length > 0 && secondary_signature_analysis.map((sig, i) => (
+                <div key={sig.name} className="sig-row">
+                  <div className="sig-num-circle-muted">{i + 6}</div>
+                  <div className="sig-info">
+                    <div className="sig-name-meta">
+                      <span className="sig-name">{sig.name}</span>
+                      <span className="sig-breakdown">{sig.domain}</span>
+                    </div>
+                    <div className="sig-bar-track">
+                      <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span className="sig-score-label-muted">{sig.score}</span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -493,7 +505,7 @@ export default function IdentityPage() {
                     badge={i + 6}
                     muted
                     title={sig.name}
-                    meta={`${sig.domain} · ${sig.score}`}
+                    meta={`${sig.domain} · ${sig.score}/25`}
                   >
                     <p className="core-statement">{sig.core_statement}</p>
                     <p>{sig.analysis}</p>
