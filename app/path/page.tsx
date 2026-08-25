@@ -10,7 +10,8 @@ import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ConstellationCard from '@/components/ConstellationCard';
 import ChipRow from '@/components/ChipRow';
-import type { PathOptionsArtifactContent, PathOption, StretchType, IdentityReframeArtifactContent } from '@/lib/artifact-schemas';
+import ReframeCtaBlock from '@/components/ReframeCtaBlock';
+import type { PathOptionsArtifactContent, PathOption, StretchType, ReframeTeaser } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 
@@ -28,7 +29,6 @@ export default function PathPage() {
   const router = useRouter();
   const [pageState, setPageState]                   = useState<PageState>('loading');
   const [userId, setUserId]                         = useState<string | null>(null);
-  const [namedIdentity, setNamedIdentity]           = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading]       = useState(false);
   const [grantLoading, setGrantLoading]             = useState(false);
   const [pathOptionsArtifactId, setPathOptionsArtifactId] = useState<string | null>(null);
@@ -40,47 +40,16 @@ export default function PathPage() {
   const [nameOptions, setNameOptions]               = useState<{ name: string; rationale: string }[]>([]);
   const [selectedName, setSelectedName]             = useState<string | null>(null);
   const [customName, setCustomName]                 = useState('');
-  const [reframeArtifactId, setReframeArtifactId]   = useState<string | null>(null);
-  const [reframeStartFailed, setReframeStartFailed] = useState(false);
+  const [reframeTeaser, setReframeTeaser]           = useState<ReframeTeaser | null>(null);
+  const [primaryConstellation, setPrimaryConstellation] = useState<{ name: string }[]>([]);
 
   // pathOptionsArtifactId doubles as the hook's artifact ID
   const genPhase   = useGenerationStatus(pathOptionsArtifactId);
   const pathOptions = genPhase.phase === 'ready' ? genPhase.content as PathOptionsArtifactContent : null;
 
-  // #98/#113: unpaid pitch — eager, unconditional generation trigger. /path
-  // is now the sole trigger point for identity_reframe (moved off /identity
-  // in #113, which folded a short teaser into identity_report itself instead).
-  const reframeGenPhase = useGenerationStatus(reframeArtifactId);
-  const reframeContent = reframeGenPhase.phase === 'ready' ? reframeGenPhase.content as IdentityReframeArtifactContent : null;
-
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
-
-    async function loadOrStartReframe(uid: string) {
-      const { data } = await getCurrentArtifact<{ id: string }>(
-        supabase,
-        uid,
-        'identity_reframe',
-        { select: 'id' },
-      );
-
-      if (cancelled) return;
-
-      if (data) {
-        setReframeArtifactId(data.id as string);
-        return;
-      }
-
-      const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
-      if (cancelled) return;
-      if (res.ok) {
-        const { artifact_id } = await res.json() as { artifact_id: string };
-        setReframeArtifactId(artifact_id);
-      } else {
-        setReframeStartFailed(true);
-      }
-    }
 
     async function loadPathOptions(uid: string) {
       const { data } = await getCurrentArtifact<{ id: string }>(
@@ -144,7 +113,7 @@ export default function PathPage() {
       if (cancelled) return;
 
       // #98: no identity_report yet is a distinct state — the unpaid pitch
-      // below renders real identity_reframe content now, and that content
+      // below renders the report's own reframe_teaser now, and that content
       // can't exist without identity_report, so there's nothing to
       // gracefully fall back to. Explicit check before the entitlement
       // check, same pattern as the 'anonymous' state.
@@ -172,10 +141,10 @@ export default function PathPage() {
         if (!entitlement) {
           if (!cancelled) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const name = (reportArtifact.content as any)?.cover?.named_identity ?? null;
-            setNamedIdentity(name);
+            const content = reportArtifact.content as any;
+            setReframeTeaser(content?.reframe_teaser ?? null);
+            setPrimaryConstellation(Array.isArray(content?.primary_constellation) ? content.primary_constellation : []);
             setPageState('unpaid');
-            await loadOrStartReframe(user.id);
           }
           return;
         }
@@ -232,18 +201,6 @@ export default function PathPage() {
       setPathOptionsArtifactId(artifact_id);
     } else {
       setStartFailed(true);
-    }
-  }
-
-  async function handleRetryReframe() {
-    setReframeStartFailed(false);
-    setReframeArtifactId(null);
-    const res = await fetch('/api/generate-identity-reframe', { method: 'POST' });
-    if (res.ok) {
-      const { artifact_id } = await res.json() as { artifact_id: string };
-      setReframeArtifactId(artifact_id);
-    } else {
-      setReframeStartFailed(true);
     }
   }
 
@@ -381,47 +338,9 @@ export default function PathPage() {
     // phase === 'ready': fall through to report render below
   }
 
-  // ── Unpaid: identity_reframe pitch ─────────────────────────────────
+  // ── Unpaid: reframe teaser CTA — same composition as /identity ─────
   if (pageState === 'unpaid') {
-    const headline = namedIdentity
-      ? `See where ${namedIdentity} is heading.`
-      : 'See where your identity is pointing.';
-
-    if (reframeStartFailed || reframeGenPhase.phase === 'failed') {
-      return (
-        <MessageState
-          eyebrow="YOUR PATH"
-          heading="Something went wrong."
-          body="We couldn’t prepare your preview. Please try again."
-          cta={<PrimaryButton onClick={handleRetryReframe}>Try again</PrimaryButton>}
-        />
-      );
-    }
-
-    if (reframeGenPhase.phase === 'idle' || reframeGenPhase.phase === 'spinner') {
-      return (
-        <GeneratingState
-          heading="Your preview is being prepared."
-          description={
-            reframeGenPhase.phase === 'spinner' && reframeGenPhase.variant === 'late'
-              ? 'Still working — this is taking a little longer than usual…'
-              : 'This usually takes about a minute.'
-          }
-        />
-      );
-    }
-
-    if (reframeGenPhase.phase === 'come-back-later') {
-      return (
-        <GeneratingState
-          spinner={false}
-          description="This is taking longer than expected — you can leave this page and come back in a few minutes. It’ll be here when it’s ready."
-        />
-      );
-    }
-
-    if (!reframeContent) return null;
-    const { recap, meaning, reframe, why } = reframeContent;
+    if (!reframeTeaser) return null;
 
     return (
       <>
@@ -429,35 +348,12 @@ export default function PathPage() {
           <div className="scroll-area scroll-area--wide-bottom">
             <p className="eyebrow">YOUR PATH</p>
 
-            <h1>{headline}</h1>
-
-            <p className="eyebrow">WHAT WE&rsquo;RE WORKING WITH</p>
-            <p>{recap}</p>
-
-            <p className="eyebrow">WHAT THIS MEANS FOR WHAT&rsquo;S NEXT</p>
-            <p>{meaning}</p>
-
-            <p className="eyebrow">WHERE YOUR STORY IS POINTING</p>
-            <p>{reframe}</p>
-
-            <p className="eyebrow">WHY THE REFRAME HOLDS</p>
-            <p>{why}</p>
-
-            {process.env.NEXT_PUBLIC_PRICE_DISPLAY && (
-              <div className="stats-pill">
-                <span className="stats-label" style={{ fontWeight: 700, fontSize: '15px' }}>
-                  {process.env.NEXT_PUBLIC_PRICE_DISPLAY}
-                </span>
-                <span className="sep-dot" />
-                <span className="stats-label">One-time · Yours forever</span>
-              </div>
-            )}
-
-            <PrimaryButton onClick={handleCheckout} disabled={checkoutLoading}>
-              {checkoutLoading ? 'Redirecting…' : 'Get My Path & Plan'}
-            </PrimaryButton>
-
-            <p className="form-helper">One-time payment · No subscription · Instant access</p>
+            <ReframeCtaBlock
+              reframeTeaser={reframeTeaser}
+              primaryConstellation={primaryConstellation}
+              onCheckout={handleCheckout}
+              checkoutLoading={checkoutLoading}
+            />
 
             {/* DEV ONLY — remove before go-live */}
             <div style={{ marginTop: '32px', textAlign: 'center' }}>

@@ -260,7 +260,7 @@ Use this exact structure:
   "reframe_teaser": {
     "recap": "",
     "reframe": "",
-    "why_bullets": ["", "", ""]
+    "forward_frame": ""
   },
   "derived_from_signature_analysis": true
 }
@@ -272,7 +272,7 @@ Before returning the JSON, verify:
 - secondary_signature_analysis has one entry per item in the Detection Engine's secondary_signatures list (0, 1, 2, or 3 — never padded, never fewer than what secondary_signatures actually contains)
 - secondary_signature_summary is present and non-empty regardless of how many secondary_signature_analysis entries exist
 - domain_profile_summary is present and non-empty
-- reframe_teaser.recap, reframe_teaser.reframe, and all 3 reframe_teaser.why_bullets are present and non-empty
+- reframe_teaser.recap, reframe_teaser.reframe, and reframe_teaser.forward_frame are all present and non-empty
 If any check fails, complete the missing fields before returning.
 
 ## FIELD REQUIREMENTS
@@ -566,13 +566,20 @@ The sentence must not contain any of these words or their close variants, in any
 
 Must end on a live, open tension, not a resolved or reassuring statement. Echo the *kind* of tension already established under the report's own signatures, without repeating any signature's tension line verbatim. No signature names.
 
-**why_bullets** (exactly 3, ~15-30 words each): Before finalizing each bullet, count its words. A bullet under 15 words is incomplete, not a valid draft — do not output it as-is. Extend every short bullet by adding the specific circumstance, stakes, or consequence around the cited fact (what it cost, what it made possible, what changed because of it) until it clears 15 words. This applies independently to each of the 3 bullets — fixing one does not exempt the others.
+**forward_frame** (minimum 55 words, target 70): Question-framed register — an imagined possibility ("what would it look like to…", "wouldn't it be worth finding out…"), never a flat declarative statement. This is the section's persuasive close: it must make the reader want to click through, not just summarize.
 
-No example is given here on purpose — a past version of this instruction included one and it was copied into real reports verbatim as if it were the user's own evidence, describing an event that never happened to them. Build each bullet fresh from this specific person's own evidence instead of modeling it on any template sentence.
+No example is given here on purpose — a past version of this instruction included one (for the why_bullets field this replaces) and it was copied into real reports verbatim regardless of whether it was labeled the right or wrong answer, or a calibration reference not to be reused. Build this field fresh from this specific person's own pattern instead of modeling it on any template sentence, rhythm, or clause structure.
 
-Concrete, evidence-grounded content: each bullet must name a specific fact, moment, or detail actually present in the user's discovery answers or the evidence_units already extracted for them (e.g. a specific project, decision, conversation avoided, or turning point) — not a restated trait or general capability description. If a bullet could be true of this identity in the abstract without citing anything the user actually said, rewrite it. Where possible, draw each bullet from a different primary signature/evidence unit rather than repeating the same anecdote three times — but if one piece of evidence is genuinely the strongest support for a given point, reusing it is fine. Personalization from truth beats personalization from variety for its own sake. No signature names, no hedging — declarative, not tentative.
+Sourced primarily from this person's answers to Q10 (what they're avoiding/postponing), Q11 (what still gives them energy amid the frustration), Q12 (the last time they felt confident and in their lane), and Q13 (the one thing they'd change) — these are the most future-oriented material in the 13 discovery answers. Still read and stay consistent with all 13, but weight toward these four.
 
-Reusing the same evidence is about the underlying fact, not the wording: if a bullet cites the same anecdote already described elsewhere in the report (e.g. in a signature's evidence_analysis), it must still be phrased in genuinely different concrete language — a different sentence structure, not a trimmed or lightly reworded copy of how it was already told.
+Three hard rules, all non-negotiable:
+- Never quote or restate a raw answer. No named anecdotes, no "you mentioned...", no paraphrase specific enough to be recognizable as one particular thing they said. Paint a *kind* of future built from the pattern, not a scene lifted from their answers.
+- Never name a specific destination, role, or outcome (no job titles, no company types, no "become a [X]"). The whole point is to open a live question, not answer it — naming an outcome closes exactly the door Path Options exists to walk through.
+- Must include a stakes beat that names, in this person's own terms, what continuing to sit still actually costs them — reframed as a redirection rather than a loss, not a generic warning — followed by a value-bridge sentence that explicitly connects this open question to Path Options as where the answer gets worked out. Ground the stakes beat in the specific pattern already established for this person elsewhere in the report (their own signatures, tensions, evidence) rather than a general statement that could apply to anyone.
+
+Do not map each of the three rules above onto exactly one sentence in a fixed order (question, question, stakes, bridge) — that produces the same shape for every person regardless of what's true about them. Vary how many sentences you use, where the stakes beat lands relative to the opening question(s), and how directly the value-bridge names Path Options at the end. The three rules are content requirements, not a sentence template.
+
+Before finalizing, count the words in your draft. If it is under 55 words, that draft is rejected — do not output it. Extend it by developing the stakes beat or the value-bridge further, grounded in more of this person's own evidence, not by adding filler adjectives.
 
 ## STRUCTURAL CONSTRAINTS
 
@@ -587,7 +594,7 @@ Must always produce:
 - 6–10 energisers
 - 6–10 friction_points
 - 1 domain_profile_summary, a few sentences covering the full spread
-- 1 reframe_teaser with recap (~50-60 words), reframe (~15-30 words), and exactly 3 why_bullets present
+- 1 reframe_teaser with recap (~50-60 words), reframe (~15-30 words), and forward_frame (minimum 55 words, target 70)
 
 ## FINAL QUALITY TEST
 

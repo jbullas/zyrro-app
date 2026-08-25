@@ -268,7 +268,7 @@ function logConstellationSynthesisAbstractLanguage(constellationSynthesis: unkno
 
 const REFRAME_TEASER_RECAP_MIN_WORDS = 45;
 const REFRAME_TEASER_REFRAME_MIN_WORDS = 15;
-const REFRAME_TEASER_BULLET_MIN_WORDS = 15;
+const REFRAME_TEASER_FORWARD_FRAME_MIN_WORDS = 55;
 
 function countWords(text: unknown): number {
   return typeof text === 'string' ? text.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -287,7 +287,7 @@ function countWords(text: unknown): number {
  */
 function logReframeTeaserWordCountGaps(reframeTeaser: unknown): void {
   if (!reframeTeaser || typeof reframeTeaser !== 'object') return;
-  const rt = reframeTeaser as { recap?: unknown; reframe?: unknown; why_bullets?: unknown };
+  const rt = reframeTeaser as { recap?: unknown; reframe?: unknown; forward_frame?: unknown };
 
   const gaps: string[] = [];
   const recapWords = countWords(rt.recap);
@@ -298,13 +298,9 @@ function logReframeTeaserWordCountGaps(reframeTeaser: unknown): void {
   if (reframeWords < REFRAME_TEASER_REFRAME_MIN_WORDS) {
     gaps.push(`reframe: ${reframeWords} words (floor ${REFRAME_TEASER_REFRAME_MIN_WORDS})`);
   }
-  if (Array.isArray(rt.why_bullets)) {
-    rt.why_bullets.forEach((bullet, i) => {
-      const bulletWords = countWords(bullet);
-      if (bulletWords < REFRAME_TEASER_BULLET_MIN_WORDS) {
-        gaps.push(`why_bullets[${i}]: ${bulletWords} words (floor ${REFRAME_TEASER_BULLET_MIN_WORDS})`);
-      }
-    });
+  const forwardFrameWords = countWords(rt.forward_frame);
+  if (forwardFrameWords < REFRAME_TEASER_FORWARD_FRAME_MIN_WORDS) {
+    gaps.push(`forward_frame: ${forwardFrameWords} words (floor ${REFRAME_TEASER_FORWARD_FRAME_MIN_WORDS})`);
   }
 
   if (gaps.length > 0) {

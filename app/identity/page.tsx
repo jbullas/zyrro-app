@@ -11,9 +11,11 @@ import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import QuestionAnswerList from '@/components/QuestionAnswerList';
+import ReframeCtaBlock from '@/components/ReframeCtaBlock';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 import { mergeAnswersWithQuestions, type MergedAnswer } from '@/lib/identity-questions';
+import type { ReframeTeaser } from '@/lib/artifact-schemas';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
@@ -71,11 +73,7 @@ interface IdentityReport {
     Sensing: number;
   };
   domain_profile_summary?: string;
-  reframe_teaser?: {
-    recap: string;
-    reframe: string;
-    why_bullets: string[];
-  };
+  reframe_teaser?: ReframeTeaser;
 }
 
 const DOMAIN_PROFILE_EXPLANATION =
@@ -188,6 +186,7 @@ export default function IdentityPage() {
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [userId, setUserId]         = useState<string | null>(null);
   const [qaItems, setQaItems]       = useState<MergedAnswer[]>([]);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
@@ -304,6 +303,24 @@ export default function IdentityPage() {
       { select: 'id' },
     );
     if (data) setArtifactId(data.id);
+  }
+
+  async function handleCheckout() {
+    if (!userId) return;
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const { url, error } = await res.json() as { url?: string; error?: string };
+      if (error || !url) throw new Error(error ?? 'No checkout URL');
+      window.location.href = url;
+    } catch (err) {
+      console.error('Checkout failed:', err);
+      setCheckoutLoading(false);
+    }
   }
 
   // ── has-artifact: hook-driven generation states ────────────────────
@@ -526,26 +543,19 @@ export default function IdentityPage() {
 
         </div>{/* end .report-sections */}
 
-        {/* #99: reframe teaser — locked 7-component composition. Generated as
-            part of identity_report's own Layer 2 call (#113), so it's already
-            in `report` by the time this page renders. No second artifact
-            fetch, no polling. /path's own composition is a separate, still-
-            undecided question — nothing here anchors to it. */}
-        {reframe_teaser?.recap && reframe_teaser.reframe && Array.isArray(reframe_teaser.why_bullets) && (
+        {/* Reframe teaser CTA — locked 6-component composition, shared with
+            /path (see docs/briefs/reframe-teaser-redesign-brief.md). Generated
+            as part of identity_report's own Layer 2 call (#113), so it's
+            already in `report` by the time this page renders. No second
+            artifact fetch, no polling. */}
+        {reframe_teaser?.recap && reframe_teaser.reframe && reframe_teaser.forward_frame && (
           <div className="report-section">
-            <div className="cta-block">
-              <p className="eyebrow">WHERE ARE YOU HEADING</p>
-              <p>{reframe_teaser.recap}</p>
-              <p className="reframe-pullquote">{reframe_teaser.reframe}</p>
-              <p className="eyebrow">WHY THIS HOLDS</p>
-              <ul className="reframe-bullets">
-                {reframe_teaser.why_bullets.map((bullet, i) => (
-                  <li key={i}>{bullet}</li>
-                ))}
-              </ul>
-              <p>Click below to find out where that pattern could be taking you next.</p>
-              <PrimaryButton href="/path">Explore Your Path Options</PrimaryButton>
-            </div>
+            <ReframeCtaBlock
+              reframeTeaser={reframe_teaser}
+              primaryConstellation={primary_constellation}
+              onCheckout={handleCheckout}
+              checkoutLoading={checkoutLoading}
+            />
           </div>
         )}
 

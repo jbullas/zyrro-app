@@ -141,9 +141,9 @@ export interface HowYouOperate {
 }
 
 export interface ReframeTeaser {
-  recap: string;         // ~50-60 words
-  reframe: string;       // ~15-30 words, shareable pull-quote
-  why_bullets: string[]; // exactly 3
+  recap: string;          // ~50-60 words
+  reframe: string;        // ~15-30 words, shareable pull-quote
+  forward_frame: string;  // question-framed, see lib/prompts/identity-report.ts
 }
 
 export interface IdentitySignatureReportArtifactContent {
