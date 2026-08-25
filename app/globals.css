@@ -897,6 +897,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-top: 16px;
   padding-left: 18px;
   padding-right: 18px;
   padding-bottom: 28px;
