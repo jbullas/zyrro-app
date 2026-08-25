@@ -26,29 +26,33 @@ export default function ReframeCtaBlock({
     .join('/');
 
   return (
-    <div className="cta-block">
-      <p className="limits-eyebrow">NOW THAT YOU KNOW WHO YOU ARE</p>
-      <h2 className="limits-heading">Find out who you should become next.</h2>
+    <div className="report-section">
+      <div className="cta-header">
+        <p className="eyebrow">NOW THAT YOU KNOW WHO YOU ARE</p>
+        <h2>Find Out Where It&rsquo;s Pointing You</h2>
+      </div>
 
-      <p className="limits-body">{reframeTeaser.recap}</p>
+      <div className="cta-block">
+        <p className="limits-body">{reframeTeaser.recap}</p>
 
-      <p className="reframe-pullquote">{reframeTeaser.reframe}</p>
+        <p className="reframe-pullquote">{reframeTeaser.reframe}</p>
 
-      <p className="limits-body">{reframeTeaser.forward_frame}</p>
+        <p className="limits-body">{reframeTeaser.forward_frame}</p>
 
-      <ul className="limits-bullets">
-        <li className="limits-bullet">
-          4 genuinely different directions{constellationLabel ? ` your ${constellationLabel} constellation` : ' your constellation'} could take next, each grounded in your own evidence
-        </li>
-        <li className="limits-bullet">Why each one fits, and what it would actually cost you to pursue it</li>
-        <li className="limits-bullet">A 7-day plan to start moving on whichever one you choose</li>
-      </ul>
+        <ul className="limits-bullets">
+          <li className="limits-bullet">
+            4 genuinely different directions{constellationLabel ? ` your ${constellationLabel} constellation` : ' your constellation'} could take next, each grounded in your own evidence
+          </li>
+          <li className="limits-bullet">Why each one fits, and what it would actually cost you to pursue it</li>
+          <li className="limits-bullet">A 7-day plan to start moving on whichever one you choose</li>
+        </ul>
 
-      <p className="limits-body">$49, one-time.</p>
+        <p className="limits-body">$49, one-time.</p>
 
-      <PrimaryButton onClick={onCheckout} disabled={checkoutLoading}>
-        {checkoutLoading ? 'Redirecting…' : 'Explore Your Path Options — $49'}
-      </PrimaryButton>
+        <PrimaryButton onClick={onCheckout} disabled={checkoutLoading}>
+          {checkoutLoading ? 'Redirecting…' : 'Explore Your Path Options — $49'}
+        </PrimaryButton>
+      </div>
     </div>
   );
 }

@@ -559,16 +559,17 @@ export default function IdentityPage() {
             /path (see docs/briefs/reframe-teaser-redesign-brief.md). Generated
             as part of identity_report's own Layer 2 call (#113), so it's
             already in `report` by the time this page renders. No second
-            artifact fetch, no polling. */}
+            artifact fetch, no polling. ReframeCtaBlock supplies its own
+            outer .report-section wrapper (see
+            docs/briefs/cta-headline-restructure-brief.md) — no double-wrap
+            here. */}
         {reframe_teaser?.recap && reframe_teaser.reframe && reframe_teaser.forward_frame && (
-          <div className="report-section">
-            <ReframeCtaBlock
-              reframeTeaser={reframe_teaser}
-              primaryConstellation={primary_constellation}
-              onCheckout={handleCheckout}
-              checkoutLoading={checkoutLoading}
-            />
-          </div>
+          <ReframeCtaBlock
+            reframeTeaser={reframe_teaser}
+            primaryConstellation={primary_constellation}
+            onCheckout={handleCheckout}
+            checkoutLoading={checkoutLoading}
+          />
         )}
 
         {/* Bottom documentation: What This Report Is / Research Foundation
