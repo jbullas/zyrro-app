@@ -158,7 +158,15 @@ export async function recordStageOutput(
   output: unknown,
   priorContent: PathCheckpointSessionContent,
 ): Promise<PathCheckpointSessionRow> {
+  // #129 Stage C found this dropping `chosen_candidate_id`: it wasn't
+  // spreading `...priorContent` first, only `...priorContent.stage_outputs`.
+  // Harmless throughout Stage A/B (chosen_candidate_id didn't exist until
+  // Checkpoint 2's recordChosenCandidate, and nothing called
+  // recordStageOutput again after that until Stage 5) — but Stage 5 running
+  // (and any later Checkpoint 3 redo) both call this after
+  // chosen_candidate_id is already set, and would have silently wiped it.
   const nextContent: PathCheckpointSessionContent = {
+    ...priorContent,
     stage_outputs: { ...priorContent.stage_outputs, [`stage${stage}`]: output },
   };
 

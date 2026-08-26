@@ -11,6 +11,8 @@ import {
   STAGE2_INTERSECTIONS_PROMPT,
   STAGE3_FRICTION_PROMPT,
   STAGE4_CANDIDATES_PROMPT,
+  STAGE5_DEVELOP_PROMPT,
+  STAGE6_REPORT_PROMPT,
 } from '@/lib/prompts/path-checkpoint';
 
 // #129 Stage B — real reasoning for Stages 1-4 of the checkpoint-guided
@@ -147,7 +149,11 @@ export async function runStage2Intersections(context: Stage1Context, redoSteer?:
 }
 
 export interface Stage3Output {
-  surviving: Stage2Overlap[] & Array<{ friction_considered: string }>;
+  // Each element carries friction_considered on top of Stage2Overlap's
+  // fields — element-type intersection, not an array-type intersection
+  // (Stage2Overlap[] & Array<{...}>, the original Stage B shape), which
+  // left .filter()'s return type ambiguous for Stage C's callers.
+  surviving: Array<Stage2Overlap & { friction_considered: string }>;
   dropped: Array<{ signature: string; friction_point_cited: string; reason: string }>;
 }
 
@@ -235,6 +241,164 @@ export async function runStage4Candidates(
   const parsed = JSON.parse(content ?? '{}');
   if (!validateStage4Output(parsed)) {
     throw new Error('Stage 4 output failed validation: ' + JSON.stringify(parsed).slice(0, 500));
+  }
+  return parsed;
+}
+
+export type StretchType = 'Natural' | 'Adjacent' | 'Reinvention';
+
+export interface Stage5Output {
+  developed_thesis: string;
+  anchoring_signatures: string[];
+  stretch: StretchType;
+  stretch_rationale: string;
+  evidence_citation: string;
+  desire_citation: string;
+  desire_source: 'energiser' | 'forward_frame';
+  friction_considered: string;
+  honest_cost_note: string;
+  rationale: string;
+}
+
+function validateStage5Output(data: unknown): data is Stage5Output {
+  const d = data as Stage5Output;
+  return (
+    typeof d?.developed_thesis === 'string' && d.developed_thesis.length > 0 &&
+    Array.isArray(d.anchoring_signatures) && d.anchoring_signatures.length > 0 &&
+    (d.stretch === 'Natural' || d.stretch === 'Adjacent' || d.stretch === 'Reinvention') &&
+    typeof d.evidence_citation === 'string' && d.evidence_citation.length > 0 &&
+    typeof d.desire_citation === 'string' && d.desire_citation.length > 0 &&
+    typeof d.honest_cost_note === 'string' && d.honest_cost_note.length > 0
+  );
+}
+
+/**
+ * Resolves Checkpoint 2's chosen candidate plus the Stage 3 overlaps it
+ * consolidates, from a session's stage_outputs — the plain filter step
+ * runStage5Develop's callers both need (the initial kickoff in
+ * generate-path-options/route.ts, and a Checkpoint 3 redo in
+ * path-checkpoint-response/route.ts). Not reasoning, so kept out of the
+ * prompt-calling functions themselves.
+ */
+export function resolveChosenCandidateInputs(
+  stageOutputs: Record<string, unknown>,
+  chosenCandidateId: string | undefined,
+): { chosenCandidate: Stage4Candidate; groundedOverlaps: Stage3Output['surviving'] } {
+  const stage3 = stageOutputs.stage3 as Stage3Output;
+  const stage4 = stageOutputs.stage4 as Stage4Output;
+  const chosenCandidate = stage4.candidates.find(c => c.id === chosenCandidateId);
+
+  if (!chosenCandidateId || !chosenCandidate) {
+    throw new Error(`No valid chosen_candidate_id (${chosenCandidateId}) found among stage4.candidates`);
+  }
+
+  const groundedOverlaps = stage3.surviving.filter(o => chosenCandidate.grounded_in.includes(o.signature));
+  return { chosenCandidate, groundedOverlaps };
+}
+
+/**
+ * Stage 5 — develop the chosen candidate alone. `groundedOverlaps` is
+ * Stage 3's surviving overlaps narrowed to the ones the chosen candidate
+ * actually consolidates (via its `grounded_in` signature names) — the
+ * caller resolves that narrowing since it's a plain filter, not reasoning.
+ */
+export async function runStage5Develop(
+  chosenCandidate: Stage4Candidate,
+  groundedOverlaps: Stage3Output['surviving'],
+  frictionPoints: string[],
+  preparedFor: string,
+  redoSteer?: string,
+): Promise<Stage5Output> {
+  const payload = {
+    chosen_candidate: chosenCandidate,
+    grounded_overlaps: groundedOverlaps,
+    friction_points: frictionPoints,
+    prepared_for: preparedFor,
+    ...(redoSteer ? { redo_steer: redoSteer } : {}),
+  };
+
+  const content = await getChatCompletion({
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: STAGE5_DEVELOP_PROMPT },
+      { role: 'user', content: JSON.stringify(payload) },
+    ],
+    max_tokens: 3000,
+    temperature: 0.3,
+  });
+
+  const parsed = JSON.parse(content ?? '{}');
+  if (!validateStage5Output(parsed)) {
+    throw new Error('Stage 5 output failed validation: ' + JSON.stringify(parsed).slice(0, 500));
+  }
+  return parsed;
+}
+
+export interface Stage6MasterStrategyObjective {
+  name: string;
+  description: string;
+  sequencing_rationale: string;
+  grounded_in: string[];
+}
+
+export interface Stage6Output {
+  thesis: string;
+  what_it_is: string;
+  why_it_fits: string;
+  not_this: string;
+  honest_cost: string;
+  life_it_leads_toward: string;
+  master_strategy: Stage6MasterStrategyObjective[];
+  plan_seed_actions: string[];
+}
+
+function validateStage6Output(data: unknown): data is Stage6Output {
+  const d = data as Stage6Output;
+  const requiredStrings: (keyof Stage6Output)[] = [
+    'thesis', 'what_it_is', 'why_it_fits', 'not_this', 'honest_cost', 'life_it_leads_toward',
+  ];
+  if (!requiredStrings.every(k => typeof d?.[k] === 'string' && (d[k] as string).length > 0)) return false;
+  if (!Array.isArray(d.master_strategy) || d.master_strategy.length === 0) return false;
+  if (!d.master_strategy.every(o =>
+    typeof o.name === 'string' && o.name.length > 0 &&
+    typeof o.description === 'string' && o.description.length > 0 &&
+    typeof o.sequencing_rationale === 'string' && o.sequencing_rationale.length > 0 &&
+    Array.isArray(o.grounded_in)
+  )) return false;
+  if (!Array.isArray(d.plan_seed_actions) || d.plan_seed_actions.length === 0) return false;
+  return true;
+}
+
+export async function runStage6Report(
+  developedDirection: Stage5Output,
+  discardedCandidates: Stage4Output['discarded'],
+  context: Stage1Context,
+): Promise<Stage6Output> {
+  const payload = {
+    developed_direction: developedDirection,
+    discarded_candidates: discardedCandidates,
+    prepared_for: context.prepared_for,
+    full_signatures: context.full_signatures,
+    primary_constellation: context.primary_constellation,
+    secondary_signature_analysis: context.secondary_signature_analysis,
+    discovery_answers: context.discovery_answers,
+    energisers: context.energisers,
+    friction_points: context.friction_points,
+  };
+
+  const content = await getChatCompletion({
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: STAGE6_REPORT_PROMPT },
+      { role: 'user', content: JSON.stringify(payload) },
+    ],
+    max_tokens: 6000,
+    temperature: 0.3,
+  });
+
+  const parsed = JSON.parse(content ?? '{}');
+  if (!validateStage6Output(parsed)) {
+    throw new Error('Stage 6 output failed validation: ' + JSON.stringify(parsed).slice(0, 500));
   }
   return parsed;
 }

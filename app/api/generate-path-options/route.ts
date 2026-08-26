@@ -9,12 +9,20 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
 import {
   startCheckpointSessionWithCreationFlag,
+  claimGeneration,
   recordStageOutput,
   advanceToStage,
   logExchange,
   type PathCheckpointSessionRow,
+  type PathCheckpointSessionContent,
 } from '@/lib/path-checkpoint';
-import { ingestStage1Context, runStage2Intersections } from '@/lib/generate-path-checkpoint';
+import {
+  ingestStage1Context,
+  runStage2Intersections,
+  runStage5Develop,
+  resolveChosenCandidateInputs,
+  type Stage1Context,
+} from '@/lib/generate-path-checkpoint';
 
 // #129 Stage B: this route is no longer a single-shot path_options
 // generator (that was PATH_OPTIONS_PROMPT, lib/prompts/path-options.ts —
@@ -58,6 +66,39 @@ async function runStage1AndStage2(
   }
 }
 
+/**
+ * #129 Stage C: Checkpoint 2's proceed (recordChosenCandidate, Stage B) only
+ * parks the session at current_stage=5 with a chosen_candidate_id — it
+ * doesn't run Stage 5 itself, since Stage 5 didn't exist yet when that code
+ * was written. This is the actual kickoff, triggered by this route's own
+ * resume branch below the first time a session in that parked state is
+ * polled/resumed. Not a change to Checkpoint 2's own logic (recordChosenCandidate
+ * is untouched) — this only decides what happens on a later request against
+ * an already-existing session sitting in that state.
+ */
+async function runStage5Kickoff(sessionId: string, userId: string, contentAtKickoff: PathCheckpointSessionContent) {
+  const supabase = createServiceClient();
+
+  try {
+    const stageOutputs = contentAtKickoff.stage_outputs as Record<string, unknown>;
+    const context = stageOutputs.stage1 as Stage1Context;
+    const { chosenCandidate, groundedOverlaps } = resolveChosenCandidateInputs(stageOutputs, contentAtKickoff.chosen_candidate_id);
+
+    const stage5 = await runStage5Develop(chosenCandidate, groundedOverlaps, context.friction_points, context.prepared_for);
+    await recordStageOutput(supabase, sessionId, 5, stage5, contentAtKickoff);
+
+    await logExchange(supabase, sessionId, userId, 5, 'presented', {
+      developed_thesis: stage5.developed_thesis,
+      anchoring_signatures: stage5.anchoring_signatures,
+      stretch: stage5.stretch,
+      honest_cost_note: stage5.honest_cost_note,
+    });
+  } catch (error) {
+    console.error('Path checkpoint Stage 5 kickoff failed:', error);
+    await supabase.from('artifacts').update({ status: 'failed' }).eq('id', sessionId);
+  }
+}
+
 export async function POST(_req: NextRequest) {
   const sessionClient = await createSessionClient();
   const { data: { user } } = await sessionClient.auth.getUser();
@@ -83,6 +124,27 @@ export async function POST(_req: NextRequest) {
     { select: 'id, current_stage, status, content' },
   );
   if (existingSession) {
+    // #129 Stage C: Checkpoint 2's proceed parks the session here
+    // (current_stage=5, awaiting_checkpoint, chosen_candidate_id set) without
+    // running Stage 5 — this is where that gets kicked off, the first time
+    // such a session is resumed/polled. claimGeneration guards against a
+    // concurrent duplicate kickoff the same way Stage 1/2's own creation
+    // race is guarded above.
+    const stageOutputs = existingSession.content.stage_outputs as Record<string, unknown>;
+    const stage5NotYetRun = existingSession.current_stage === 5 && !stageOutputs.stage5;
+
+    if (stage5NotYetRun && existingSession.status === 'awaiting_checkpoint') {
+      const claimed = await claimGeneration(supabase, existingSession.id);
+      if (claimed) {
+        after(() => runStage5Kickoff(existingSession.id, user.id, claimed.content));
+        return NextResponse.json({ session_id: existingSession.id, current_stage: 5, status: 'generating' });
+      }
+      // Lost the claim race — another concurrent request is already running
+      // Stage 5's kickoff. Report 'generating' (the now-true state), not the
+      // stale 'awaiting_checkpoint' this read predates.
+      return NextResponse.json({ session_id: existingSession.id, current_stage: 5, status: 'generating' });
+    }
+
     return NextResponse.json({
       session_id: existingSession.id,
       current_stage: existingSession.current_stage,

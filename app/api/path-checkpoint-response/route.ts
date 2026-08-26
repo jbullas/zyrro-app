@@ -10,6 +10,7 @@ import {
   logExchange,
   countRedosForStage,
   recordChosenCandidate,
+  completeCheckpointSession,
   type PathCheckpointSessionRow,
 } from '@/lib/path-checkpoint';
 import { getCurrentArtifact } from '@/lib/artifacts';
@@ -17,10 +18,14 @@ import {
   runStage2Intersections,
   runStage3Friction,
   runStage4Candidates,
+  runStage5Develop,
+  runStage6Report,
+  resolveChosenCandidateInputs,
   type Stage1Context,
   type Stage2Output,
   type Stage3Output,
   type Stage4Output,
+  type Stage5Output,
 } from '@/lib/generate-path-checkpoint';
 
 // #129 Stage B — the API surface for responding to Checkpoint 1 (stage 2)
@@ -137,6 +142,59 @@ async function runStage4Redo(
   }
 }
 
+async function runStage5Redo(
+  sessionId: string,
+  userId: string,
+  contentAtCheckpoint: Record<string, unknown>,
+  context: Stage1Context,
+  chosenCandidateId: string | undefined,
+  steer: string,
+) {
+  const supabase = createServiceClient();
+  try {
+    const { chosenCandidate, groundedOverlaps } = resolveChosenCandidateInputs(contentAtCheckpoint, chosenCandidateId);
+    const stage5 = await runStage5Develop(chosenCandidate, groundedOverlaps, context.friction_points, context.prepared_for, steer);
+    // Same class of bug recordStageOutput itself had (see lib/path-checkpoint.ts):
+    // constructing { stage_outputs: contentAtCheckpoint } here without
+    // chosen_candidate_id means there's nothing for recordStageOutput's own
+    // ...priorContent spread to preserve — confirmed live via
+    // scripts/verify-129-stage-c.mts (Leona's Checkpoint 3 redo wiped it).
+    await recordStageOutput(supabase, sessionId, 5, stage5, { stage_outputs: contentAtCheckpoint, chosen_candidate_id: chosenCandidateId });
+    await logExchange(supabase, sessionId, userId, 5, 'presented', {
+      developed_thesis: stage5.developed_thesis,
+      anchoring_signatures: stage5.anchoring_signatures,
+      stretch: stage5.stretch,
+      honest_cost_note: stage5.honest_cost_note,
+    });
+  } catch (error) {
+    console.error('Path checkpoint Stage 5 redo failed:', error);
+    await supabase.from('artifacts').update({ status: 'failed' }).eq('id', sessionId);
+  }
+}
+
+/**
+ * Stage 6 — no checkpoint after it (final delivery). Writes the completed
+ * path_checkpoint_result artifact and marks the session complete via
+ * completeCheckpointSession; nothing else settles status afterward.
+ */
+async function runStage6(
+  sessionId: string,
+  userId: string,
+  contentAtCheckpoint: Record<string, unknown>,
+  context: Stage1Context,
+) {
+  const supabase = createServiceClient();
+  try {
+    const stage4 = contentAtCheckpoint.stage4 as Stage4Output;
+    const stage5 = contentAtCheckpoint.stage5 as Stage5Output;
+    const stage6 = await runStage6Report(stage5, stage4.discarded, context);
+    await completeCheckpointSession(supabase, userId, sessionId, stage6);
+  } catch (error) {
+    console.error('Path checkpoint Stage 6 failed:', error);
+    await supabase.from('artifacts').update({ status: 'failed' }).eq('id', sessionId);
+  }
+}
+
 /**
  * Handles a 'proceed' at either checkpoint. Stage 2: advances to stage 3 and
  * hands off to a background job that owns resolving status from here (via
@@ -159,6 +217,16 @@ async function proceedFromCheckpoint(
     const stage2 = stageOutputs.stage2 as Stage2Output;
     after(() => runStage3And4(session.id, session.user_id, advanced.content.stage_outputs, context, stage2));
     return NextResponse.json({ session_id: session.id, current_stage: 3, status: 'generating' });
+  }
+
+  if (stage === 5) {
+    // Checkpoint 3 — no candidate choice needed here (unlike Checkpoint 2),
+    // just an acknowledgment that the developed direction is right. Stage 6
+    // has no checkpoint after it (final delivery) — runStage6 owns settling
+    // status via completeCheckpointSession, nothing else after this handoff.
+    const advanced = await advanceToStage(supabase, session.id, 6);
+    after(() => runStage6(session.id, session.user_id, advanced.content.stage_outputs, context));
+    return NextResponse.json({ session_id: session.id, current_stage: 6, status: 'generating' });
   }
 
   // stage === 4 — Checkpoint 2, the real fork. Requires a candidate id,
@@ -204,7 +272,7 @@ export async function POST(req: NextRequest) {
   }
 
   const stage = session.current_stage;
-  if (stage !== 2 && stage !== 4) {
+  if (stage !== 2 && stage !== 4 && stage !== 5) {
     return NextResponse.json({ error: `No checkpoint active at stage ${stage}` }, { status: 400 });
   }
   if (session.status !== 'awaiting_checkpoint') {
@@ -213,6 +281,20 @@ export async function POST(req: NextRequest) {
 
   const stageOutputs = session.content.stage_outputs as Record<string, unknown>;
   const context = stageOutputs.stage1 as Stage1Context;
+  const chosenCandidateId = session.content.chosen_candidate_id;
+
+  // current_stage===5 && status==='awaiting_checkpoint' is ambiguous on its
+  // own: Checkpoint 2's proceed (recordChosenCandidate) parks a session in
+  // exactly this state BEFORE Stage 5 has ever run — that parked state is
+  // meant to be resolved by polling POST /api/generate-path-options (which
+  // kicks Stage 5 off), not by a checkpoint response landing here first.
+  // stage_outputs.stage5's presence is the real distinguishing signal.
+  if (stage === 5 && !stageOutputs.stage5) {
+    return NextResponse.json(
+      { error: 'Stage 5 has not finished generating yet — poll POST /api/generate-path-options first' },
+      { status: 409 },
+    );
+  }
 
   // Claimed once, upfront, for every path below (cap-exceeded auto-proceed,
   // real redo, and genuine proceed alike) — every one of them ends up
@@ -273,9 +355,11 @@ export async function POST(req: NextRequest) {
 
       if (stage === 2) {
         after(() => runStage2Redo(session.id, user.id, stageOutputs, context, body.text ?? ''));
-      } else {
+      } else if (stage === 4) {
         const stage3 = stageOutputs.stage3 as Stage3Output;
         after(() => runStage4Redo(session.id, user.id, stageOutputs, context, stage3.surviving, body.text ?? ''));
+      } else {
+        after(() => runStage5Redo(session.id, user.id, stageOutputs, context, chosenCandidateId, body.text ?? ''));
       }
 
       return NextResponse.json({ session_id: session.id, current_stage: stage, status: 'generating' });
