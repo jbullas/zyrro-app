@@ -4,7 +4,6 @@ import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
 import { getChatCompletion } from '@/lib/llm';
 import { PROJECT_NAME_PROMPT } from '@/lib/prompts/project-name';
-import type { PathOption } from '@/lib/artifact-schemas';
 
 interface ProjectNameOption {
   name: string;
@@ -25,6 +24,17 @@ function validateProjectNameOptions(data: unknown): data is { options: ProjectNa
     && typeof o?.rationale === 'string' && o.rationale.trim().length > 0);
 }
 
+// #129 Stage D: project naming (#10) relocated from the old path_options
+// "pick a card" moment to Stage 6 completion — this route now takes a
+// path_checkpoint_result id instead of path_options_artifact_id + path_id.
+// PROJECT_NAME_PROMPT itself is unchanged, still expecting { name, thesis,
+// signatures_engaged }. Only this route's caller (formerly /path/page.tsx's
+// old 4-card flow) had a caller at all — safe to adapt in place rather than
+// keep a dead old branch. The chosen candidate's own short name (Stage 6's
+// report has no equivalent short label of its own) and its anchoring
+// signatures (Stage 5's deepened pass, not Stage 4's lighter one) are
+// sourced from the linked path_checkpoint_session, not the final report
+// content directly.
 export async function POST(req: NextRequest) {
   const sessionClient = await createSessionClient();
   const { data: { user } } = await sessionClient.auth.getUser();
@@ -32,16 +42,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { path_options_artifact_id, path_id } = await req.json() as {
-    path_options_artifact_id: string;
-    path_id: string;
-  };
+  const { path_checkpoint_result_id } = await req.json() as { path_checkpoint_result_id: string };
 
-  if (!path_options_artifact_id || !path_id) {
-    return NextResponse.json(
-      { error: 'Missing path_options_artifact_id or path_id' },
-      { status: 400 },
-    );
+  if (!path_checkpoint_result_id) {
+    return NextResponse.json({ error: 'Missing path_checkpoint_result_id' }, { status: 400 });
   }
 
   const entitled = await hasPaidEntitlement(user.id);
@@ -51,28 +55,43 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // Resolve the chosen option, same lookup as generatePathPlan
-  const { data: pathOptionsArtifact } = await supabase
+  const { data: resultArtifact } = await supabase
     .from('artifacts')
-    .select('content')
-    .eq('id', path_options_artifact_id)
+    .select('content, path_checkpoint_session_id')
+    .eq('id', path_checkpoint_result_id)
     .eq('user_id', user.id)
-    .eq('type', 'path_options')
+    .eq('type', 'path_checkpoint_result')
     .eq('status', 'ready')
     .maybeSingle();
 
-  if (!pathOptionsArtifact) {
-    return NextResponse.json({ error: 'Path options not found' }, { status: 404 });
+  if (!resultArtifact) {
+    return NextResponse.json({ error: 'Path result not found' }, { status: 404 });
+  }
+
+  let chosenCandidateName = '';
+  let signaturesEngaged: string[] = [];
+
+  if (resultArtifact.path_checkpoint_session_id) {
+    const { data: session } = await supabase
+      .from('artifacts')
+      .select('content')
+      .eq('id', resultArtifact.path_checkpoint_session_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sessionContent = session?.content as any;
+    const stageOutputs = sessionContent?.stage_outputs;
+    const chosenId = sessionContent?.chosen_candidate_id as string | undefined;
+    const stage4Candidates = stageOutputs?.stage4?.candidates as Array<{ id: string; name: string }> | undefined;
+    chosenCandidateName = stage4Candidates?.find(c => c.id === chosenId)?.name ?? '';
+
+    const stage5AnchoringSignatures = stageOutputs?.stage5?.anchoring_signatures;
+    if (Array.isArray(stage5AnchoringSignatures)) signaturesEngaged = stage5AnchoringSignatures;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chosenOption = (pathOptionsArtifact.content as any)?.options?.find(
-    (o: PathOption) => o.id === path_id,
-  ) as PathOption | undefined;
-
-  if (!chosenOption) {
-    return NextResponse.json({ error: 'Chosen path option not found' }, { status: 404 });
-  }
+  const thesis = (resultArtifact.content as any)?.thesis ?? '';
 
   try {
     const content = await getChatCompletion({
@@ -82,9 +101,9 @@ export async function POST(req: NextRequest) {
         {
           role: 'user',
           content: JSON.stringify({
-            name: chosenOption.name,
-            thesis: chosenOption.thesis,
-            signatures_engaged: chosenOption.signatures_engaged,
+            name: chosenCandidateName,
+            thesis,
+            signatures_engaged: signaturesEngaged,
           }),
         },
       ],

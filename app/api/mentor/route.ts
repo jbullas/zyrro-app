@@ -103,6 +103,40 @@ async function buildContextBlock(userId: string): Promise<string> {
       if (phaseNames) parts.push(`Phases: ${phaseNames}`);
       if (startHere) parts.push(`Start Here Actions:\n${startHere}`);
     }
+  } else {
+    // #129 Stage D: path_selections is the old 4-card flow's own storage.
+    // A user who named a project through the new checkpoint-guided flow has
+    // no row here at all — writing one would leave /plan polling forever
+    // for a path_plan artifact the new flow never generates (see
+    // docs/changelogs/2026-08-26.md). Fall back to path_checkpoint_result
+    // directly so Mentor still has real path/plan context for these users,
+    // without touching path_selections or /plan at all.
+    const { data: resultArtifact } = await getCurrentArtifact<{ content: unknown }>(
+      supabase,
+      userId,
+      "path_checkpoint_result",
+      { status: "ready", select: "content" },
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = resultArtifact?.content as any;
+
+    if (result) {
+      parts.push("\n## Chosen Path");
+      if (result.project_name) parts.push(`Name: ${result.project_name}`);
+      if (result.thesis) parts.push(`Thesis: ${result.thesis}`);
+
+      const objectiveNames = Array.isArray(result.master_strategy)
+        ? result.master_strategy.map((o: { name: string }) => o.name).join(", ")
+        : "";
+      const seedActions = Array.isArray(result.plan_seed_actions)
+        ? result.plan_seed_actions.map((a: string) => `- ${a}`).join("\n")
+        : "";
+
+      parts.push("\n## Current Plan");
+      if (objectiveNames) parts.push(`Objectives: ${objectiveNames}`);
+      if (seedActions) parts.push(`Start Here Actions:\n${seedActions}`);
+    }
   }
 
   return parts.length ? parts.join("\n") : "(No profile context loaded yet.)";
