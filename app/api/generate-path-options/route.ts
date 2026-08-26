@@ -86,22 +86,14 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: 'Identity report not found' }, { status: 404 });
   }
 
-  // #98: options generation now takes the identity_reframe pitch as context
-  // so it doesn't contradict what the user already read. This should always
-  // exist by the time a paying user reaches here (it's fired eagerly off
-  // identity_report completion) — if it doesn't, that's a race the client
-  // should retry rather than silently generating options with no reframe
-  // context.
-  const { data: reframeArtifact } = await getCurrentArtifact<{ content: unknown }>(
-    supabase,
-    user.id,
-    'identity_reframe',
-    { status: 'ready', select: 'content' },
-  );
-
-  if (!reframeArtifact) {
-    return NextResponse.json({ error: 'Identity reframe not ready' }, { status: 409 });
-  }
+  // #129 Stage B bug fix: identity_reframe generation was retired entirely by
+  // #124 (folded into identity_report's own reframe_teaser field) — nothing
+  // creates an identity_reframe artifact for any user anymore, so the old
+  // "fetch it, 409 if not ready" gate here permanently blocked path
+  // generation for every new paying user. Read reframe_teaser straight off
+  // the already-fetched identity_report content instead; no second fetch,
+  // no readiness gate to fail.
+  const reframeTeaser = (identityArtifact.content as { reframe_teaser?: unknown } | null)?.reframe_teaser ?? null;
 
   // #71: path_options is append-only (matching #59's identity_report
   // precedent) — always INSERT a new row so regenerating never destroys
@@ -154,7 +146,7 @@ export async function POST(_req: NextRequest) {
     artifactId = newArtifact.id;
   }
 
-  after(() => runGeneration(artifactId, identityArtifact.content, reframeArtifact.content));
+  after(() => runGeneration(artifactId, identityArtifact.content, reframeTeaser));
 
   return NextResponse.json({ artifact_id: artifactId });
 }
