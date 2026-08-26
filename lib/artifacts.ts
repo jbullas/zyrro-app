@@ -1,7 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type ArtifactType = 'identity_report' | 'identity_reframe' | 'path_options' | 'path_plan';
-export type ArtifactStatus = 'generating' | 'ready' | 'failed';
+export type ArtifactType =
+  | 'identity_report'
+  | 'identity_reframe'
+  | 'path_options'
+  | 'path_plan'
+  | 'path_checkpoint_session'
+  | 'path_checkpoint_result';
+// path_checkpoint_session additionally uses 'awaiting_checkpoint' and
+// 'complete' (see lib/path-checkpoint.ts) — not part of the generating/ready/
+// failed vocabulary the other (Tier C append-only) types use.
+export type ArtifactStatus = 'generating' | 'ready' | 'failed' | 'awaiting_checkpoint' | 'complete';
 
 /**
  * Resolves the current version of a Tier C (append-only) artifact — the
