@@ -5,10 +5,25 @@ export const maxDuration = 240;
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
-import { getChatCompletion } from '@/lib/llm';
-import { PATH_OPTIONS_PROMPT } from '@/lib/prompts/path-options';
-import type { PathOptionsArtifactContent } from '@/lib/artifact-schemas';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
+import {
+  startCheckpointSessionWithCreationFlag,
+  recordStageOutput,
+  advanceToStage,
+  logExchange,
+  type PathCheckpointSessionRow,
+} from '@/lib/path-checkpoint';
+import { ingestStage1Context, runStage2Intersections } from '@/lib/generate-path-checkpoint';
+
+// #129 Stage B: this route is no longer a single-shot path_options
+// generator (that was PATH_OPTIONS_PROMPT, lib/prompts/path-options.ts —
+// left in place, not deleted, since Stage C may still reuse its prose
+// conventions). It now kicks off a path_checkpoint_session and runs Stage 1
+// (ingest) + Stage 2 (capability/desire intersections) in the background,
+// landing the session at Checkpoint 1. Stages 3+/Checkpoint 2 are driven by
+// POST /api/path-checkpoint-response. Real routing/UX is Stage D — this is
+// just the API surface Stage B needs to be testable.
 
 function createServiceClient() {
   return createSupabaseAdmin(
@@ -17,47 +32,29 @@ function createServiceClient() {
   );
 }
 
-function validatePathOptions(data: unknown): data is PathOptionsArtifactContent {
-  const d = data as PathOptionsArtifactContent;
-  if (!Array.isArray(d.options) || d.options.length !== 4) return false;
-  const required = ['id', 'name', 'thesis', 'body', 'signatures_engaged', 'stretch'];
-  if (!d.options.every(o => required.every(f => f in (o as object)))) return false;
-  const stretches = d.options.map(o => o.stretch);
-  if (!stretches.includes('Natural') || !stretches.includes('Reinvention')) return false;
-  return true;
-}
-
-async function runGeneration(artifactId: string, identityReport: unknown, identityReframe: unknown) {
+async function runStage1AndStage2(
+  sessionId: string,
+  userId: string,
+  identityReport: IdentitySignatureReportArtifactContent,
+) {
   const supabase = createServiceClient();
 
   try {
-    const content = await getChatCompletion({
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: PATH_OPTIONS_PROMPT },
-        { role: 'user', content: JSON.stringify({ identity_report: identityReport, identity_reframe: identityReframe }) },
-      ],
-      max_tokens: 6000,
-      temperature: 0,
+    const context = await ingestStage1Context(supabase, userId, identityReport);
+    let session = await recordStageOutput(supabase, sessionId, 1, context, { stage_outputs: {} });
+
+    session = await advanceToStage(supabase, sessionId, 2);
+    const stage2 = await runStage2Intersections(context);
+    session = await recordStageOutput(supabase, sessionId, 2, stage2, session.content);
+
+    await logExchange(supabase, sessionId, userId, 2, 'presented', {
+      overlaps: stage2.overlaps,
+      capability_only: stage2.capability_only,
+      desire_only: stage2.desire_only,
     });
-
-    const options = JSON.parse(content ?? '{}');
-
-    if (!validatePathOptions(options)) {
-      throw new Error('Path options failed validation');
-    }
-
-    await supabase
-      .from('artifacts')
-      .update({ status: 'ready', content: options })
-      .eq('id', artifactId);
-
   } catch (error) {
-    console.error('Path options generation failed:', error);
-    await supabase
-      .from('artifacts')
-      .update({ status: 'failed' })
-      .eq('id', artifactId);
+    console.error('Path checkpoint Stage 1/2 failed:', error);
+    await supabase.from('artifacts').update({ status: 'failed' }).eq('id', sessionId);
   }
 }
 
@@ -75,7 +72,25 @@ export async function POST(_req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  const { data: identityArtifact } = await getCurrentArtifact<{ content: unknown }>(
+  // path_checkpoint_session is mutated in place, one row per user (#129
+  // Stage A) — if one already exists, this is a re-entry (page reload,
+  // double-click), not a fresh start. Return its current state rather than
+  // creating a second row.
+  const { data: existingSession } = await getCurrentArtifact<PathCheckpointSessionRow>(
+    supabase,
+    user.id,
+    'path_checkpoint_session',
+    { select: 'id, current_stage, status, content' },
+  );
+  if (existingSession) {
+    return NextResponse.json({
+      session_id: existingSession.id,
+      current_stage: existingSession.current_stage,
+      status: existingSession.status,
+    });
+  }
+
+  const { data: identityArtifact } = await getCurrentArtifact<{ content: IdentitySignatureReportArtifactContent }>(
     supabase,
     user.id,
     'identity_report',
@@ -86,67 +101,13 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: 'Identity report not found' }, { status: 404 });
   }
 
-  // #129 Stage B bug fix: identity_reframe generation was retired entirely by
-  // #124 (folded into identity_report's own reframe_teaser field) — nothing
-  // creates an identity_reframe artifact for any user anymore, so the old
-  // "fetch it, 409 if not ready" gate here permanently blocked path
-  // generation for every new paying user. Read reframe_teaser straight off
-  // the already-fetched identity_report content instead; no second fetch,
-  // no readiness gate to fail.
-  const reframeTeaser = (identityArtifact.content as { reframe_teaser?: unknown } | null)?.reframe_teaser ?? null;
+  const { session, created } = await startCheckpointSessionWithCreationFlag(supabase, user.id, 1);
 
-  // #71: path_options is append-only (matching #59's identity_report
-  // precedent) — always INSERT a new row so regenerating never destroys
-  // history. A prior failed attempt has no informational content, so it's
-  // deleted first (same call kickoffIdentityGeneration makes for #59)
-  // rather than left to accumulate.
-  await supabase
-    .from('artifacts')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('type', 'path_options')
-    .eq('status', 'failed');
-
-  const { data: newArtifact, error } = await supabase
-    .from('artifacts')
-    .insert({
-      user_id: user.id,
-      type: 'path_options',
-      access_level: 'paid',
-      status: 'generating',
-      content: {},
-    })
-    .select('id')
-    .single();
-
-  let artifactId: string;
-
-  if (error?.code === '23505') {
-    // Lost the #71 unique-index race against a concurrent call for this
-    // user (e.g. a double-click) — someone else's generation already
-    // started. Reuse that row's id rather than erroring, so the frontend
-    // still gets a valid artifact_id to poll. No status filter: the winner's
-    // row is guaranteed to be the newest for this user regardless of what
-    // it's since resolved to.
-    const { data: current } = await getCurrentArtifact<{ id: string }>(
-      supabase,
-      user.id,
-      'path_options',
-      { select: 'id' },
-    );
-    if (!current) {
-      console.error('Path options insert lost the generating-row race but no current row was found:', error);
-      return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
-    }
-    artifactId = current.id;
-  } else if (error || !newArtifact) {
-    console.error('Path options artifact insert error:', error);
-    return NextResponse.json({ error: 'Failed to create artifact' }, { status: 500 });
-  } else {
-    artifactId = newArtifact.id;
+  // Lost the create race (concurrent double-click) — someone else's request
+  // already owns this session and will run Stage 1/2. Don't run it twice.
+  if (created) {
+    after(() => runStage1AndStage2(session.id, user.id, identityArtifact.content));
   }
 
-  after(() => runGeneration(artifactId, identityArtifact.content, reframeTeaser));
-
-  return NextResponse.json({ artifact_id: artifactId });
+  return NextResponse.json({ session_id: session.id, current_stage: session.current_stage, status: session.status });
 }

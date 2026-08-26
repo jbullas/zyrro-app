@@ -2,9 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getCurrentArtifact } from '@/lib/artifacts';
 
 // #129 Stage A — checkpoint infrastructure (placeholder content only; real
-// reasoning prompts are Stage B/C). See
-// docs/briefs/129-checkpoint-guided-path-selection-design.md and
-// docs/briefs/129-stage-a-checkpoint-infrastructure-brief.md.
+// reasoning prompts are Stage B/C). Extended, not replaced, by Stage B (see
+// recordChosenCandidate below) — the state machine itself is unchanged. See
+// docs/briefs/129-checkpoint-guided-path-selection-design.md,
+// docs/briefs/129-stage-a-checkpoint-infrastructure-brief.md, and
+// docs/briefs/129-stage-b-reasoning-pipeline-brief.md.
 //
 // path_checkpoint_session is a `type = 'path_checkpoint_session'` row on the
 // shared artifacts table, but unlike every other artifact type it is
@@ -18,6 +20,10 @@ export type PathCheckpointSessionStatus = 'generating' | 'awaiting_checkpoint' |
 
 export type PathCheckpointSessionContent = {
   stage_outputs: Record<string, unknown>;
+  // Set once, at Checkpoint 2's proceed — the design doc leaves Stage 5
+  // (developing the chosen path) to Stage C, so this just records which
+  // Stage 4 candidate id the user picked, ready for Stage C to pick up.
+  chosen_candidate_id?: string;
 };
 
 export type PathCheckpointSessionRow = {
@@ -34,16 +40,22 @@ const SESSION_SELECT = 'id, user_id, current_stage, status, content';
 type Client = SupabaseClient<any, any, any>;
 
 /**
- * Starts a new path_checkpoint_session for a user, or reuses an in-flight
- * one if a concurrent call already won the create race — same
- * insert-then-catch-23505-then-reread pattern as generate-path-options's
- * kickoff (#71 precedent), adapted for a mutate-in-place type.
+ * Shared insert-then-catch-23505-then-reread implementation — same pattern
+ * as generate-path-options's kickoff (#71 precedent), adapted for a
+ * mutate-in-place type. `created` tells the caller whether THIS call won the
+ * race and should go on to do the session's first-stage work, or lost it and
+ * should just treat the returned row as someone else's already-in-flight (or
+ * finished) session. Stage A's startCheckpointSession (below) doesn't need
+ * that distinction since its callers only care about the resulting row;
+ * Stage B's route handlers do, since kicking off Stage 1/2 twice for a
+ * double-click on a brand-new user would double-run a real LLM call and
+ * double-log a 'presented' exchange for the same content.
  */
-export async function startCheckpointSession(
+async function startOrReuseCheckpointSession(
   supabase: Client,
   userId: string,
   initialStage: number,
-): Promise<PathCheckpointSessionRow> {
+): Promise<{ session: PathCheckpointSessionRow; created: boolean }> {
   const { data: inserted, error } = await supabase
     .from('artifacts')
     .insert({
@@ -67,14 +79,45 @@ export async function startCheckpointSession(
     if (readError || !current) {
       throw readError ?? new Error('Lost the session-create race but no existing row was found');
     }
-    return current;
+    return { session: current, created: false };
   }
 
   if (error || !inserted) {
     throw error ?? new Error('Failed to create path_checkpoint_session');
   }
 
-  return inserted as PathCheckpointSessionRow;
+  return { session: inserted as PathCheckpointSessionRow, created: true };
+}
+
+/**
+ * Starts a new path_checkpoint_session for a user, or reuses an in-flight
+ * one if a concurrent call already won the create race. See
+ * startOrReuseCheckpointSession for the shared implementation — this is the
+ * Stage A shape (row only) kept unchanged for its existing callers
+ * (scripts/verify-129-stage-a.mts). Stage B route handlers that need to know
+ * whether they won the race should call startCheckpointSessionWithCreationFlag
+ * instead.
+ */
+export async function startCheckpointSession(
+  supabase: Client,
+  userId: string,
+  initialStage: number,
+): Promise<PathCheckpointSessionRow> {
+  const { session } = await startOrReuseCheckpointSession(supabase, userId, initialStage);
+  return session;
+}
+
+/**
+ * Stage B addition — same as startCheckpointSession, but also reports
+ * whether this call won the create race, so a caller that's about to kick
+ * off real work (an LLM call, a logged exchange) can skip it when it lost.
+ */
+export async function startCheckpointSessionWithCreationFlag(
+  supabase: Client,
+  userId: string,
+  initialStage: number,
+): Promise<{ session: PathCheckpointSessionRow; created: boolean }> {
+  return startOrReuseCheckpointSession(supabase, userId, initialStage);
 }
 
 /**
@@ -226,4 +269,54 @@ export async function completeCheckpointSession(
   if (sessionError) throw sessionError;
 
   return resultId;
+}
+
+/**
+ * Stage B addition. Checkpoint 2's proceed is the one checkpoint where the
+ * user picks a specific thing (a Stage 4 candidate id) rather than just
+ * acknowledging — record it and move current_stage to 5 so the row is ready
+ * for Stage C to pick up. Stage 5/6 aren't implemented yet, so this
+ * deliberately leaves status at 'awaiting_checkpoint' rather than claiming
+ * 'generating' for work that doesn't exist yet. `priorContent` is merged,
+ * same prior-content-preserving pattern as recordStageOutput — stage_outputs
+ * passes through untouched.
+ */
+export async function recordChosenCandidate(
+  supabase: Client,
+  sessionId: string,
+  candidateId: string,
+  priorContent: PathCheckpointSessionContent,
+): Promise<PathCheckpointSessionRow> {
+  const nextContent: PathCheckpointSessionContent = {
+    ...priorContent,
+    chosen_candidate_id: candidateId,
+  };
+
+  const { data, error } = await supabase
+    .from('artifacts')
+    .update({ current_stage: 5, status: 'awaiting_checkpoint', content: nextContent })
+    .eq('id', sessionId)
+    .select(SESSION_SELECT)
+    .single();
+
+  if (error || !data) throw error ?? new Error('Failed to record chosen candidate');
+  return data as PathCheckpointSessionRow;
+}
+
+/**
+ * Counts how many 'redo' exchanges already exist for a given stage of a
+ * session — used to enforce the design doc §6 redo cap (2 max per
+ * checkpoint; on exceeding it, the caller should auto-proceed with the
+ * last-generated version rather than looping indefinitely).
+ */
+export async function countRedosForStage(supabase: Client, sessionId: string, stage: number): Promise<number> {
+  const { count, error } = await supabase
+    .from('path_checkpoint_exchanges')
+    .select('*', { count: 'exact', head: true })
+    .eq('session_id', sessionId)
+    .eq('stage', stage)
+    .eq('role', 'redo');
+
+  if (error) throw error;
+  return count ?? 0;
 }
