@@ -167,10 +167,102 @@ Replaces today's separate `PATH_OPTIONS_PROMPT` (4×150-250 word cards) and
 5. **The honest cost** — tied to a specific `friction_point`, not generic
    difficulty ("this will be hard"). Must be as specific and evidenced as the
    fit section.
-6. **The life it leads toward** — concrete and evidenced (what a day/year
-   genuinely doing this would look like, given who they demonstrably are).
-   Never a happiness promise — stays in the same grounded register as the
-   rest of the report.
+6. **The life it leads toward — the destination** (reordered 2026-08-26, was
+   #7). Concrete and evidenced (what a day/year genuinely doing this would
+   look like, given who they demonstrably are). Never a happiness promise —
+   stays in the same grounded register as the rest of the report. Comes
+   before the strategy on purpose: paint the destination first, then show
+   the route — ending the report on the concrete "how" sets up the
+   `/plan` seed actions and Mentor CTA that likely follow it on the page,
+   rather than ending on an abstract future picture and then pivoting
+   awkwardly into action items.
+7. **The master strategy — how** (reordered 2026-08-26, was #6; restructured
+   2026-08-26 twice — first from a single paragraph into phases, then from
+   phases into **objectives**, after a design discussion identified that
+   "phases" (Plan → Research → Execute → Evaluate) risked being the exact
+   kind of cookie-cutter, could-apply-to-anyone structure the rest of this
+   redesign exists to avoid. Objectives encode *what actually matters for
+   this specific person*, not *the universal shape of doing anything* —
+   phases describe process; objectives describe substance.
+
+   Structure: an ordered array of **core objectives only** — the few things
+   that actually determine whether this path succeeds, not a checklist of
+   every task involved. Count is evidence-driven, same principle as Stage
+   4's candidate count: no fixed quota, could be 2, could be 5, whatever the
+   evidence genuinely supports.
+
+   **Naming convention — this doubles as the completion signal, no separate
+   "done" field needed**: each objective should be named in the shape
+   "do X by Y so that Z" — specific enough that what "done" looks like is
+   self-evident from the name itself. "Build credibility" fails this test
+   (vague, no implied completion state); "Establish a track record in
+   [specific domain] so that [specific outcome tied to their evidence]"
+   passes.
+
+   **Ordering is strictly sequential** (not parallel — practically, a
+   person has finite time and attention regardless of theoretical
+   independence). But the *reason* for a given position is often a mix of
+   two things, and the rationale must be honest about which is actually
+   driving it rather than always implying a hard prerequisite: (a) real
+   dependency — this objective genuinely can't succeed until an earlier one
+   is substantially in place, or (b) priority — both are independently
+   achievable, but this one matters more first given the person's specific
+   evidence. Dependency constrains what's eligible; priority orders what's
+   eligible. Don't force every rationale into one category — most will be
+   a blend, and the rationale should say so honestly rather than performing
+   false certainty about a clean "step 1 before step 2" logic.
+
+   Each objective needs: a `name` (in the X-by-Y-so-that-Z shape above), a
+   `description` (what it actually involves), and a `sequencing_rationale`
+   (why this objective sits at this point — real dependency, priority, or
+   both, tied to a real citation — never a generic project-management
+   assumption). Same self-check as every other section: could this exact
+   objective be handed to a different user regardless of their evidence? If
+   yes, revise until it's inseparable from this person's actual citations.
+
+   **Referencing discarded Stage 4 candidates**: permitted if it genuinely
+   helps communicate a point, but do not assume the reader remembers
+   details from section 4 by the time they reach this section — any such
+   reference must be self-contained (re-establish enough context to make
+   sense on its own), not a bare callback assuming recall.
+
+   This structure matches `/path`'s planned card/stepper rendering — each
+   objective should be independently renderable, not prose Stage D has to
+   re-parse into steps.
+
+**Superseded framing, for the record:** the original value-ladder description
+promised a "7 day action plan" as part of the one-time paid tier. That
+tactical, day-by-day framing is retired in favor of the master strategy
+above (§7, the how — structured as sequenced, grounded objectives, not prose)
+plus a living `/plan` surface (see §8) seeded with a small set of concrete
+starting actions at Stage 6 completion. The strategy is static analysis,
+generated once as part of the report; `/plan` is where ongoing, checkable
+task management actually happens over time — a meaningfully different kind
+of artifact, deliberately out of Stage C's scope (see §8).
+
+## 8. `/plan` — deliberately deferred, not decided here
+
+Where the living, checkable day-to-day task list lives, how it's seeded,
+and Mentor's exact role in maintaining it are all open questions, explicitly
+out of scope for #129's staged execution (Stages A-D). What's settled enough
+to build against:
+
+- `/path` hosts the full diagnosis (report + master strategy + destination,
+  §4) — static, generated once by Stage 6, matching every other Tier C
+  artifact's shape.
+- `/plan` is a distinct, already-existing surface (originally intended for
+  day-to-day task management) that needs a **mutable** artifact shape — closer
+  to `path_checkpoint_session`'s "mutated in place" pattern than the
+  append-only Tier C pattern everything else in this project uses. This is
+  a genuinely new artifact shape, not a small addition to existing patterns.
+- Stage 6 should *seed* `/plan`'s initial content (a handful of concrete
+  starting actions grounded in the strategy's first objective) as part of its
+  output, so a one-time payer isn't left with strategy-only and an empty
+  task list — but building the actual mutable task-management system is
+  explicitly a new, separately-scoped ticket, not part of Stage C.
+- Mentor's subscription value becomes concrete once this exists: helping
+  execute and adapt the strategy over time, by maintaining `/plan` — not
+  re-explaining `/path`'s static analysis.
 
 ## 5. Staging (execution order, matching the #100/#118 precedent)
 
