@@ -770,6 +770,7 @@ p {
 .generating-desc {
   line-height: 1.55;
   max-width: 340px;
+  margin: 0 auto;
 }
 
 .deliverables-list {
