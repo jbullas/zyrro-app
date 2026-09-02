@@ -6,11 +6,15 @@ export type ArtifactType =
   | 'path_options'
   | 'path_plan'
   | 'path_checkpoint_session'
-  | 'path_checkpoint_result';
+  | 'path_checkpoint_result'
+  | 'path_direction_session';
 // path_checkpoint_session additionally uses 'awaiting_checkpoint' and
 // 'complete' (see lib/path-checkpoint.ts) — not part of the generating/ready/
 // failed vocabulary the other (Tier C append-only) types use.
-export type ArtifactStatus = 'generating' | 'ready' | 'failed' | 'awaiting_checkpoint' | 'complete';
+// path_direction_session uses 'in_progress' and 'complete' (see
+// lib/path-direction.ts) — no background generation, so no 'generating'/
+// 'failed', and no review step, so no 'awaiting_checkpoint'.
+export type ArtifactStatus = 'generating' | 'ready' | 'failed' | 'awaiting_checkpoint' | 'complete' | 'in_progress';
 
 /**
  * Resolves the current version of a Tier C (append-only) artifact — the

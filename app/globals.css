@@ -1797,3 +1797,74 @@ p {
   background: rgba(216,72,59,0.10);
   color: var(--color-failure);
 }
+
+/* ── SelectableList — #134 Slice 1, Checkpoint 1 "Direction" (see
+   components/SelectableList.tsx). A flat select-up-to-N checklist, styled as
+   its own row rather than reusing .project-name-card (that card's
+   left-aligned title+rationale layout doesn't fit a single-line toggle row
+   with a leading check mark). Kept at file end per established practice —
+   new utility classes placed earlier have previously lost cascade ties to
+   older component classes at equal specificity. ── */
+.selectable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selectable-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #fff;
+  border-radius: 10px;
+  border: 0.5px solid rgba(0,0,0,0.1);
+  padding: 12px 14px;
+  cursor: pointer;
+  font: inherit;
+  color: #1E1E1E;
+  width: 100%;
+}
+
+.selectable-row:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.selectable-row-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.selectable-row--positive.selected {
+  border-color: var(--color-success);
+}
+.selectable-row--positive.selected .selectable-row-check {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.selectable-row--negative.selected {
+  border-color: var(--color-failure);
+}
+.selectable-row--negative.selected .selectable-row-check {
+  background: var(--color-failure);
+  border-color: var(--color-failure);
+}
+
+.selection-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
