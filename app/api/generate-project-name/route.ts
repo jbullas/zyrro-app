@@ -4,6 +4,8 @@ import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
 import { getChatCompletion } from '@/lib/llm';
 import { PROJECT_NAME_PROMPT } from '@/lib/prompts/project-name';
+import { getCurrentArtifact } from '@/lib/artifacts';
+import type { PathReportContent } from '@/lib/generate-path-report';
 
 interface ProjectNameOption {
   name: string;
@@ -24,28 +26,28 @@ function validateProjectNameOptions(data: unknown): data is { options: ProjectNa
     && typeof o?.rationale === 'string' && o.rationale.trim().length > 0);
 }
 
-// #129 Stage D: project naming (#10) relocated from the old path_options
-// "pick a card" moment to Stage 6 completion — this route now takes a
-// path_checkpoint_result id instead of path_options_artifact_id + path_id.
-// PROJECT_NAME_PROMPT itself is unchanged, still expecting { name, thesis,
-// signatures_engaged }. Only this route's caller (formerly /path/page.tsx's
-// old 4-card flow) had a caller at all — safe to adapt in place rather than
-// keep a dead old branch. The chosen candidate's own short name (Stage 6's
-// report has no equivalent short label of its own) and its anchoring
-// signatures (Stage 5's deepened pass, not Stage 4's lighter one) are
-// sourced from the linked path_checkpoint_session, not the final report
-// content directly.
-export async function POST(req: NextRequest) {
+// #134 Slice 3: project naming (#10, relocated to final-delivery completion
+// by #129 Stage D) adapted in place a second time — now reads path_report
+// instead of path_checkpoint_result. Same "adapt in place, don't keep a
+// dead old branch" reasoning #129 Stage D's own comment already used for
+// this route's first migration (path_options -> path_checkpoint_result).
+// PROJECT_NAME_PROMPT itself was rewritten (lib/prompts/project-name.ts) to
+// take path_report's real chosen_candidate { name, description } directly —
+// the old { name, thesis, signatures_engaged } shape doesn't exist in the
+// new flow's data model, same "new prompt, not a bridge into the old
+// shape" principle lib/prompts/path-report.ts itself already established.
+//
+// Resolves the current user's ready path_report server-side via
+// getCurrentArtifact rather than trusting a client-supplied id — the old
+// version took path_checkpoint_result_id in the request body; this is a
+// deliberate tightening, matching the convention
+// app/api/path-options/route.ts's POST already established (server-resolves
+// rather than trusts a client-passed id), not an oversight.
+export async function POST(_req: NextRequest) {
   const sessionClient = await createSessionClient();
   const { data: { user } } = await sessionClient.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { path_checkpoint_result_id } = await req.json() as { path_checkpoint_result_id: string };
-
-  if (!path_checkpoint_result_id) {
-    return NextResponse.json({ error: 'Missing path_checkpoint_result_id' }, { status: 400 });
   }
 
   const entitled = await hasPaidEntitlement(user.id);
@@ -55,43 +57,16 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  const { data: resultArtifact } = await supabase
-    .from('artifacts')
-    .select('content, path_checkpoint_session_id')
-    .eq('id', path_checkpoint_result_id)
-    .eq('user_id', user.id)
-    .eq('type', 'path_checkpoint_result')
-    .eq('status', 'ready')
-    .maybeSingle();
+  const { data: report } = await getCurrentArtifact<{ content: PathReportContent }>(
+    supabase,
+    user.id,
+    'path_report',
+    { status: 'ready', select: 'content' },
+  );
 
-  if (!resultArtifact) {
-    return NextResponse.json({ error: 'Path result not found' }, { status: 404 });
+  if (!report) {
+    return NextResponse.json({ error: 'Path report not found' }, { status: 404 });
   }
-
-  let chosenCandidateName = '';
-  let signaturesEngaged: string[] = [];
-
-  if (resultArtifact.path_checkpoint_session_id) {
-    const { data: session } = await supabase
-      .from('artifacts')
-      .select('content')
-      .eq('id', resultArtifact.path_checkpoint_session_id)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionContent = session?.content as any;
-    const stageOutputs = sessionContent?.stage_outputs;
-    const chosenId = sessionContent?.chosen_candidate_id as string | undefined;
-    const stage4Candidates = stageOutputs?.stage4?.candidates as Array<{ id: string; name: string }> | undefined;
-    chosenCandidateName = stage4Candidates?.find(c => c.id === chosenId)?.name ?? '';
-
-    const stage5AnchoringSignatures = stageOutputs?.stage5?.anchoring_signatures;
-    if (Array.isArray(stage5AnchoringSignatures)) signaturesEngaged = stage5AnchoringSignatures;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const thesis = (resultArtifact.content as any)?.thesis ?? '';
 
   try {
     const content = await getChatCompletion({
@@ -101,9 +76,8 @@ export async function POST(req: NextRequest) {
         {
           role: 'user',
           content: JSON.stringify({
-            name: chosenCandidateName,
-            thesis,
-            signatures_engaged: signaturesEngaged,
+            name: report.content.chosen_candidate.name,
+            description: report.content.chosen_candidate.description,
           }),
         },
       ],
