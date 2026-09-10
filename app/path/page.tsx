@@ -8,10 +8,12 @@ import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ReframeCtaBlock from '@/components/ReframeCtaBlock';
 import DirectionFlow from '@/components/DirectionFlow';
+import OptionsFlow from '@/components/OptionsFlow';
 import type { ReframeTeaser } from '@/lib/artifact-schemas';
 import { useCheckpointSessionStatus } from '@/lib/checkpoint-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 import { usePathDirection } from '@/lib/use-path-direction';
+import { usePathOptions } from '@/lib/use-path-options';
 
 type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'checkpoint-flow';
 
@@ -41,6 +43,14 @@ export default function PathPage() {
   const [draftMustHaves, setDraftMustHaves]   = useState<string[]>([]);
   const [draftMustAvoids, setDraftMustAvoids] = useState<string[]>([]);
   const [draftIdealLife, setDraftIdealLife]   = useState('');
+
+  // #134 Slice 2 — activates the moment Direction completes, same gating
+  // convention usePathDirection itself uses (an `active` boolean derived
+  // from surrounding state, not a new PageState value). Called
+  // unconditionally at the top level, same as every other hook here — only
+  // the `active` argument varies with direction.step, not whether the hook
+  // itself is called, so this doesn't violate the rules of hooks.
+  const options = usePathOptions(direction.step === 'complete');
 
   // ── Entry gating — unchanged from the pre-Stage-D page ──────────────
   useEffect(() => {
@@ -272,6 +282,45 @@ export default function PathPage() {
         body={direction.error ?? 'We couldn’t load your Direction step. Please try again.'}
         cta={<PrimaryButton onClick={direction.retry}>Try again</PrimaryButton>}
       />
+    );
+  }
+
+  // ── Checkpoint 2 "Options" (#134 Slice 2) ────────────────────────────
+  // Direction is complete — usePathOptions activated above the moment
+  // direction.step flipped to 'complete'. This replaces DirectionFlow's own
+  // terminal 'complete' branch entirely: PathPage never renders
+  // <DirectionFlow> once direction.step is 'complete' (see the fallthrough
+  // below, reached only when it isn't), so that branch inside
+  // DirectionFlow.tsx is now unreachable dead code — flagged here, not
+  // deleted this slice, same "flag, don't necessarily delete yet" posture
+  // as #134 Slice 1's own dead-code notes elsewhere in this file.
+  if (direction.step === 'complete') {
+    if (options.loading) {
+      return (
+        <GeneratingState heading="Loading your Options step." />
+      );
+    }
+
+    if (options.error || !options.status || !options.content) {
+      return (
+        <MessageState
+          eyebrow="YOUR PATH"
+          heading="Something went wrong."
+          body={options.error ?? 'We couldn’t load your Options step. Please try again.'}
+          cta={<PrimaryButton onClick={options.retry}>Try again</PrimaryButton>}
+        />
+      );
+    }
+
+    // options.status/options.content are guaranteed non-null past the
+    // guard above, but TS can't see that through the object property
+    // access alone — narrow via local consts, same pattern direction uses
+    // just below for DirectionFlow's stricter prop type.
+    const optionsStatus = options.status;
+    const optionsContent = options.content;
+
+    return (
+      <OptionsFlow options={{ ...options, status: optionsStatus, content: optionsContent }} />
     );
   }
 
