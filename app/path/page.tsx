@@ -9,11 +9,14 @@ import GeneratingState from '@/components/GeneratingState';
 import ReframeCtaBlock from '@/components/ReframeCtaBlock';
 import DirectionFlow from '@/components/DirectionFlow';
 import OptionsFlow from '@/components/OptionsFlow';
+import PathReportFlow from '@/components/PathReportFlow';
 import type { ReframeTeaser } from '@/lib/artifact-schemas';
 import { useCheckpointSessionStatus } from '@/lib/checkpoint-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 import { usePathDirection } from '@/lib/use-path-direction';
 import { usePathOptions } from '@/lib/use-path-options';
+import { usePathReport } from '@/lib/use-path-report';
+import { useProjectNaming } from '@/lib/use-project-naming';
 
 type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'checkpoint-flow';
 
@@ -51,6 +54,13 @@ export default function PathPage() {
   // the `active` argument varies with direction.step, not whether the hook
   // itself is called, so this doesn't violate the rules of hooks.
   const options = usePathOptions(direction.step === 'complete');
+
+  // #134 Slice 3 UI — same gating convention, one step further down the
+  // chain: activates the moment Options completes. naming has no `active`
+  // gate of its own (nothing to bootstrap — see lib/use-project-naming.ts's
+  // own header for why it's a separate hook from usePathReport).
+  const report = usePathReport(options.status === 'complete');
+  const naming = useProjectNaming();
 
   // ── Entry gating — unchanged from the pre-Stage-D page ──────────────
   useEffect(() => {
@@ -310,6 +320,37 @@ export default function PathPage() {
           cta={<PrimaryButton onClick={options.retry}>Try again</PrimaryButton>}
         />
       );
+    }
+
+    // ── Final delivery: "Your Path" report + naming (#134 Slice 3) ─────
+    // Options reached its own terminal state — usePathReport activated
+    // above the moment options.status flipped to 'complete'. This replaces
+    // OptionsFlow's own 'complete' branch entirely, same "supersede, flag
+    // don't delete" posture as this block's own header comment already
+    // uses for DirectionFlow's terminal branch: PathPage never renders
+    // <OptionsFlow> once options.status is 'complete' (see the fallthrough
+    // below, reached only when it isn't), so that branch inside
+    // OptionsFlow.tsx (the plain chosen-candidate summary card) is now
+    // unreachable dead code — flagged here, not deleted this slice.
+    if (options.status === 'complete') {
+      if (report.loading) {
+        return (
+          <GeneratingState heading="Loading your Path report." />
+        );
+      }
+
+      if (report.error) {
+        return (
+          <MessageState
+            eyebrow="YOUR PATH"
+            heading="Something went wrong."
+            body={report.error}
+            cta={<PrimaryButton onClick={report.retry}>Try again</PrimaryButton>}
+          />
+        );
+      }
+
+      return <PathReportFlow report={report} naming={naming} />;
     }
 
     // options.status/options.content are guaranteed non-null past the
