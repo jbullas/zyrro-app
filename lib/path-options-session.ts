@@ -68,19 +68,51 @@ const EMPTY_CONTENT: PathOptionsSessionContent = {
 type Client = SupabaseClient<any, any, any>;
 
 /**
- * Starts a new path_options_session for a user, or reuses an in-flight one
- * if a concurrent call already won the create race — same insert-then-
- * catch-23505-then-reread shape as startOrReuseCheckpointSession
- * (lib/path-checkpoint.ts). `created` tells the caller whether this call
- * should go on to kick off the initial-4 generation, or lost the race and
- * should just treat the returned row as someone else's already-in-flight
- * (or finished) session — same contract as path_checkpoint_session's
+ * Starts a new path_options_session for a user, or reuses an existing one —
+ * whether still in flight or already resolved. `created` tells the caller
+ * whether this call should go on to kick off the initial-4 generation, or
+ * reuse the returned row as someone else's already-in-flight (or finished)
+ * session, same contract as path_checkpoint_session's own
  * startCheckpointSessionWithCreationFlag.
+ *
+ * Checks for any existing row FIRST, before ever attempting an insert.
+ * artifacts_one_path_options_session_generating_per_user (migration
+ * 20260910000000_path_options_session.sql) is a *partial* unique index — it
+ * only guards two concurrent creation attempts racing to insert while no row
+ * exists yet. It does nothing to stop a later call from creating a SECOND
+ * row once the first has resolved past 'generating' (to
+ * 'awaiting_checkpoint'/'complete') — which is exactly what an
+ * insert-first-unconditionally approach used to do here: a returning user's
+ * every fresh page mount (this is the bootstrap call lib/use-path-options.ts's
+ * hook makes on every mount, not just the first) silently spawned a
+ * brand-new empty session, shadowing the real one via getCurrentArtifact's
+ * created_at DESC "current row" ordering — discarding the user's actual
+ * completed selection and restarting Options from scratch. Confirmed live
+ * via #134 Slice 3's own UI verification pass, which reproduced this by
+ * seeding an already-'complete' session and loading /path once — the same
+ * shape as any real revisit after completion. Same root cause, same fix
+ * shape, as app/api/path-report/route.ts's own GET fix in this same
+ * session.
  */
 export async function startOrReuseOptionsSession(
   supabase: Client,
   userId: string,
 ): Promise<{ session: PathOptionsSessionRow; created: boolean }> {
+  const { data: existing, error: readError } = await getCurrentArtifact<PathOptionsSessionRow>(
+    supabase,
+    userId,
+    'path_options_session',
+    { select: SESSION_SELECT },
+  );
+  if (readError) throw readError;
+  if (existing) {
+    return { session: existing, created: false };
+  }
+
+  // Only reachable now for a genuine concurrent first-ever-creation race
+  // (two requests landing here with no row yet) — the read above already
+  // handles the common "a row already exists" case, which used to fall
+  // through to here unguarded.
   const { data: inserted, error } = await supabase
     .from('artifacts')
     .insert({
@@ -94,14 +126,14 @@ export async function startOrReuseOptionsSession(
     .single();
 
   if (error?.code === '23505') {
-    const { data: current, error: readError } = await getCurrentArtifact<PathOptionsSessionRow>(
+    const { data: current, error: rereadError } = await getCurrentArtifact<PathOptionsSessionRow>(
       supabase,
       userId,
       'path_options_session',
       { select: SESSION_SELECT },
     );
-    if (readError || !current) {
-      throw readError ?? new Error('Lost the session-create race but no existing row was found');
+    if (rereadError || !current) {
+      throw rereadError ?? new Error('Lost the session-create race but no existing row was found');
     }
     return { session: current, created: false };
   }

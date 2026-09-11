@@ -190,58 +190,90 @@ export async function GET(_req: NextRequest) {
   }
   const { context, chosenCandidateId } = built;
 
-  // Standard Tier C creation-race pattern — insert, catch 23505, reread —
-  // matching identity_report's own precedent, not path_options_session's
-  // claimGeneration-based session pattern: path_report is a Tier C row, not
-  // a mutated-in-place session.
-  const { data: inserted, error: insertError } = await supabase
-    .from('artifacts')
-    .insert({
-      user_id: user.id,
-      type: 'path_report',
-      access_level: 'paid',
-      status: 'generating',
-      // Genuinely partial at this point — only what's already known before
-      // generation runs. Not cast to PathReportContent; see
-      // PathReportRowRaw's own comment above.
-      content: {
-        chosen_candidate: { id: chosenCandidateId, name: context.chosen_candidate.name, description: context.chosen_candidate.description },
-        comments: context.comments,
-      },
-    })
-    .select('id, user_id, status, content')
-    .single();
+  // Check for any existing row FIRST, before ever attempting an insert.
+  // artifacts_one_path_report_generating_per_user (migration
+  // 20260910010000_path_report.sql) is a *partial* unique index — it only
+  // guards two concurrent creation attempts racing to insert while no row
+  // exists yet. It does nothing to stop a later call from creating a SECOND
+  // row once the first has resolved past 'generating' (to 'ready') — which
+  // is exactly what this route's insert-first-unconditionally approach used
+  // to do below on every call: a returning user's every fresh page mount
+  // (this GET is the bootstrap call lib/use-path-report.ts's hook makes on
+  // every mount, not just the first) silently spawned a brand-new empty
+  // report row and kicked off a real, costly regeneration, shadowing the
+  // finished report via getCurrentArtifact's created_at DESC "current row"
+  // ordering. Confirmed live via #134 Slice 3's own UI verification pass —
+  // same root cause, same fix shape, as lib/path-options-session.ts's
+  // startOrReuseOptionsSession fix in this same session.
+  const { data: existingRow, error: existingReadError } = await getCurrentArtifact<PathReportRowRaw>(
+    supabase,
+    user.id,
+    'path_report',
+    { select: 'id, user_id, status, content' },
+  );
+  if (existingReadError) throw existingReadError;
 
   let session: PathReportRowRaw;
   let created: boolean;
 
-  if (insertError?.code === '23505') {
-    const { data: current, error: readError } = await getCurrentArtifact<PathReportRowRaw>(
-      supabase,
-      user.id,
-      'path_report',
-      { select: 'id, user_id, status, content' },
-    );
-    if (readError || !current) {
-      throw readError ?? new Error('Lost the path_report creation race but no existing row was found');
-    }
-    session = current;
+  if (existingRow) {
+    session = existingRow;
     created = false;
-  } else if (insertError || !inserted) {
-    throw insertError ?? new Error('Failed to create path_report');
   } else {
-    session = inserted as PathReportRowRaw;
-    created = true;
+    // Standard Tier C creation-race pattern — insert, catch 23505, reread —
+    // matching identity_report's own precedent, not path_options_session's
+    // claimGeneration-based session pattern: path_report is a Tier C row, not
+    // a mutated-in-place session. Only reachable now for a genuine
+    // concurrent first-ever-generation race (two requests landing here with
+    // no row yet) — the read above already handles the common "a row
+    // already exists" case, which used to fall through to here unguarded.
+    const { data: inserted, error: insertError } = await supabase
+      .from('artifacts')
+      .insert({
+        user_id: user.id,
+        type: 'path_report',
+        access_level: 'paid',
+        status: 'generating',
+        // Genuinely partial at this point — only what's already known before
+        // generation runs. Not cast to PathReportContent; see
+        // PathReportRowRaw's own comment above.
+        content: {
+          chosen_candidate: { id: chosenCandidateId, name: context.chosen_candidate.name, description: context.chosen_candidate.description },
+          comments: context.comments,
+        },
+      })
+      .select('id, user_id, status, content')
+      .single();
+
+    if (insertError?.code === '23505') {
+      const { data: current, error: readError } = await getCurrentArtifact<PathReportRowRaw>(
+        supabase,
+        user.id,
+        'path_report',
+        { select: 'id, user_id, status, content' },
+      );
+      if (readError || !current) {
+        throw readError ?? new Error('Lost the path_report creation race but no existing row was found');
+      }
+      session = current;
+      created = false;
+    } else if (insertError || !inserted) {
+      throw insertError ?? new Error('Failed to create path_report');
+    } else {
+      session = inserted as PathReportRowRaw;
+      created = true;
+    }
   }
 
   if (created) {
     after(() => runGeneration(session.id, context, chosenCandidateId));
-    return NextResponse.json({ status: session.status, content: session.content });
+    return NextResponse.json({ id: session.id, status: session.status, content: session.content });
   }
 
-  // Reused an existing row. If a prior generation attempt crashed (status
-  // 'failed'), this GET is the only place that can ever resume it — same
-  // claim-then-rerun shape as /api/path-options's own GET fix, applying
+  // Reused an existing row (found on the first read above, or via the
+  // creation-race reread just above). If a prior generation attempt crashed
+  // (status 'failed'), this GET is the only place that can ever resume it —
+  // same claim-then-rerun shape as /api/path-options's own GET fix, applying
   // that lesson rather than repeating the gap.
   if (session.status === 'failed') {
     const { data: claimed } = await supabase
@@ -254,14 +286,14 @@ export async function GET(_req: NextRequest) {
 
     if (claimed) {
       after(() => runGeneration(session.id, context, chosenCandidateId));
-      return NextResponse.json({ status: (claimed as PathReportRowRaw).status, content: (claimed as PathReportRowRaw).content });
+      return NextResponse.json({ id: session.id, status: (claimed as PathReportRowRaw).status, content: (claimed as PathReportRowRaw).content });
     }
     // Lost the claim race — another concurrent request already claimed it
     // and will run the resume. Report 'generating' (the now-true state),
     // not the stale 'failed' this read predates — same precedent as
     // /api/path-options's own claim-race handling.
-    return NextResponse.json({ status: 'generating', content: session.content });
+    return NextResponse.json({ id: session.id, status: 'generating', content: session.content });
   }
 
-  return NextResponse.json({ status: session.status, content: session.content });
+  return NextResponse.json({ id: session.id, status: session.status, content: session.content });
 }
