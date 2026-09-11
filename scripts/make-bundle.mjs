@@ -24,7 +24,7 @@ const OUT = 'context-bundle.md';
 const MAX_LINE = 2000; // lines longer than this are stripped (embedded assets, minified blobs)
 
 // Include any tracked file with one of these extensions...
-const TEXT_EXT = new Set(['.md', '.ts', '.tsx', '.js', '.mjs', '.css', '.sql', '.json']);
+const TEXT_EXT = new Set(['.md', '.ts', '.tsx', '.mts', '.js', '.mjs', '.css', '.sql', '.json']);
 
 // ...except these filenames (large/noisy, no planning value).
 const DENY = new Set(['package-lock.json', 'context-bundle.md']);
