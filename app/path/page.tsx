@@ -8,7 +8,7 @@ import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ReframeCtaBlock from '@/components/ReframeCtaBlock';
 import DirectionFlow from '@/components/DirectionFlow';
-import OptionsFlow from '@/components/OptionsFlow';
+import OptionsFlow, { COMMENTS_ACKNOWLEDGMENT } from '@/components/OptionsFlow';
 import PathReportFlow from '@/components/PathReportFlow';
 import type { ReframeTeaser } from '@/lib/artifact-schemas';
 import { useCheckpointSessionStatus } from '@/lib/checkpoint-status';
@@ -322,6 +322,15 @@ export default function PathPage() {
       );
     }
 
+    // options.content is guaranteed non-null past the guard above, but TS
+    // can't see that through the object property access alone — narrow via
+    // a local const, same pattern used just below for optionsStatus/
+    // DirectionFlow's stricter prop type. Hoisted up here (rather than only
+    // declared right before the final <OptionsFlow> render, as it used to
+    // be) so it's also usable inside the report.loading branch immediately
+    // below, for #138 §3's comments-acknowledgment fix.
+    const optionsContent = options.content;
+
     // ── Final delivery: "Your Path" report + naming (#134 Slice 3) ─────
     // Options reached its own terminal state — usePathReport activated
     // above the moment options.status flipped to 'complete'. This replaces
@@ -334,8 +343,18 @@ export default function PathPage() {
     // unreachable dead code — flagged here, not deleted this slice.
     if (options.status === 'complete') {
       if (report.loading) {
+        // #138 §3: this is the real, reachable moment for the "your comment
+        // was captured" acknowledgment — OptionsFlow.tsx's own 'complete'
+        // branch (where an earlier version of this fix lived) never renders,
+        // per this block's own comment above. Live-verification confirmed
+        // that directly: the confirm+comment flow lands here, not there.
+        // Conditional on optionsContent.comments, same guard shape already
+        // used for the (unreachable) echo in OptionsFlow.tsx.
         return (
-          <GeneratingState heading="Loading your Path report." />
+          <GeneratingState
+            heading="Loading your Path report."
+            description={optionsContent.comments ? COMMENTS_ACKNOWLEDGMENT : undefined}
+          />
         );
       }
 
@@ -353,12 +372,11 @@ export default function PathPage() {
       return <PathReportFlow report={report} naming={naming} />;
     }
 
-    // options.status/options.content are guaranteed non-null past the
-    // guard above, but TS can't see that through the object property
-    // access alone — narrow via local consts, same pattern direction uses
-    // just below for DirectionFlow's stricter prop type.
+    // options.status is guaranteed non-null past the guard above, but TS
+    // can't see that through the object property access alone — narrow via
+    // a local const, same pattern DirectionFlow's stricter prop type uses
+    // just below. optionsContent was already narrowed above.
     const optionsStatus = options.status;
-    const optionsContent = options.content;
 
     return (
       <OptionsFlow options={{ ...options, status: optionsStatus, content: optionsContent }} />

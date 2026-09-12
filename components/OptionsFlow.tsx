@@ -4,6 +4,8 @@ import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
 import LinkButton from '@/components/LinkButton';
 import SubmitError from '@/components/SubmitError';
+import ConstellationCard from '@/components/ConstellationCard';
+import ChipRow from '@/components/ChipRow';
 import { useState } from 'react';
 import type { PathOptionsState } from '@/lib/use-path-options';
 
@@ -27,18 +29,51 @@ import type { PathOptionsState } from '@/lib/use-path-options';
 //   4-card UI (commit 7be3ba2), not the Stage D version's single-shared-
 //   button "project-name-card" pattern — that Stage D pattern is exactly
 //   what brief §4 calls out as wrong (one button below a stack of prose,
-//   not a real per-card action). .constellation-card/.option-card-footer
-//   are reused verbatim from that recovered pre-#129 markup. .option-card-sigs
-//   (the recovered pattern's signature-chip row) is NOT reused — CP2's
-//   candidates have no signatures_engaged field the way the old
-//   path_options schema did (§4's content bar is deliberately simpler),
-//   so there's no real data to put there; rendering an empty or fabricated
-//   chip row would be worse than omitting it.
+//   not a real per-card action). .option-card-footer is reused verbatim
+//   from that recovered pre-#129 markup.
+//
+// #138 §6 switched the per-card markup from hand-rolled constellation-card
+// divs (which never actually got a number badge, and whose
+// .constellation-sig-name name class was never defined in globals.css —
+// both silent pre-existing gaps, not something this change introduces) to
+// the real ConstellationCard component, matching /identity's signature
+// cards. .option-card-sigs/.chip-tag (via ChipRow) are recovered from the
+// same pre-#129 commit but were left unused until now — CP2's candidates
+// had no signatures_engaged field until §6 gave them one; rendering an
+// empty/fabricated chip row before now would have been worse than omitting
+// it, per this file's own original reasoning.
 //
 // The RedoField free-text pattern (same commit) is reused near-verbatim for
-// the refine section below ("Not quite right?" copy, textarea + LinkButton),
-// since Checkpoint 2's "provide free-text alternative input" is the direct
-// analogue of the old flow's redo.
+// the refine section below (textarea + LinkButton), since Checkpoint 2's
+// "provide free-text alternative input" is the direct analogue of the old
+// flow's redo.
+//
+// #138 §3 shipped three UI fixes, all scoped to this file alone:
+// - Renamed the refine trigger from "Not quite right?" to "Want a different
+//   option?" — the old copy implied the AI got it wrong; the new one
+//   matches what the button underneath it actually does ("Generate 2 more
+//   options").
+// - The refine card now hides once a candidate is tentatively selected
+//   (`!tentativeId` added to its guard) — there's no reason to offer
+//   "generate 2 more options" once the user has already picked one, and it
+//   used to stay visible alongside "Confirm selection," which read as
+//   confusing.
+// - The comments field's "reads as inert" complaint: traced the actual data
+//   flow first (comments ARE saved correctly and already threaded into
+//   #139's report generation, lib/generate-path-report.ts) rather than
+//   assuming it was broken. The fix is a single inline acknowledgment line
+//   (COMMENTS_ACKNOWLEDGMENT, exported below) — not a broader before/after
+//   copy redesign, which is deferred to #139 once that report's actual use
+//   of comments is built and can be verified for real, rather than guessed
+//   at here. Its rendering below, inside this component's own 'complete'
+//   branch, is DEAD CODE — app/path/page.tsx never renders <OptionsFlow>
+//   once options.status is 'complete' (see that file's own comment at the
+//   equivalent point). Live verification confirmed this: the real reachable
+//   moment is app/path/page.tsx's report.loading interstitial instead, which
+//   is why the constant is exported — imported and rendered there, not here.
+//   Left rendering here too (harmless, unreachable) rather than deleted,
+//   same "flag, don't necessarily delete yet" posture this exact dead
+//   branch already had before #138 touched this file.
 
 const OPTIONS_INTRO =
   'Four directions, built from what you just told us matters. Pick the one that’s closest to right — or tell us ' +
@@ -50,6 +85,11 @@ const OPTIONS_EXPLANATION =
 
 const COMMENTS_EXPLANATION =
   'Anything else you want us to know before we build this out? Optional.';
+
+// #138 §3: exported — the real, reachable render of this text is in
+// app/path/page.tsx's report.loading interstitial, not in this file's own
+// 'complete' branch below (see that branch's own comment for why).
+export const COMMENTS_ACKNOWLEDGMENT = 'Got it — this will be factored into your final report.';
 
 const REFINE_EXPLANATION =
   'Tell us what’s missing or off, and we’ll generate two more directions alongside these.';
@@ -131,6 +171,7 @@ export default function OptionsFlow({ options }: OptionsFlowProps) {
               <div className="card">
                 <p className="card-sub-label">YOUR COMMENTS</p>
                 <p>{options.content.comments}</p>
+                <p className="documentation">{COMMENTS_ACKNOWLEDGMENT}</p>
               </div>
             )}
           </div>
@@ -163,20 +204,33 @@ export default function OptionsFlow({ options }: OptionsFlowProps) {
           <p className="eyebrow">CHECKPOINT 2 · OPTIONS</p>
           <p className="documentation">{OPTIONS_EXPLANATION}</p>
 
-          {candidates.map(c => (
-            <div key={c.id} className={`constellation-card${tentativeId === c.id ? ' selected' : ''}`}>
-              <div className="constellation-card-header">
-                <div className="constellation-header-info">
-                  <div className="constellation-sig-name">{c.name}</div>
+          {candidates.map((c, i) => (
+            <ConstellationCard key={c.id} badge={i + 1} title={c.name}>
+              <p className="core-statement">{c.core_statement}</p>
+              <p className="evidence-analysis">{c.description}</p>
+              <p className="evidence-analysis"><strong>Select this if:</strong> {c.select_if}</p>
+              <div className="tension-block">
+                <span className="tension-label">TENSION</span>
+                <p>{c.tension}</p>
+              </div>
+              <div className="stat-row fit-stat-row">
+                <div className="score-chip">
+                  <span className="score-chip-label">Overall fit</span>
+                  <span className="score-chip-value">{c.fit_score ?? '—'}</span>
+                </div>
+                <div className="score-chip">
+                  <span className="score-chip-label">Confidence</span>
+                  <span className="score-chip-value">{c.fit_confidence ?? '—'}</span>
                 </div>
               </div>
-              <p className="evidence-analysis">{c.description}</p>
+              <p className="card-sub-label" style={{ margin: '14px 16px 6px' }}>DRAWS ON</p>
+              <ChipRow items={c.signatures_engaged} wrapperClassName="option-card-sigs" />
               <div className="option-card-footer">
                 <SecondaryButton onClick={() => setTentativeId(c.id)} disabled={options.submitting}>
                   {tentativeId === c.id ? 'Selected ✓' : 'Select This Path →'}
                 </SecondaryButton>
               </div>
-            </div>
+            </ConstellationCard>
           ))}
 
           {tentativeId && (
@@ -202,9 +256,9 @@ export default function OptionsFlow({ options }: OptionsFlowProps) {
             </div>
           )}
 
-          {!atCap && (
+          {!atCap && !tentativeId && (
             <div className="card">
-              <p className="card-sub-label">Not quite right?</p>
+              <p className="card-sub-label">Want a different option?</p>
               <p className="documentation">{REFINE_EXPLANATION}</p>
               <textarea
                 className="input-field input-field--textarea"

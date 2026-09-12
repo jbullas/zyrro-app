@@ -1241,9 +1241,17 @@ p {
   margin: 0;
 }
 
-.scoring-chips {
+/* Shared stat-row base — display/gap/padding/border-top are identical
+   regardless of column count. Originally duplicated verbatim into a
+   separate .fit-stat-row class (#138 §6) rather than extracted, which was
+   the wrong call: caught during this session's own commit-prep review and
+   extracted here instead. .scoring-chips/.fit-stat-row below set ONLY
+   grid-template-columns, a property .stat-row never touches — so there's no
+   cascade-tie risk between them (that risk is specifically about two
+   same-specificity classes fighting over the SAME property; these don't
+   overlap). Always combined with .stat-row in markup, never used alone. */
+.stat-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding: 14px 16px;
   /* no margin-top declared — .constellation-card-body > * + * owns that;
@@ -1252,6 +1260,13 @@ p {
      visual divider on top of that spacing. */
   border-top: 0.5px solid rgba(0,0,0,0.07);
 }
+
+.scoring-chips { grid-template-columns: repeat(4, 1fr); }
+
+/* #138 §6: option cards' 2-box "Overall fit"/"Confidence" stat row —
+   combined with .stat-row in markup (`className="stat-row fit-stat-row"`),
+   same pattern as .scoring-chips above. */
+.fit-stat-row { grid-template-columns: repeat(2, 1fr); }
 
 .score-chip {
   display: flex;

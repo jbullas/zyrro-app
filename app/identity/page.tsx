@@ -461,7 +461,7 @@ export default function IdentityPage() {
                     <span className="tension-label">TENSION</span>
                     <p>{sig.tension}</p>
                   </div>
-                  <div className="scoring-chips">
+                  <div className="stat-row scoring-chips">
                     <div className="score-chip">
                       <span className="score-chip-label">Frequency</span>
                       <span className="score-chip-value">{sig.frequency ?? '—'}</span>
