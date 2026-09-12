@@ -6,7 +6,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
 import { getCurrentArtifact } from '@/lib/artifacts';
-import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
+import type { IdentitySignatureReportArtifactContent, PrimarySignatureAnalysis } from '@/lib/artifact-schemas';
 import type { PathDirectionSessionContent } from '@/lib/path-direction';
 import {
   startOrReuseOptionsSession,
@@ -82,6 +82,29 @@ async function loadCompletedDirectionContent(
 }
 
 /**
+ * #138 §2: selects the signatures generation treats as the primary driver —
+ * every entry with confidence: High, case-insensitively matched
+ * (PrimaryConstellationConfidence's own comment in lib/artifact-schemas.ts:
+ * real data doesn't reliably hold the instructed "Mid"/"High" casing, so
+ * exact-string comparison against a single expected value isn't safe).
+ * Falls back to the single highest-scoring signature, regardless of
+ * confidence tier, when none are High — the required §2 edge case, so
+ * generation is never handed an empty signatures array and never silently
+ * reverts to a fixed count. The empty-array guard covers a corrupt or
+ * legacy row: primary_constellation is generated as exactly 5, but that's
+ * not compiler-enforced on data read back from Supabase.
+ */
+function selectPrimaryDriverSignatures(
+  primaryConstellation: PrimarySignatureAnalysis[],
+): PrimarySignatureAnalysis[] {
+  const highConfidence = primaryConstellation.filter(s => s.confidence.toLowerCase() === 'high');
+  if (highConfidence.length > 0) return highConfidence;
+
+  if (primaryConstellation.length === 0) return [];
+  return [primaryConstellation.reduce((best, candidate) => (candidate.score > best.score ? candidate : best))];
+}
+
+/**
  * §4's generation inputs: the curated must-haves/avoids/ideal-life from
  * Checkpoint 1, plus the user's strongest signatures — never the full
  * discovery answers or scored signature list Stage 1 of the old flow used.
@@ -90,6 +113,11 @@ async function loadCompletedDirectionContent(
  * time this runs, loadCompletedDirectionContent has already confirmed
  * status === 'complete', which resolveDirectionStep guarantees means all
  * three fields are set, but the type itself doesn't narrow that.
+ *
+ * #138 §2: signatures is selectPrimaryDriverSignatures's confidence-filtered
+ * (or highest-score-fallback) output, not the raw always-top-5
+ * primary_constellation — see that function's own comment. how_you_operate
+ * is passed straight through from the identity report, no filtering.
  */
 function buildGenerationContext(
   identityReport: IdentitySignatureReportArtifactContent,
@@ -99,7 +127,8 @@ function buildGenerationContext(
     must_haves: directionContent.must_haves ?? [],
     must_avoids: directionContent.must_avoids ?? [],
     ideal_life: directionContent.ideal_life ?? '',
-    primary_constellation: identityReport.primary_constellation,
+    signatures: selectPrimaryDriverSignatures(identityReport.primary_constellation),
+    how_you_operate: identityReport.how_you_operate,
   };
 }
 

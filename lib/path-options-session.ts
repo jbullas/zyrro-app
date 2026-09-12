@@ -28,10 +28,59 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 // real tsc error rather than by inspection.
 export type PathOptionsSessionStatus = 'generating' | 'awaiting_checkpoint' | 'complete' | 'failed';
 
+// #138 §6: the semantic-check judge's own confidence in its fit_score
+// verdict for one option. Deliberately the same literal casing as
+// PrimaryConstellationConfidence ('High'|'Medium'|'Low') for consistency of
+// casing across the codebase, but NOT an alias of it and NOT reused: that
+// type measures the strength of underlying signature evidence: this one
+// measures the judge's confidence in its own assessment of a single
+// option's fit. The two represent genuinely different things and could
+// diverge later (e.g. if PrimaryConstellationConfidence ever needs to grow
+// its own "Mid" tolerance further) — keeping them distinct types avoids
+// coupling that evolution accidentally.
+export type FitConfidence = 'High' | 'Medium' | 'Low';
+
 export interface PathOptionsCandidate {
   id: string;
   name: string;
   description: string;
+  // #138 §4: short "select this if..." sentence sharpening what's actually
+  // different about THIS option's version of the person's pattern — not a
+  // one-line restatement of description. Required (not optional) on every
+  // candidate generated after this ships; no backfill for candidates
+  // generated before it, but path_options_session rows are short-lived
+  // (one session per user, resolved within the same /path visit), so there's
+  // no real population of pre-#138 candidates to worry about missing it.
+  select_if: string;
+  // #138 §6: one short sentence, descriptive/orienting ("what is this path,
+  // at a glance?") — deliberately distinct from select_if, which is
+  // comparative/decision-oriented ("why pick this one over the others").
+  core_statement: string;
+  // #138 §6: the single most important honest caveat about this path — a
+  // genuine trade-off or partial overlap with something the user wants to
+  // avoid, even if it didn't rise to a full §5 rejection. Complements, not
+  // duplicates, #139's planned honest_cost: this is a quick cross-option
+  // screening signal, honest_cost goes deeper on the one path already
+  // chosen.
+  tension: string;
+  // #138 §6: the name(s) of the signature(s), from the High-confidence set
+  // passed into generation (§2), that this option most directly draws on —
+  // not a blanket list repeated on every card. Reinforces §1's requirement
+  // that every option trace back to real, cited signature evidence.
+  signatures_engaged: string[];
+  // #138 §6: produced by extending §5's existing semantic-check judge call,
+  // not a new separate LLM call. Purely a DISPLAY value — never affects the
+  // accept/reject/retry gating §5 already implements and has been verified
+  // against. Nullable because generate-path-options-session.ts's
+  // validateSemanticVerdicts parses these two fields leniently, per-field,
+  // specifically so a malformed/missing value from the judge can never
+  // invalidate the underlying pass/fail verdict they ride alongside — an
+  // accepted candidate can legitimately have a null fit_score/fit_confidence
+  // if the judge's response was malformed just for these display-only
+  // fields. UI falls back to '—', same precedent as /identity's
+  // `sig.frequency ?? '—'`.
+  fit_score: number | null;
+  fit_confidence: FitConfidence | null;
   // Which generation batch produced this candidate: 1 = initial 4, 2/3 =
   // the two possible +2 refine rounds. Not used for any DB constraint (see
   // the migration's own comment) — kept for the material-difference check's

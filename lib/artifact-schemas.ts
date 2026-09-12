@@ -10,6 +10,21 @@ export type ScoreBand = "weak" | "moderate" | "strong" | "dominant";
 
 export type ConfidenceLevel = "low" | "medium" | "high";
 
+// Real observed casing/spelling on primary_constellation entries (2026-09-11
+// live-data check, 30 real identity_report rows) — deliberately NOT
+// ConfidenceLevel above. lib/prompts/identity-report.ts instructs the model
+// to write "Low"|"Mid"|"High" (capitalized), copied verbatim from the
+// Detection Engine's own JSON, but the model doesn't reliably hold that
+// instructed vocabulary: the middle tier came back as "Medium" far more
+// often than the instructed "Mid" across those 30 rows (57 vs 8
+// occurrences), while "High" and "Low" were consistently capitalized with
+// no variants seen. Any consumer must normalize case/spelling before
+// comparing (e.g. .toLowerCase() === 'high'), never trust exact string
+// equality against a single expected value — this union exists to keep real
+// type-checking on the field (catching typos, catching a truly unexpected
+// value) without pretending the data is cleaner than it actually is.
+export type PrimaryConstellationConfidence = "Low" | "Mid" | "Medium" | "High";
+
 export type DomainName =
   | "Visioning"
   | "Thinking"
@@ -113,6 +128,12 @@ export interface PrimarySignatureAnalysis {
   name: string;
   domain: DomainName;
   score: number;              // 1-25
+  // #138 §2: real field on every stored row — added here because §2's
+  // confidence-based signature selection needs to read it typed. See
+  // PrimaryConstellationConfidence's own comment for why this isn't
+  // ConfidenceLevel. frequency/intensity are also real fields on this
+  // object but are NOT added here — nothing in #138 reads them.
+  confidence: PrimaryConstellationConfidence;
   core_statement: string;     // 8-20 words
   evidence_analysis: string;  // 150-250 words, Pattern→Evidence→Meaning
   tension: string;            // one sentence

@@ -144,6 +144,7 @@ const REALISTIC_CONTEXT: PathReportGenerationContext = {
       name: 'The Systems Architect',
       domain: 'Thinking',
       score: 24,
+      confidence: 'High',
       core_statement: 'You see the structure beneath a problem before anyone else names it.',
       evidence_analysis:
         'Across multiple discovery answers you described redesigning how a team worked, not just what it produced — ' +
@@ -155,6 +156,7 @@ const REALISTIC_CONTEXT: PathReportGenerationContext = {
       name: 'The Quiet Closer',
       domain: 'Driving',
       score: 21,
+      confidence: 'High',
       core_statement: 'You finish what other people abandon once the interesting part is over.',
       evidence_analysis:
         'You described shipping a project solo after two collaborators dropped off, and separately finishing a certification ' +

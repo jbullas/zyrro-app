@@ -1,23 +1,25 @@
 /**
- * #134 Slice 2 — script test for the two Checkpoint 2 "Options" hard checks
- * (findMustAvoidViolations, findMaterialDuplicates) and the batch-generation
- * control flow (generateCandidateBatch/generateInitialOptions) in
- * lib/generate-path-options-session.ts. Same discipline as
+ * #134 Slice 2 — script test for the three Checkpoint 2 "Options" hard
+ * checks (findMustAvoidViolations, findMaterialDuplicates,
+ * findJobTitleNameViolation — the third added by #138) and the
+ * batch-generation control flow (generateCandidateBatch/generateInitialOptions)
+ * in lib/generate-path-options-session.ts. Same discipline as
  * enforceSecondaryEvidenceFloor/enforceConstellationSynthesisNonOverlap were
  * validated against real captured failures before being trusted
- * (lib/generate-identity-report.ts) — Part 1/2 below are pure fixture
- * assertions (deterministic, no network), including three regression cases
- * captured from real generation runs during this check's own development
- * (see each fixture's comment for what real run it came from); Part 3/4
- * make real LLM calls against realistic and deliberately hostile inputs to
- * prove the pipeline behaves correctly against genuine model output, not
- * just hand-authored cases.
+ * (lib/generate-identity-report.ts) — Parts 1/1b/2 below are pure fixture
+ * assertions (deterministic, no network), including regression cases
+ * captured from real generation runs during development (see each fixture's
+ * comment for what real run it came from); Parts 3/4 make real LLM calls
+ * against realistic and deliberately hostile inputs to prove the pipeline
+ * behaves correctly against genuine model output, not just hand-authored
+ * cases.
  *
  * Run: npx tsx --env-file=.env.local scripts/test-134-slice2-options-checks.mts
  */
 import {
   findMustAvoidViolations,
   findMaterialDuplicates,
+  findJobTitleNameViolation,
   generateInitialOptions,
   generateCandidateBatch,
   OptionsGenerationShortfallError,
@@ -123,6 +125,55 @@ section('PART 1 — findMustAvoidViolations: fixture assertions (no network)');
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+section('PART 1b — findJobTitleNameViolation: fixture assertions (no network)');
+// ─────────────────────────────────────────────────────────────────────────
+
+{
+  // Real captured miss, #138's own prompt-level test run (2026-09-11,
+  // scenario B of scripts/__test_138_prompt_only.mts): the model named an
+  // option "Crisis Response Specialist", violating the prompt's own stated
+  // naming rule, while a near-identical option in a parallel scenario
+  // ("Crisis Response Innovator") correctly avoided it — confirming a
+  // code-level check is needed here for the same reason hard checks 1/2
+  // already exist (constraint-stacking in the prompt alone isn't reliable).
+  const violatingName = 'Crisis Response Specialist';
+  const hit = findJobTitleNameViolation(violatingName);
+  assertTrue(
+    hit !== null && hit.suffix === 'specialist',
+    'real captured case: "Crisis Response Specialist" is flagged as job-title-shaped (suffix "specialist")',
+  );
+
+  const compliantName = 'Crisis Response Innovator';
+  assertTrue(
+    findJobTitleNameViolation(compliantName) === null,
+    'real captured case: "Crisis Response Innovator" (same underlying option, compliant name) is NOT flagged',
+  );
+
+  for (const suffix of ['Director', 'Lead', 'Manager', 'Officer']) {
+    const name = `Field Operations ${suffix}`;
+    const violation = findJobTitleNameViolation(name);
+    assertTrue(
+      violation !== null && violation.suffix === suffix.toLowerCase(),
+      `"${name}" is flagged as job-title-shaped (suffix "${suffix.toLowerCase()}")`,
+    );
+  }
+
+  // False-positive guards: substring/mid-word matches must not trigger.
+  assertTrue(
+    findJobTitleNameViolation('The Ledger') === null,
+    '"The Ledger" is NOT flagged — "Ledger" is not "Lead" plus a suffix, it is a whole different word',
+  );
+  assertTrue(
+    findJobTitleNameViolation('Speciality Stores Builder') === null,
+    '"Speciality Stores Builder" is NOT flagged — "Builder" is not a job-title suffix, and "Speciality" is not "Specialist"',
+  );
+  assertTrue(
+    findJobTitleNameViolation('Field Managers') !== null,
+    '"Field Managers" (plural) IS flagged via stemming — a plural role-noun is still job-title-shaped',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 section('PART 2 — findMaterialDuplicates: fixture assertions (no network)');
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -131,6 +182,12 @@ section('PART 2 — findMaterialDuplicates: fixture assertions (no network)');
     id: 'existing-1',
     round: 1,
     name: 'The Independent Practice',
+    select_if: 'You want full ownership of client relationships from day one, even without a steady paycheck at first.',
+    core_statement: 'A solo practice built around your own direct client relationships, not an agency structure.',
+    tension: 'The first six months carry real income risk before the pipeline replaces your old salary.',
+    signatures_engaged: ['Builder'],
+    fit_score: null,
+    fit_confidence: null,
     description:
       'This path means leaving the agency entirely and building a small, named practice around your own client relationships. ' +
       'The most difficult part of this direction is the first six months without a steady paycheck, when you are ' +
@@ -140,6 +197,10 @@ section('PART 2 — findMaterialDuplicates: fixture assertions (no network)');
 
   const verbatimOverlap = {
     name: 'The Solo Consultancy',
+    select_if: 'You want the same independence framed as consulting engagements rather than a standing practice.',
+    core_statement: 'A consulting practice built around short, direct engagements instead of a standing client roster.',
+    tension: 'Income is lumpier than a standing practice, since each engagement has its own start and end.',
+    signatures_engaged: ['Builder'],
     description:
       'This is a different framing of the same independence idea, but told through consulting language instead of a practice. ' +
       'The most difficult part of this direction is the first six months without a steady paycheck, and that risk is ' +
@@ -153,6 +214,10 @@ section('PART 2 — findMaterialDuplicates: fixture assertions (no network)');
 
   const genuinelyDifferent = {
     name: 'The Internal Track',
+    select_if: 'You want to stay inside a larger organization and move toward leading a small team, not go independent.',
+    core_statement: 'A path inside an existing organization, moving toward leading a small team rather than going independent.',
+    tension: 'Progress depends on political capital and sponsorship, not just the quality of your own work.',
+    signatures_engaged: ['Builder'],
     description:
       'This path stays inside a larger organization but moves you toward leading a small team rather than being an individual ' +
       'contributor. It plays to your pattern of organizing ambiguity for other people, and the demand it makes is political, ' +
@@ -174,11 +239,19 @@ section('PART 2 — findMaterialDuplicates: fixture assertions (no network)');
   // project has a clear scope") — boilerplate, not evidence of actual
   // duplication. This is the exact real captured pair (full option text,
   // not excerpted) that drove MATERIAL_DIFFERENCE_MIN_OVERLAP_WORDS from
-  // 8 to 14.
+  // 8 to 14. select_if is synthesized (didn't exist in the pre-#138 flow
+  // this pair was captured from), kept short and non-overlapping so it
+  // doesn't change the original pair's overlap-length outcome.
   const rdTeamLeader: PathOptionsCandidate = {
     id: 'existing-rd',
     round: 1,
     name: 'R&D Team Leader',
+    select_if: 'You want to lead an established team inside a company, not build something of your own from scratch.',
+    core_statement: 'Leading a research and development team inside an established company.',
+    tension: 'Progress depends on the organization funding your team, not just your own output.',
+    signatures_engaged: ['Contextualiser'],
+    fit_score: null,
+    fit_confidence: null,
     description:
       "In this role, you'll lead a research and development team within a larger organization, focusing on innovative " +
       'solutions to complex problems. This option stands apart by embedding you in an environment dedicated to deep ' +
@@ -191,6 +264,10 @@ section('PART 2 — findMaterialDuplicates: fixture assertions (no network)');
   };
   const technicalProjectManager = {
     name: 'Technical Project Manager',
+    select_if: 'You want the same team-leadership shape expressed through formal project delivery rather than R&D.',
+    core_statement: 'Leading formal project delivery in a technical organization.',
+    tension: 'Success is measured by delivery timelines, not by the technical work itself.',
+    signatures_engaged: ['Contextualiser'],
     description:
       "As a Technical Project Manager, you'll oversee the development of complex projects with a focus on delivering " +
       'clear, structured solutions. This role differs by emphasizing project management within a technical context, ' +
@@ -217,12 +294,13 @@ const REALISTIC_CONTEXT: OptionsGenerationContext = {
   must_avoids: ['Ambiguous requirements', 'Micromanagement'],
   ideal_life:
     'Running a small, focused team that ships things people actually use, with real ownership over the outcome.',
-  primary_constellation: [
+  signatures: [
     {
       signature_number: '01',
       name: 'The Systems Architect',
       domain: 'Thinking',
       score: 24,
+      confidence: 'High',
       core_statement: 'You see the structure beneath a problem before anyone else names it.',
       evidence_analysis:
         'Across multiple discovery answers you described redesigning how a team worked, not just what it produced — ' +
@@ -234,6 +312,7 @@ const REALISTIC_CONTEXT: OptionsGenerationContext = {
       name: 'The Quiet Closer',
       domain: 'Driving',
       score: 21,
+      confidence: 'High',
       core_statement: 'You finish what other people abandon once the interesting part is over.',
       evidence_analysis:
         'You described shipping a project solo after two collaborators dropped off, and separately finishing a certification ' +
@@ -241,6 +320,13 @@ const REALISTIC_CONTEXT: OptionsGenerationContext = {
       tension: 'You can stay in a finishing role too long, past the point where you should have handed it off.',
     },
   ],
+  how_you_operate: {
+    work_style: 'You default to designing the structure of a problem before touching its details, and you stay on something past the point most people would hand it off.',
+    thinking_style: 'You think in systems and dependencies — you want to see how the pieces connect before committing to any one piece.',
+    relationship_style: 'You build trust by being the person who reliably closes out what others start, more than through frequent check-ins.',
+    decision_style: 'You decide slowly and deliberately when the structure is still unclear, then move fast once it is.',
+    stress_pattern: 'You get anxious when scope is ambiguous, and quietly resentful when you are pulled off a system before it is actually finished.',
+  },
 };
 
 async function runRealisticGeneration() {
@@ -252,13 +338,20 @@ async function runRealisticGeneration() {
   assertTrue(ids.size === result.accepted.length, 'all accepted candidate ids are unique');
   assertTrue(result.accepted.every(c => c.round === 1), 'all initial-batch candidates are tagged round 1');
   assertTrue(
-    result.accepted.every(c => c.name.trim().length > 0 && c.description.trim().length > 0),
-    'every accepted candidate has non-empty name and description',
+    result.accepted.every(c => c.name.trim().length > 0 && c.select_if.trim().length > 0 && c.description.trim().length > 0),
+    'every accepted candidate has non-empty name, select_if, and description',
+  );
+  assertTrue(
+    result.accepted.every(c => findJobTitleNameViolation(c.name) === null),
+    'no accepted candidate has a job-title-shaped name',
   );
 
   // Redundant re-check against the real output as independent evidence, not
   // just trusting generateCandidateBatch's own internal accept/reject logic.
-  const reCheckedViolations = result.accepted.flatMap(c => findMustAvoidViolations(c.description, REALISTIC_CONTEXT.must_avoids));
+  // Scans select_if + description combined, same as the real accept path.
+  const reCheckedViolations = result.accepted.flatMap(c =>
+    findMustAvoidViolations(`${c.select_if}\n\n${c.description}`, REALISTIC_CONTEXT.must_avoids),
+  );
   assertTrue(reCheckedViolations.length === 0, 're-running findMustAvoidViolations against the real accepted output finds zero violations');
 
   let reCheckedDuplicates = 0;
@@ -270,7 +363,7 @@ async function runRealisticGeneration() {
 
   console.log('\nReal generated options (for eyes-on review):');
   for (const c of result.accepted) {
-    console.log(`\n--- ${c.name} ---\n${c.description}`);
+    console.log(`\n--- ${c.name} ---\nSELECT IF: ${c.select_if}\n${c.description}`);
   }
   if (result.rejected.length > 0) {
     console.log('\nRejected drafts this run (over-generation buffer doing its job):');
@@ -282,7 +375,7 @@ async function runRealisticGeneration() {
 section('PART 4 — real LLM call, forced collision: reject -> retry -> hard-fail (network)');
 // ─────────────────────────────────────────────────────────────────────────
 
-// The prompt's own content bar (point 6) requires every option to state what
+// The prompt's own content bar (point 7) requires every option to state what
 // it demands in time and resources — so a must_avoid that names that exact
 // concept creates a structural conflict the model cannot satisfy no matter
 // how it's asked to retry. Deliberately used here as a fast, deterministic
