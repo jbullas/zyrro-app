@@ -25,6 +25,58 @@ type Screen = 'intro' | 'question' | 'contact' | 'check-email';
 // is the untouched State 1; 'state2'/'state3' below.
 type Mode = 'checking' | 'anonymous' | 'state2' | 'state3';
 
+const DISCOVERY_ANSWERS_KEY = 'zyrro_discovery_answers';
+const USER_NAME_KEY = 'zyrro_user_name';
+
+type StoredDiscoveryAnswers = {
+  ownerId: string | null;
+  answers: Array<{ question_number: number; question_text: string; answer_text: string }>;
+};
+
+type StoredUserName = {
+  ownerId: string;
+  name: string;
+};
+
+// #leak-fix: localStorage can't prove which visitor a stored blob belongs
+// to, so every write is stamped with an ownerId (a real Supabase user id,
+// or null for an anonymous writer) and every read is gated on that stamp
+// matching the CURRENT visitor's resolved identity exactly. An anonymous
+// resolvedOwnerId (null) never matches anything — localStorage can't tell
+// two different anonymous visitors apart, so anonymous visits never trust
+// a pre-existing blob, even one they wrote themselves in an earlier tab
+// load. Anything not provably owned by the current visitor is wiped
+// outright rather than partially trusted.
+function clearStorageUnlessOwnedBy(resolvedOwnerId: string | null) {
+  for (const key of [DISCOVERY_ANSWERS_KEY, USER_NAME_KEY]) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    let stampedOwnerId: string | null = null;
+    try {
+      const parsed = JSON.parse(raw) as { ownerId?: unknown };
+      stampedOwnerId = typeof parsed.ownerId === 'string' ? parsed.ownerId : null;
+    } catch {
+      stampedOwnerId = null;
+    }
+    const trusted = resolvedOwnerId !== null && stampedOwnerId === resolvedOwnerId;
+    if (!trusted) localStorage.removeItem(key);
+  }
+}
+
+// Call only after clearStorageUnlessOwnedBy has run for the same
+// resolvedOwnerId — whatever's left at that point is already trusted.
+function readOwnedDiscoveryAnswers(): StoredDiscoveryAnswers['answers'] | null {
+  const raw = localStorage.getItem(DISCOVERY_ANSWERS_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StoredDiscoveryAnswers;
+    if (!Array.isArray(parsed.answers)) return null;
+    return parsed.answers;
+  } catch {
+    return null;
+  }
+}
+
 export default function StartPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -39,17 +91,41 @@ export default function StartPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [mode, setMode] = useState<Mode>('checking');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const [qaItems, setQaItems] = useState<MergedAnswer[]>([]);
   const [submitError, setSubmitError] = useState('');
 
   // #20 State 2/3 branch: resolve auth + discovery_answers once on mount.
-  // Kept as its own effect, entirely separate from the localStorage-prefill
-  // effect below, so State 1's existing behavior is untouched either way.
+  // The identity gate (clearStorageUnlessOwnedBy) runs first, synchronously
+  // within this same async function, before anything reads
+  // zyrro_discovery_answers into UI state — folding the old always-on,
+  // unconditional prefill effect in here (rather than keeping it as a
+  // separate effect) is what closes the race that used to let a prior
+  // browser occupant's answers get prefilled before auth was resolved.
   useEffect(() => {
     let cancelled = false;
 
     async function resolveMode() {
       const { data: { user } } = await supabase.auth.getUser();
+      const resolvedOwnerId = user?.id ?? null;
+
+      clearStorageUnlessOwnedBy(resolvedOwnerId);
+      if (cancelled) return;
+      setOwnerId(resolvedOwnerId);
+
+      const owned = readOwnedDiscoveryAnswers();
+      if (owned && !cancelled) {
+        setAnswers(prev => {
+          const loaded = [...prev];
+          owned.forEach(item => {
+            if (item.question_number >= 1 && item.question_number <= 13) {
+              loaded[item.question_number - 1] = item.answer_text || '';
+            }
+          });
+          return loaded;
+        });
+      }
+
       if (!user) {
         if (!cancelled) setMode('anonymous');
         return;
@@ -79,24 +155,6 @@ export default function StartPage() {
     return () => { cancelled = true; };
   }, [supabase]);
 
-  useEffect(() => {
-    const stored = localStorage.getItem('zyrro_discovery_answers');
-    if (!stored) return;
-    try {
-      const data = JSON.parse(stored) as Array<{ question_number: number; answer_text: string }>;
-      if (!Array.isArray(data)) return;
-      setAnswers(prev => {
-        const loaded = [...prev];
-        data.forEach(item => {
-          if (item.question_number >= 1 && item.question_number <= 13) {
-            loaded[item.question_number - 1] = item.answer_text || '';
-          }
-        });
-        return loaded;
-      });
-    } catch {}
-  }, []);
-
   const currentQuestion = QUESTIONS[questionIndex];
   const currentAnswer = answers[questionIndex] || '';
 
@@ -109,12 +167,15 @@ export default function StartPage() {
   }
 
   function saveToStorage(currentAnswers: string[]) {
-    const data = QUESTIONS.map((q, i) => ({
-      question_number: q.number,
-      question_text: q.question,
-      answer_text: currentAnswers[i] || '',
-    }));
-    localStorage.setItem('zyrro_discovery_answers', JSON.stringify(data));
+    const data: StoredDiscoveryAnswers = {
+      ownerId,
+      answers: QUESTIONS.map((q, i) => ({
+        question_number: q.number,
+        question_text: q.question,
+        answer_text: currentAnswers[i] || '',
+      })),
+    };
+    localStorage.setItem(DISCOVERY_ANSWERS_KEY, JSON.stringify(data));
   }
 
   function handleBack() {
@@ -156,6 +217,7 @@ export default function StartPage() {
         body: JSON.stringify({ answers: payload }),
       });
       if (!res.ok) throw new Error('Submission failed');
+      localStorage.removeItem(DISCOVERY_ANSWERS_KEY);
       router.push('/identity');
     } catch {
       setSubmitError('Something went wrong. Please try again.');
@@ -169,13 +231,13 @@ export default function StartPage() {
     setSubmitting(true);
 
     // Read answers from localStorage; strip question_text — lives server-side in QUESTIONS
-    const stored = localStorage.getItem('zyrro_discovery_answers');
+    const stored = localStorage.getItem(DISCOVERY_ANSWERS_KEY);
     let discoveryAnswers: Array<{ question_number: number; answer_text: string }> = [];
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as Array<{ question_number: number; question_text: string; answer_text: string }>;
-        if (Array.isArray(parsed)) {
-          discoveryAnswers = parsed.map(a => ({
+        const parsed = JSON.parse(stored) as StoredDiscoveryAnswers;
+        if (Array.isArray(parsed.answers)) {
+          discoveryAnswers = parsed.answers.map(a => ({
             question_number: a.question_number,
             answer_text: a.answer_text.slice(0, 5000),
           }));
@@ -216,7 +278,9 @@ export default function StartPage() {
       return;
     }
 
-    localStorage.setItem('zyrro_user_name', name);
+    const nameData: StoredUserName = { ownerId: signUpData.user.id, name };
+    localStorage.setItem(USER_NAME_KEY, JSON.stringify(nameData));
+    localStorage.removeItem(DISCOVERY_ANSWERS_KEY);
     setSubmitting(false);
     setScreen('check-email');
   }

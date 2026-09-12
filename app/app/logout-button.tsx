@@ -34,6 +34,12 @@ export default function LogoutButton() {
     Object.keys(sessionStorage).forEach((key) => {
       if (key.startsWith('sb-')) sessionStorage.removeItem(key)
     })
+    // /start's zyrro_discovery_answers/zyrro_user_name are stamped with an
+    // ownerId and already self-clear for the next visitor on their own
+    // (see app/start/page.tsx), but clearing here too means this account's
+    // data never even briefly outlives the session it belongs to.
+    localStorage.removeItem('zyrro_discovery_answers')
+    localStorage.removeItem('zyrro_user_name')
 
     router.push('/login')
   }
