@@ -21,9 +21,10 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // control flow — that machinery exists in Slice 2 because Options
 // generates several independent candidates that must differ from each
 // other. This module generates exactly one holistic report; there is
-// nothing to compare it against and no "batch" to filter. Control flow is
-// simpler: generate once, check every text field, one retry with a steer
-// if a violation is found, hard-fail if still violating after that.
+// nothing to compare it against and no "batch" to filter. Control flow:
+// generate once, check every text field, one retry with a steer if a
+// violation is found. #144-reopened relaxed the final step from a
+// hard-fail to log-only — see generatePathReport's own comment for why.
 //
 // #139 — full content-design rebuild (docs/briefs/139-path-report-redesign.md).
 // Confirmed cut: `honest_cost` — its job (naming a real trade-off) is
@@ -53,7 +54,9 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // claims about a real market/competitor/industry — nothing here has been
 // looked up). One more added for #144 (docs/briefs/144-path-report-live-
 // review-fixes.md): logEmDashesInReport, an exact-match backstop for the
-// prompt's own new "no em dashes, anywhere" rule.
+// prompt's own new "no em dashes, anywhere" rule. One more added when #144
+// reopened (see must_avoids handling below): logHedgeWordsInReport, an
+// exact-match backstop for hedged must-avoid exclusion claims.
 
 // #144: was string[] (bare short labels, rendered as flat chips) — "only
 // pills are pretty but useless" per live review. Each option now carries a
@@ -328,6 +331,51 @@ function logEmDashesInReport(draft: PathReportDraft): void {
   }
 }
 
+// ── Hedge word check (log-only) ──────────────────────────────────────────
+
+// #144-reopened: added after an adversarial live test (a deliberately-
+// hedging steer injected directly, bypassing the normal control flow) found
+// the prompt's own SELF-CHECK item 10 does not reliably override a hedge
+// once something is actively pushing the model toward writing one — 0/3
+// adversarial attempts got corrected. Known, accepted limitation, not
+// chased further: the self-check catches accidental drift, not deliberate
+// adversarial steering, and nothing in this module's own real production
+// steer text (see generatePathReport below) attempts the latter — every
+// non-adversarial real generation this session stayed clean. Reworking the
+// self-check's own wording to defeat a deliberately adversarial input is
+// the same dead end this project has already hit chasing phrase-level
+// prompt tuning against a determined counter-example; this log-only regex
+// is the honest backstop instead — same posture as logEmDashesInReport
+// (exact match, no false-positive risk, a reliable production signal, not
+// a retry trigger).
+const HEDGE_WORDS_PATTERN = /\b(rarely|mostly|occasionally|occasional|for the most part|to some degree|somewhat|largely|usually)\b/i;
+
+function logHedgeWordsInReport(draft: PathReportDraft): void {
+  const fields: Array<[string, string]> = [
+    ['summary', draft.summary],
+    ['what_this_could_be', draft.what_this_could_be],
+    ['why_it_fits', draft.why_it_fits],
+    ['life_it_leads_toward', draft.life_it_leads_toward],
+    ...draft.strategic_decisions.flatMap((sd, i): Array<[string, string]> => [
+      [`strategic_decisions[${i}].decision`, sd.decision],
+      [`strategic_decisions[${i}].why_it_matters`, sd.why_it_matters],
+      ...sd.live_options.flatMap((o, j): Array<[string, string]> => [
+        [`strategic_decisions[${i}].live_options[${j}].option`, o.option],
+        [`strategic_decisions[${i}].live_options[${j}].context`, o.context],
+      ]),
+    ]),
+  ];
+
+  const flagged = fields.filter(([, text]) => HEDGE_WORDS_PATTERN.test(text));
+  if (flagged.length > 0) {
+    console.warn(
+      'path_report: hedge word found in generated output (may be softening a must-avoid exclusion claim rather ' +
+      'than stating it cleanly, per the prompt\'s own must_avoids instruction):',
+      flagged.map(([label, text]) => `${label}: "${text.match(HEDGE_WORDS_PATTERN)?.[0]}"`).join(', '),
+    );
+  }
+}
+
 async function requestReportDraft(
   context: PathReportGenerationContext,
   steer: string | undefined,
@@ -364,6 +412,7 @@ async function requestReportDraft(
   logTrajectoryLanguageInSummary(parsed);
   logResearchClaimsInStrategicDecisions(parsed);
   logEmDashesInReport(parsed);
+  logHedgeWordsInReport(parsed);
 
   return parsed;
 }
@@ -412,10 +461,23 @@ export class PathReportGenerationViolationError extends Error {
 /**
  * Generates the final path report — one attempt, then one bounded retry
  * (with the violated must-avoids fed back as steering context) if the
- * first attempt touches any, then a hard-fail if still violating. A future
- * API route's job (not built this slice) to catch PathReportGenerationViolationError
- * and persist a visible failed state, same as every other generation route
- * in this project catches and marks its artifact 'failed'.
+ * first attempt touches any.
+ *
+ * #144-reopened: the final step used to hard-fail (throw
+ * PathReportGenerationViolationError) if violations remained after the
+ * retry. Relaxed to log-only — findMustAvoidViolations is a negation-aware
+ * phrase match, but it can't distinguish a genuine violation from a
+ * confident, deliberate claim that this path avoids a must_avoid using the
+ * must_avoid's own wording, a pattern the prompt now explicitly encourages
+ * (see lib/prompts/path-report.ts's own must_avoids instruction). The
+ * prompt's own hedge-detection self-check (item 10) is the real defense
+ * against genuine violations now; this mechanical check is a monitoring
+ * backstop, not a gate, until something that can actually tell the two
+ * apart exists. The retry-with-steer step itself stays — still useful for
+ * a genuine violation — but its steer text was reworded (below) so it no
+ * longer tells the model to strip out a mention that might be a fine,
+ * confident exclusion claim; the old wording assumed any phrase match was
+ * bad, which is no longer true.
  */
 export async function generatePathReport(context: PathReportGenerationContext): Promise<PathReportDraft> {
   let draft = await requestReportDraft(context, undefined);
@@ -423,15 +485,21 @@ export async function generatePathReport(context: PathReportGenerationContext): 
 
   if (violations.length > 0) {
     const steer =
-      `The previous attempt touched these must-avoid(s), which must not appear anywhere in the report: ` +
-      `${violations.map(v => v.must_avoid).join(', ')}. Do not name them, reference them, or restate them in ` +
-      `any form — write around them entirely.`;
+      `The previous attempt included phrase(s) matching these must-avoid(s): ` +
+      `${violations.map(v => v.must_avoid).join(', ')}. Review each one: if the path genuinely involves or ` +
+      `recommends it, revise that out entirely. If you were confidently stating the path avoids it, that's fine ` +
+      `and can stay, even in its own wording, but make sure the claim reads clean and unhedged, not softened with ` +
+      `words like "rarely," "mostly," or "to some degree."`;
     draft = await requestReportDraft(context, steer);
     violations = findMustAvoidViolationsInReport(draft, context.must_avoids);
   }
 
   if (violations.length > 0) {
-    throw new PathReportGenerationViolationError(violations);
+    console.warn(
+      `path_report: must-avoid-shaped phrase(s) still present after one retry (log-only, not a hard-fail — see ` +
+      `#144-reopened: the phrase match can't distinguish a genuine violation from a confident, correct exclusion ` +
+      `claim): ${violations.map(v => v.must_avoid).join(', ')}`,
+    );
   }
 
   return draft;
