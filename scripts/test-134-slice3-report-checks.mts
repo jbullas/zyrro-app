@@ -22,6 +22,7 @@ import {
   type PathReportGenerationContext,
   type PathReportDraft,
 } from '../lib/generate-path-report';
+import { findMustAvoidViolations } from '../lib/generate-path-options-session';
 
 let failures = 0;
 function assertTrue(cond: boolean, msg: string) {
@@ -226,8 +227,47 @@ async function runRealGeneration() {
 
   // Redundant re-check against the real output as independent evidence, not
   // just trusting generatePathReport's own internal check.
+  //
+  // #144-reopened changed the semantics this assertion needs to check: a
+  // must-avoid-shaped phrase match is no longer necessarily a failure — a
+  // confident, clean exclusion claim using the must_avoid's own wording is
+  // correct and expected now (lib/prompts/path-report.ts's own must_avoids
+  // instruction), so asserting zero matches here is stale and will fail on
+  // legitimate output. The actual invariant worth checking is narrower:
+  // whenever a match occurs, it must never be paired with a hedge word in
+  // that SAME field (that pairing — a softened exclusion claim — is the
+  // one thing still genuinely forbidden). Checked per-field, not on
+  // dedup'd violations from findMustAvoidViolationsInReport (which drops
+  // which field a match came from), so a hedge in one field can't hide
+  // behind a clean phrase match in another. Same word list as
+  // lib/generate-path-report.ts's own logHedgeWordsInReport.
+  const HEDGE_WORDS_FOR_TEST = /\b(rarely|mostly|occasionally|occasional|for the most part|to some degree|somewhat|largely|usually)\b/i;
+  const fieldsToRecheck: Array<[string, string]> = [
+    ['summary', report.summary],
+    ['what_this_could_be', report.what_this_could_be],
+    ['why_it_fits', report.why_it_fits],
+    ['life_it_leads_toward', report.life_it_leads_toward],
+    ...report.strategic_decisions.flatMap((sd, i): Array<[string, string]> => [
+      [`strategic_decisions[${i}].decision`, sd.decision],
+      [`strategic_decisions[${i}].why_it_matters`, sd.why_it_matters],
+      ...sd.live_options.flatMap((o, j): Array<[string, string]> => [
+        [`strategic_decisions[${i}].live_options[${j}].option`, o.option],
+        [`strategic_decisions[${i}].live_options[${j}].context`, o.context],
+      ]),
+    ]),
+  ];
   const reCheckedViolations = findMustAvoidViolationsInReport(report, REALISTIC_CONTEXT.must_avoids);
-  assertTrue(reCheckedViolations.length === 0, 're-running findMustAvoidViolationsInReport against the real output finds zero violations');
+  console.log(
+    `\nre-running findMustAvoidViolationsInReport against the real output: ` +
+    `${reCheckedViolations.length === 0 ? 'zero matches' : `${reCheckedViolations.length} match(es) — ${reCheckedViolations.map(v => v.must_avoid).join(', ')} — informational only, no longer a failure on its own (log-only per #144-reopened)`}`,
+  );
+  const fieldsWithHedgedViolation = fieldsToRecheck.filter(
+    ([, text]) => findMustAvoidViolations(text, REALISTIC_CONTEXT.must_avoids).length > 0 && HEDGE_WORDS_FOR_TEST.test(text),
+  );
+  assertTrue(
+    fieldsWithHedgedViolation.length === 0,
+    `no field pairs a must-avoid-shaped phrase match with a hedge word (found in: ${fieldsWithHedgedViolation.map(([label]) => label).join(', ') || 'none'})`,
+  );
 
   console.log('\nReal generated report (for eyes-on review):\n');
   console.log('--- summary ---\n' + report.summary);
