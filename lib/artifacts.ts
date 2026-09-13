@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { withDbRetry } from '@/lib/with-db-retry';
 
 export type ArtifactType =
   | 'identity_report'
@@ -49,21 +50,28 @@ export async function getCurrentArtifact<T = Record<string, unknown>>(
   type: ArtifactType,
   opts: { status?: ArtifactStatus; select?: string; match?: Record<string, string> } = {}
 ) {
-  let query = supabase
-    .from('artifacts')
-    .select(opts.select ?? '*')
-    .eq('user_id', userId)
-    .eq('type', type);
+  // Built as a factory, not a single query object, so withDbRetry's retry
+  // attempt fires a genuinely fresh request rather than re-awaiting the same
+  // builder instance a second time.
+  const buildQuery = () => {
+    let query = supabase
+      .from('artifacts')
+      .select(opts.select ?? '*')
+      .eq('user_id', userId)
+      .eq('type', type);
 
-  if (opts.match) {
-    query = query.match(opts.match);
-  }
+    if (opts.match) {
+      query = query.match(opts.match);
+    }
 
-  query = query.order('created_at', { ascending: false }).limit(1);
+    query = query.order('created_at', { ascending: false }).limit(1);
 
-  if (opts.status) {
-    query = query.eq('status', opts.status);
-  }
+    if (opts.status) {
+      query = query.eq('status', opts.status);
+    }
 
-  return query.maybeSingle<T>();
+    return query.maybeSingle<T>();
+  };
+
+  return withDbRetry(`getCurrentArtifact(${type})`, buildQuery);
 }

@@ -47,12 +47,15 @@ async function loadIdentityReport(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<IdentitySignatureReportArtifactContent | null> {
-  const { data } = await getCurrentArtifact<{ content: IdentitySignatureReportArtifactContent }>(
+  const { data, error } = await getCurrentArtifact<{ content: IdentitySignatureReportArtifactContent }>(
     supabase,
     userId,
     'identity_report',
     { status: 'ready', select: 'content' },
   );
+  if (error) {
+    console.error('loadIdentityReport error', { userId, error });
+  }
   return data?.content ?? null;
 }
 
@@ -71,12 +74,15 @@ async function loadCompletedDirectionContent(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
 ): Promise<PathDirectionSessionContent | null> {
-  const { data } = await getCurrentArtifact<{ status: string; content: PathDirectionSessionContent }>(
+  const { data, error } = await getCurrentArtifact<{ status: string; content: PathDirectionSessionContent }>(
     supabase,
     userId,
     'path_direction_session',
     { select: 'status, content' },
   );
+  if (error) {
+    console.error('loadCompletedDirectionContent error', { userId, error });
+  }
   if (!data || data.status !== 'complete') return null;
   return data.content;
 }

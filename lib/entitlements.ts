@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { withDbRetry } from '@/lib/with-db-retry';
 
 export type EntitlementProduct = 'onetime_payment' | 'subscription_payment';
 
@@ -13,13 +14,18 @@ export async function hasEntitlement(userId: string, product: EntitlementProduct
   // NEVER set NEXT_PUBLIC_OPEN_ACCESS on the production environment.
   if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') return true;
   const supabase = createServiceClient();
-  const { data } = await supabase
-    .from('entitlements')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('product', product)
-    .eq('status', 'active')
-    .maybeSingle();
+  const { data, error } = await withDbRetry('hasEntitlement', () =>
+    supabase
+      .from('entitlements')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('product', product)
+      .eq('status', 'active')
+      .maybeSingle()
+  );
+  if (error) {
+    console.error('hasEntitlement error', { userId, product, error });
+  }
   return !!data;
 }
 
