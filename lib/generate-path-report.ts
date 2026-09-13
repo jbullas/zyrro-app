@@ -1,5 +1,5 @@
 import { getChatCompletion } from '@/lib/llm';
-import { PATH_REPORT_PROMPT } from '@/lib/prompts/path-report';
+import { PATH_REPORT_OUTLINE_PROMPT, PATH_REPORT_ELABORATION_PROMPT } from '@/lib/prompts/path-report';
 import type { PrimarySignatureAnalysis } from '@/lib/artifact-schemas';
 import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate-path-options-session';
 
@@ -25,6 +25,33 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // generate once, check every text field, one retry with a steer if a
 // violation is found. #144-reopened relaxed the final step from a
 // hard-fail to log-only — see generatePathReport's own comment for why.
+//
+// #145 — strategic_decisions was consistently landing at exactly 2 for
+// genuinely open-ended paths. A real generation diagnostic ruled out token
+// truncation as the cause (finish_reason "stop," well under the 4000
+// ceiling every time) — the actual cause was the prompt's own old "could
+// be 2, could be 5" framing anchoring toward the floor.
+//
+// requestReportDraft below is two real LLM calls, not one — an outline
+// call (requestOutlineDraft, enumeration only) followed by an elaboration
+// call (requestElaboration, full depth on the fixed list the outline
+// produced). A single-call version with the same corrected breadth/
+// distinctness language was also built and measured for real against this
+// one: 9+ attempts each, across all three test personas (Product Scout —
+// the persona that surfaced the original complaint —, #139's non-venture
+// Internal Systems Lead, and the committed test script's own persona).
+// Single-call reliably hit exactly 3 decisions every time (9/9, zero
+// variance) — a real fix over the 2-decision baseline, but never above the
+// floor of the "3-5 typical" target. Two calls consistently landed higher:
+// 4/4/5, 4/4/4, and 4 on the same three personas. Kept two calls for that
+// measured reason: this section is what the Mentor CTA sells, and the
+// extra ~20s and second API call were judged worth it for results
+// comfortably above the floor rather than just at it. See
+// lib/prompts/path-report.ts's own header comment for the same history.
+// generatePathReport's own control flow (one attempt, one steer-and-retry
+// on a must-avoid touch) didn't need to change for any of this — it calls
+// requestReportDraft exactly as before, unaware that each "attempt" is now
+// two real calls under the hood, not one.
 //
 // #139 — full content-design rebuild (docs/briefs/139-path-report-redesign.md).
 // Confirmed cut: `honest_cost` — its job (naming a real trade-off) is
@@ -73,6 +100,14 @@ export interface StrategicDecision {
   live_options: LiveOption[];
 }
 
+// #145: step 1's own output shape for a decision, before elaboration —
+// enumeration only, no depth yet. Exported for fixture-testability, same
+// precedent as StrategicDecision/LiveOption.
+export interface DecisionOutlineEntry {
+  decision: string;
+  rationale: string;
+}
+
 export interface PathReportGenerationContext {
   chosen_candidate: { name: string; description: string; core_statement: string };
   comments: string;
@@ -93,6 +128,23 @@ export interface PathReportDraft {
   what_this_could_be: string;
   why_it_fits: string;
   life_it_leads_toward: string;
+  strategic_decisions: StrategicDecision[];
+}
+
+// #145: internal-only shapes for the two-step generation pipeline (see this
+// file's own header comment) — never exposed outside requestReportDraft.
+// ReportOutlineDraft is step 1's raw output; ElaborationDraft is step 2's.
+// Assembly combines them into the same public PathReportDraft above, so
+// nothing outside this function needs to know generation is two calls.
+interface ReportOutlineDraft {
+  summary: string;
+  what_this_could_be: string;
+  why_it_fits: string;
+  life_it_leads_toward: string;
+  decision_outline: DecisionOutlineEntry[];
+}
+
+interface ElaborationDraft {
   strategic_decisions: StrategicDecision[];
 }
 
@@ -121,6 +173,26 @@ export interface PathReportContent extends PathReportDraft {
   project_name?: string | null;
 }
 
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
+function isValidLiveOptions(v: unknown): v is LiveOption[] {
+  return (
+    Array.isArray(v) && v.length >= 2 && v.length <= 4 &&
+    v.every(o => !!o && typeof o === 'object' && isNonEmptyString(o.option) && isNonEmptyString(o.context))
+  );
+}
+
+function isValidStrategicDecision(sd: unknown): sd is StrategicDecision {
+  return (
+    !!sd && typeof sd === 'object' &&
+    isNonEmptyString((sd as StrategicDecision).decision) &&
+    isNonEmptyString((sd as StrategicDecision).why_it_matters) &&
+    isValidLiveOptions((sd as StrategicDecision).live_options)
+  );
+}
+
 function validatePathReportDraft(data: unknown): data is PathReportDraft {
   const d = data as PathReportDraft | null;
   if (!d || typeof d !== 'object') return false;
@@ -128,20 +200,43 @@ function validatePathReportDraft(data: unknown): data is PathReportDraft {
   const requiredStrings: (keyof PathReportDraft)[] = [
     'summary', 'what_this_could_be', 'why_it_fits', 'life_it_leads_toward',
   ];
-  if (!requiredStrings.every(k => typeof d[k] === 'string' && (d[k] as string).trim().length > 0)) return false;
+  if (!requiredStrings.every(k => isNonEmptyString(d[k]))) return false;
 
   if (!Array.isArray(d.strategic_decisions) || d.strategic_decisions.length === 0) return false;
-  return d.strategic_decisions.every(sd =>
-    !!sd && typeof sd === 'object' &&
-    typeof sd.decision === 'string' && sd.decision.trim().length > 0 &&
-    typeof sd.why_it_matters === 'string' && sd.why_it_matters.trim().length > 0 &&
-    Array.isArray(sd.live_options) && sd.live_options.length >= 2 && sd.live_options.length <= 4 &&
-    sd.live_options.every(o =>
-      !!o && typeof o === 'object' &&
-      typeof o.option === 'string' && o.option.trim().length > 0 &&
-      typeof o.context === 'string' && o.context.trim().length > 0,
-    ),
+  return d.strategic_decisions.every(isValidStrategicDecision);
+}
+
+// #145 — step 1's own raw-output validation: everything except decision
+// depth (the enumeration only). No upper/lower bound enforced on
+// decision_outline's length here beyond non-empty — the prompt's own
+// breadth instruction (3-5 typical) is a content-quality target, not a
+// schema constraint; hard-blocking generation on a count the prompt itself
+// only asks for, not requires, would trade a content problem for an outage.
+function validateOutlineDraft(data: unknown): data is ReportOutlineDraft {
+  const d = data as ReportOutlineDraft | null;
+  if (!d || typeof d !== 'object') return false;
+
+  const requiredStrings: (keyof ReportOutlineDraft)[] = [
+    'summary', 'what_this_could_be', 'why_it_fits', 'life_it_leads_toward',
+  ];
+  if (!requiredStrings.every(k => isNonEmptyString(d[k]))) return false;
+
+  if (!Array.isArray(d.decision_outline) || d.decision_outline.length === 0) return false;
+  return d.decision_outline.every(e =>
+    !!e && typeof e === 'object' && isNonEmptyString(e.decision) && isNonEmptyString(e.rationale),
   );
+}
+
+// #145 — step 2's own raw-output validation. expectedCount is a hard check
+// (not just non-empty): a count mismatch against the outline means a
+// decision was genuinely dropped or added, which assembly can't safely
+// paper over the way it can a minor wording drift in the echoed decision
+// text (see requestReportDraft's own comment).
+function validateElaborationDraft(data: unknown, expectedCount: number): data is ElaborationDraft {
+  const d = data as ElaborationDraft | null;
+  if (!d || typeof d !== 'object') return false;
+  if (!Array.isArray(d.strategic_decisions) || d.strategic_decisions.length !== expectedCount) return false;
+  return d.strategic_decisions.every(isValidStrategicDecision);
 }
 
 // ── Placeholder-bracket check (log-only) ────────────────────────────────
@@ -376,10 +471,12 @@ function logHedgeWordsInReport(draft: PathReportDraft): void {
   }
 }
 
-async function requestReportDraft(
+// #145 — step 1: enumeration only, no decision depth yet. See this file's
+// own header comment for why this is a separate call from elaboration.
+async function requestOutlineDraft(
   context: PathReportGenerationContext,
   steer: string | undefined,
-): Promise<PathReportDraft> {
+): Promise<ReportOutlineDraft> {
   const payload = {
     chosen_candidate: context.chosen_candidate,
     comments: context.comments,
@@ -395,26 +492,119 @@ async function requestReportDraft(
   const content = await getChatCompletion({
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: PATH_REPORT_PROMPT },
+      { role: 'system', content: PATH_REPORT_OUTLINE_PROMPT },
       { role: 'user', content: JSON.stringify(payload) },
     ],
-    max_tokens: 4000,
+    // Well above what real generation needs (a real run: ~600-900 tokens
+    // for the four prose fields plus a lean 3-5-entry outline) — cost
+    // isn't the constraint here (brief #145), this ceiling just needs to
+    // never be the thing limiting breadth.
+    max_tokens: 3000,
     temperature: 0.4,
   });
 
   const parsed = JSON.parse(content ?? '{}');
-  if (!validatePathReportDraft(parsed)) {
-    throw new Error('Path report generation failed validation: ' + JSON.stringify(parsed).slice(0, 500));
+  if (!validateOutlineDraft(parsed)) {
+    throw new Error('Path report outline generation failed validation: ' + JSON.stringify(parsed).slice(0, 500));
+  }
+  return parsed;
+}
+
+// #145 — step 2: full depth (why_it_matters + live_options) for every
+// decision in decisionOutline, in one call. The decision list itself is
+// fixed by this point — decisionOutline is the source of truth for count
+// and order, not something this call can change.
+async function requestElaboration(
+  context: PathReportGenerationContext,
+  decisionOutline: DecisionOutlineEntry[],
+  steer: string | undefined,
+): Promise<ElaborationDraft> {
+  const payload = {
+    chosen_candidate: context.chosen_candidate,
+    comments: context.comments,
+    must_haves: context.must_haves,
+    must_avoids: context.must_avoids,
+    ideal_life: context.ideal_life,
+    primary_constellation: context.primary_constellation,
+    energisers: context.energisers,
+    friction_points: context.friction_points,
+    decision_outline: decisionOutline,
+    ...(steer ? { steer } : {}),
+  };
+
+  const content = await getChatCompletion({
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: PATH_REPORT_ELABORATION_PROMPT },
+      { role: 'user', content: JSON.stringify(payload) },
+    ],
+    // Generous on purpose (brief #145: "more tokens... explicitly fine
+    // here") — up to 5 decisions x (80-140 word why_it_matters + up to 4
+    // live_options with real context each) is real content, and this
+    // section is the one the CTA is actually selling.
+    max_tokens: 6000,
+    temperature: 0.4,
+  });
+
+  const parsed = JSON.parse(content ?? '{}');
+  if (!validateElaborationDraft(parsed, decisionOutline.length)) {
+    throw new Error('Path report elaboration failed validation: ' + JSON.stringify(parsed).slice(0, 500));
+  }
+  return parsed;
+}
+
+async function requestReportDraft(
+  context: PathReportGenerationContext,
+  steer: string | undefined,
+): Promise<PathReportDraft> {
+  const outline = await requestOutlineDraft(context, steer);
+  const elaboration = await requestElaboration(context, outline.decision_outline, steer);
+
+  // Assembly: decision text is authoritative from the outline, matched by
+  // array position — not trusted from elaboration's own echoed "decision"
+  // field, even though the elaboration prompt asks for it verbatim. This
+  // means a minor wording drift in the echo can never corrupt the
+  // persisted report; only a genuine count mismatch (already hard-failed
+  // by validateElaborationDraft above) is a real problem. Still logged
+  // (informational) when the echo drifts, since real drift despite a
+  // matching count would be a sign something else is off.
+  elaboration.strategic_decisions.forEach((sd, i) => {
+    const outlineText = outline.decision_outline[i].decision;
+    if (sd.decision.trim().toLowerCase() !== outlineText.trim().toLowerCase()) {
+      console.warn(
+        `path_report: elaboration echoed a different decision text at position ${i} than the outline gave it ` +
+        `(using the outline's own text for the persisted report either way): outline="${outlineText}" elaboration="${sd.decision}"`,
+      );
+    }
+  });
+
+  const draft: PathReportDraft = {
+    summary: outline.summary,
+    what_this_could_be: outline.what_this_could_be,
+    why_it_fits: outline.why_it_fits,
+    life_it_leads_toward: outline.life_it_leads_toward,
+    strategic_decisions: elaboration.strategic_decisions.map((sd, i) => ({
+      decision: outline.decision_outline[i].decision,
+      why_it_matters: sd.why_it_matters,
+      live_options: sd.live_options,
+    })),
+  };
+
+  if (!validatePathReportDraft(draft)) {
+    throw new Error('Assembled path report draft failed validation: ' + JSON.stringify(draft).slice(0, 500));
   }
 
-  logPlaceholderBracketsInReport(parsed);
-  enforceLifeLeadsTowardNonOverlap(parsed, context.ideal_life);
-  logTrajectoryLanguageInSummary(parsed);
-  logResearchClaimsInStrategicDecisions(parsed);
-  logEmDashesInReport(parsed);
-  logHedgeWordsInReport(parsed);
+  // One pass over the fully assembled draft, same as before the split —
+  // no architecture change needed for these (brief #145's own "Assembly"
+  // instruction).
+  logPlaceholderBracketsInReport(draft);
+  enforceLifeLeadsTowardNonOverlap(draft, context.ideal_life);
+  logTrajectoryLanguageInSummary(draft);
+  logResearchClaimsInStrategicDecisions(draft);
+  logEmDashesInReport(draft);
+  logHedgeWordsInReport(draft);
 
-  return parsed;
+  return draft;
 }
 
 /**

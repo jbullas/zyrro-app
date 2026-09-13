@@ -47,11 +47,14 @@ import type { ProjectNamingState } from '@/lib/use-project-naming';
 // review): live_options was originally rendered via ChipRow — "only pills
 // are pretty but useless" — replaced with a real schema change
 // (LiveOption { option; context }, lib/generate-path-report.ts) and a
-// labeled-sub-section render: each option is its own `card-sub-label` +
-// `evidence-analysis` pair (both reused verbatim from elsewhere in this
-// same card, margins overridden inline the same way "OPEN DIRECTIONS"
-// already does — no new CSS classes needed), giving each option enough
-// space to actually explain the direction instead of just naming it.
+// labeled-sub-section render: each option as a `card-sub-label` +
+// `evidence-analysis` pair. #145 redesigned that render again: those two
+// classes are both deliberately small/muted secondary-content styles,
+// wrong once each option became real primary content the user has to read
+// and compare, not a citation. Each option now gets its own bordered box
+// (`.live-option-card`, a new scoped nested-card variant — see its own
+// comment in globals.css for why not the bare `.card` class) with the
+// label at normal body weight instead of tiny uppercase.
 // why_it_matters' own paragraph dropped .evidence-analysis too (kept the
 // same padding inline, just not the muted/small citation-style font
 // treatment — that class was inherited from the old master_strategy render
@@ -91,26 +94,42 @@ const COME_BACK_LATER_COPY =
   'back in a few minutes. It’ll be here when it’s ready.';
 const FAILED_BODY = 'We couldn’t finish your Path report. Please try again.';
 
-// #144: help text rewritten throughout — no em dashes anywhere (global
-// rule, docs/briefs/144-path-report-live-review-fixes.md), and What This
-// Could Be's specifically reworked to set the expectation of one confident
-// vision directly, not just describe scope (the old copy read as
-// "uninspiring" per live review).
+// #145: rewritten again to match /identity's actual help-text voice — state
+// plainly what the section is and what it's derived from, no aspirational/
+// motivational framing (the #144 copy above still sold the section rather
+// than explaining it). DESTINATION_EXPLANATION renamed to
+// DAY_IN_LIFE_EXPLANATION here too: the section itself was renamed to "Day
+// in Life" back in #144, but this constant's own name never followed.
 const WHAT_THIS_COULD_BE_EXPLANATION =
-  'One real, confident picture of where this leads if you follow it all the way. Not a list of maybes.';
+  'Paints the vision of what this path could lead to over time.';
 const WHY_IT_FITS_EXPLANATION =
-  'Two things have to be true for a direction to be real. You have to be capable of it, and you have to actually ' +
-  'want it. Both get named here, and where they meet.';
-const DESTINATION_EXPLANATION =
-  'What a real day actually doing this looks like, given who you demonstrably are. Includes the one real ' +
-  'trade-off it asks of you. Not a promise of happiness, just an honest picture.';
+  'Shows why this is the right path for you, and how it relates to your identity and your abilities.';
+const DAY_IN_LIFE_EXPLANATION =
+  'Shows what your life could look like doing this.';
 const STRATEGY_EXPLANATION =
-  'Not a plan yet. The real open decisions this direction actually has, and what’s genuinely on the table for ' +
-  'each one.';
+  'Outlines the key decisions you need to make to realise the vision.';
 
-const WHATS_NEXT_COPY =
-  'Next, this turns into a Project: a Plan for walking this path, and concrete actions to start moving. Not ' +
-  'built yet, but it’s coming.';
+const WHATS_NEXT_COPY = 'Give this project a name to make it yours.';
+
+// #145: the bottom CTA previously carried only WHATS_NEXT_COPY's one
+// generic line. Rewritten to borrow ReframeCtaBlock.tsx's own content
+// pattern (recap, then a concrete bulleted list of what the next tier
+// actually delivers) rather than just its wrapper styling, per the brief —
+// this is the section that has to make someone want to subscribe to
+// Mentor. Bullets are grounded in what Mentor actually does today (see
+// app/api/mentor/route.ts's own system prompt and
+// lib/prompts/conversation-bundle.ts): it's given your identity/chosen
+// path/plan as real context on every message, pushes accountability on
+// your plan's own actions, and bundles each conversation for continuity
+// into the next one — not invented copy. No price line here, unlike
+// ReframeCtaBlock's real $49 checkout: Mentor's subscription billing isn't
+// built yet (ticket #30), and /mentor's own unsubscribed state already
+// shows a real (if checkout-disabled) paywall card rather than crashing or
+// assuming an active subscription — so this button links there as an
+// honest interim step, not a fabricated checkout call.
+const MENTOR_CTA_RECAP =
+  'You’ve picked a direction and seen the real decisions in front of you. What’s still missing is someone in ' +
+  'your corner while you actually walk it.';
 
 type PathReportFlowProps = {
   report: PathReportState;
@@ -165,12 +184,15 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
     prepared_for, identity_context, project_name,
   } = content;
 
-  // why_it_fits is generated as two paragraphs separated by a blank line
-  // (lib/prompts/path-report.ts's own explicit instruction) — split on that
-  // literal separator so each renders as its own <p>. Falls back to a
-  // single paragraph if a draft somehow didn't include the separator,
-  // rather than rendering an empty second <p>.
+  // why_it_fits and life_it_leads_toward are both generated as two
+  // paragraphs separated by a blank line (lib/prompts/path-report.ts's own
+  // explicit instruction, #145 extending the same convention to
+  // life_it_leads_toward) — split on that literal separator so each
+  // renders as its own <p>. Falls back to a single paragraph if a draft
+  // somehow didn't include the separator, rather than rendering an empty
+  // second <p>.
   const whyItFitsParagraphs = why_it_fits.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const lifeItLeadsTowardParagraphs = life_it_leads_toward.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
 
   return (
     <>
@@ -248,12 +270,12 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
             <p className="eyebrow">WHY IT FITS</p>
             <p className="documentation">{WHY_IT_FITS_EXPLANATION}</p>
             <div className="card">
-              <h3>What You Can Do</h3>
+              <h3>Your Abilities</h3>
               <p>{whyItFitsParagraphs[0]}</p>
             </div>
             {whyItFitsParagraphs[1] && (
               <div className="card">
-                <h3>What You Want</h3>
+                <h3>Your Preferences</h3>
                 <p>{whyItFitsParagraphs[1]}</p>
               </div>
             )}
@@ -261,8 +283,11 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
 
           <div className="section">
             <p className="eyebrow">DAY IN LIFE</p>
-            <p className="documentation">{DESTINATION_EXPLANATION}</p>
-            <div className="card"><p>{life_it_leads_toward}</p></div>
+            <p className="documentation">{DAY_IN_LIFE_EXPLANATION}</p>
+            <div className="card">
+              <p>{lifeItLeadsTowardParagraphs[0]}</p>
+              {lifeItLeadsTowardParagraphs[1] && <p>{lifeItLeadsTowardParagraphs[1]}</p>}
+            </div>
           </div>
 
           <div className="section">
@@ -273,9 +298,9 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
                 <p style={{ padding: '14px 16px 0' }}>{sd.why_it_matters}</p>
                 <p className="card-sub-label" style={{ margin: '14px 16px 6px' }}>OPEN DIRECTIONS</p>
                 {sd.live_options.map((opt, j) => (
-                  <div key={j}>
-                    <p className="card-sub-label" style={{ margin: '0 16px 4px' }}>{opt.option}</p>
-                    <p className="evidence-analysis" style={{ padding: '0 16px' }}>{opt.context}</p>
+                  <div key={j} className="live-option-card">
+                    <p className="live-option-label">{opt.option}</p>
+                    <p className="live-option-context">{opt.context}</p>
                   </div>
                 ))}
               </ConstellationCard>
@@ -284,8 +309,21 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
 
           <div className="section cta">
             <p className="eyebrow" style={{ textAlign: 'center' }}>WHAT&rsquo;S NEXT</p>
-            <h2 style={{ textAlign: 'center' }}>Turn This Into a Project</h2>
+            <h2 style={{ textAlign: 'center' }}>You Don&rsquo;t Have to Walk This Alone</h2>
             <div className="card cta">
+              <p>{MENTOR_CTA_RECAP}</p>
+
+              <ul>
+                <li>A mentor who already knows your signatures, this path, and the decisions above — you never have to re-explain yourself</li>
+                <li>Direct, concrete input on whichever decision above you&rsquo;re actually stuck on, not generic advice</li>
+                <li>Accountability on the specific actions you commit to, conversation to conversation</li>
+                <li>Every conversation picks up exactly where the last one left off — nothing gets lost between sessions</li>
+              </ul>
+
+              <PrimaryButton href="/mentor">Meet Your Mentor</PrimaryButton>
+            </div>
+
+            <div className="card">
               <p>{WHATS_NEXT_COPY}</p>
               {project_name ? (
                 <>

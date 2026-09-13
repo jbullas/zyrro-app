@@ -1279,6 +1279,43 @@ p {
   margin: 0;
 }
 
+/* #145: Open Directions redesign — live_options previously rendered as a
+   .card-sub-label (tiny uppercase) + .evidence-analysis (muted) pair, both
+   styles meant for secondary/citation-style content. Now real primary
+   content the user has to read and compare, so it gets its own bordered
+   box instead. Not the bare .card class: nesting a full .card (white bg +
+   border + shadow) inside ConstellationCard's own .card would stack two
+   shadows on the same white background and look redundant. This scoped
+   variant keeps the same bordered-box language (border-radius, hairline
+   border, same border opacity .card itself uses) with a faint background
+   tint instead of a shadow, so it reads as nested rather than duplicated.
+   Horizontal margin matches the 16px inset already used by this card's
+   sibling elements (why_it_matters, the OPEN DIRECTIONS label) — vertical
+   spacing between boxes is left to .constellation-card-body > * + * (16px),
+   same as before. */
+.live-option-card {
+  margin: 0 16px;
+  padding: 12px 14px;
+  border: 0.5px solid rgba(0,0,0,0.07);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.02);
+}
+
+.live-option-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.45;
+  margin: 0 0 4px;
+}
+
+.live-option-context {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* Shared stat-row base — display/gap/padding/border-top are identical
    regardless of column count. Originally duplicated verbatim into a
    separate .fit-stat-row class (#138 §6) rather than extracted, which was
