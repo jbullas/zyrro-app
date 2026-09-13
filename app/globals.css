@@ -366,6 +366,14 @@ p {
   font-weight: 700;
 }
 
+/* #139: gap between stacked <p>s in a plain .card (e.g. why_it_fits'
+   two paragraphs) — the global `p { margin: 0 }` reset leaves none
+   otherwise. Specificity (0,1,1) beats the bare `p` rule regardless of
+   source order, so this is safe wherever it's placed in the file. */
+.card p + p {
+  margin-top: 12px;
+}
+
 /* ── IDENTITY BADGE ── */
 .badge {
   background: var(--gradient);

@@ -16,17 +16,6 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // Must-avoid check: reused from lib/generate-path-options-session.ts
 // (findMustAvoidViolations — the negation-aware phrase-presence check
 // built and validated against real output in Slice 2), not reimplemented.
-// Reasoning for reusing it here, worked through explicitly rather than
-// assumed: this prompt carries none of Options' content-bar instruction to
-// explicitly explain avoidance (the thing that caused Slice 2's real
-// 12/12 false-positive run), and chosen_candidate is already a
-// Slice-2-hard-checked, must-avoid-clean option by the time it reaches
-// this module — so the risk is lower than Options faced. But must_avoids
-// are still passed into this prompt as grounding context, and honest_cost
-// in particular is a plausible place for an LLM to reach for reassurance
-// framing ("unlike roles with heavy oversight...") even without being
-// told to, the same spontaneous pattern Slice 2's real output showed. Kept
-// as defense-in-depth rather than dropped.
 //
 // No material-difference check here, and no over-generate/filter batch
 // control flow — that machinery exists in Slice 2 because Options
@@ -36,43 +25,49 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // simpler: generate once, check every text field, one retry with a steer
 // if a violation is found, hard-fail if still violating after that.
 //
-// Two more checks added after the first real generation run (this
-// session's own live test, scripts/test-134-slice3-report-checks.mts)
-// surfaced them — not assumed necessary up front, confirmed by real
-// output:
-// - logPlaceholderBracketsInReport: the real run left literal
-//   "[specific date]"-style template text in two of three
-//   master_strategy names — traced to this prompt's own worked example
-//   using bracket notation illustratively, which the model then copied as
-//   if it were real syntax. Fixed at the prompt level (the example no
-//   longer uses brackets) with this as a log-only backstop, not a
-//   retry trigger — a leftover placeholder is a polish problem, not a
-//   trust/compliance one, so it doesn't get the same hard-fail treatment
-//   as a must-avoid violation.
-// - enforceLifeLeadsTowardNonOverlap: life_it_leads_toward's real output
-//   closed on a sentence that was a near-verbatim echo of ideal_life
-//   rather than a developed destination. Exactly the failure class
-//   enforceConstellationSynthesisNonOverlap already solved for
-//   constellation_synthesis vs identity_thesis
-//   (lib/generate-identity-report.ts) — same fix applied here, not
-//   reinvented. Its helpers aren't exported from that file, so the small
-//   normalizeWords/splitSentences/hasOverlappingPhrase trio below is a
-//   local duplicate — same situation lib/generate-path-options-session.ts
-//   was already in for its own overlap check, not a new inconsistency.
+// #139 — full content-design rebuild (docs/briefs/139-path-report-redesign.md).
+// Confirmed cut: `honest_cost` — its job (naming a real trade-off) is
+// absorbed into life_it_leads_toward's friction-as-trade-off beat, not
+// replaced by anything else. `thesis` is also removed from this module's
+// generated fields entirely — the report's thesis line is now
+// chosen_candidate.core_statement, carried straight through from the
+// Options candidate the user already picked, never regenerated (the whole
+// point: Options already produced a real, hard-checked core_statement for
+// this exact candidate; asking this prompt to write a new one risks
+// drifting from what the user actually selected). `master_strategy`
+// (OutlineObjective[]) is replaced by `strategic_decisions`
+// (StrategicDecision[]) — a list of open decisions, not a sequenced task
+// list. This is a structural fix, not a prompt-language one: a list of
+// decisions has no inherent chronology, so there's no cross-item sequencing
+// to get wrong the way master_strategy's per-step timeframes used to.
+//
+// Two checks carried over unchanged from the pre-#139 version (still
+// relevant, no schema-shape dependency): logPlaceholderBracketsInReport
+// (log-only backstop for literal "[timeframe]"-style leftover template
+// text) and enforceLifeLeadsTowardNonOverlap (strips any sentence in
+// life_it_leads_toward that echoes ideal_life rather than developing it).
+// Two new checks added for #139's new content requirements (see their own
+// comments below): logTrajectoryLanguageInSummary (Summary's own stated
+// boundary — no future-scale/reputation speculation, that's What This
+// Could Be's job) and logResearchClaimsInStrategicDecisions (no confident
+// claims about a real market/competitor/industry — nothing here has been
+// looked up).
+
+export interface StrategicDecision {
+  decision: string;
+  why_it_matters: string;
+  live_options: string[];
+}
 
 export interface PathReportGenerationContext {
-  chosen_candidate: { name: string; description: string };
+  chosen_candidate: { name: string; description: string; core_statement: string };
   comments: string;
   must_haves: string[];
   must_avoids: string[];
   ideal_life: string;
   primary_constellation: PrimarySignatureAnalysis[];
-}
-
-export interface OutlineObjective {
-  name: string;
-  description: string;
-  sequencing_rationale: string;
+  energisers: string[];
+  friction_points: string[];
 }
 
 // The LLM-generated fields only — chosen_candidate/comments/project_name
@@ -80,12 +75,11 @@ export interface OutlineObjective {
 // aren't generated here, they're attached by the caller from data it
 // already has.
 export interface PathReportDraft {
-  thesis: string;
-  what_it_is: string;
+  summary: string;
+  what_this_could_be: string;
   why_it_fits: string;
-  honest_cost: string;
   life_it_leads_toward: string;
-  master_strategy: OutlineObjective[];
+  strategic_decisions: StrategicDecision[];
 }
 
 export type PathReportStatus = 'generating' | 'ready' | 'failed';
@@ -101,7 +95,7 @@ export type PathReportStatus = 'generating' | 'ready' | 'failed';
 // its TS shape, the same way PathReportDraft already is for the generated
 // subset of it.
 export interface PathReportContent extends PathReportDraft {
-  chosen_candidate: { id: string; name: string; description: string };
+  chosen_candidate: { id: string; name: string; description: string; core_statement: string };
   comments: string;
   project_name?: string | null;
 }
@@ -111,16 +105,17 @@ function validatePathReportDraft(data: unknown): data is PathReportDraft {
   if (!d || typeof d !== 'object') return false;
 
   const requiredStrings: (keyof PathReportDraft)[] = [
-    'thesis', 'what_it_is', 'why_it_fits', 'honest_cost', 'life_it_leads_toward',
+    'summary', 'what_this_could_be', 'why_it_fits', 'life_it_leads_toward',
   ];
   if (!requiredStrings.every(k => typeof d[k] === 'string' && (d[k] as string).trim().length > 0)) return false;
 
-  if (!Array.isArray(d.master_strategy) || d.master_strategy.length === 0) return false;
-  return d.master_strategy.every(o =>
-    !!o && typeof o === 'object' &&
-    typeof o.name === 'string' && o.name.trim().length > 0 &&
-    typeof o.description === 'string' && o.description.trim().length > 0 &&
-    typeof o.sequencing_rationale === 'string' && o.sequencing_rationale.trim().length > 0,
+  if (!Array.isArray(d.strategic_decisions) || d.strategic_decisions.length === 0) return false;
+  return d.strategic_decisions.every(sd =>
+    !!sd && typeof sd === 'object' &&
+    typeof sd.decision === 'string' && sd.decision.trim().length > 0 &&
+    typeof sd.why_it_matters === 'string' && sd.why_it_matters.trim().length > 0 &&
+    Array.isArray(sd.live_options) && sd.live_options.length >= 2 && sd.live_options.length <= 4 &&
+    sd.live_options.every(o => typeof o === 'string' && o.trim().length > 0),
   );
 }
 
@@ -137,15 +132,14 @@ const PLACEHOLDER_BRACKET_PATTERN = /\[[^\]]{1,60}\]/;
  */
 function logPlaceholderBracketsInReport(draft: PathReportDraft): void {
   const fields: Array<[string, string]> = [
-    ['thesis', draft.thesis],
-    ['what_it_is', draft.what_it_is],
+    ['summary', draft.summary],
+    ['what_this_could_be', draft.what_this_could_be],
     ['why_it_fits', draft.why_it_fits],
-    ['honest_cost', draft.honest_cost],
     ['life_it_leads_toward', draft.life_it_leads_toward],
-    ...draft.master_strategy.flatMap((o, i): Array<[string, string]> => [
-      [`master_strategy[${i}].name`, o.name],
-      [`master_strategy[${i}].description`, o.description],
-      [`master_strategy[${i}].sequencing_rationale`, o.sequencing_rationale],
+    ...draft.strategic_decisions.flatMap((sd, i): Array<[string, string]> => [
+      [`strategic_decisions[${i}].decision`, sd.decision],
+      [`strategic_decisions[${i}].why_it_matters`, sd.why_it_matters],
+      ...sd.live_options.map((o, j): [string, string] => [`strategic_decisions[${i}].live_options[${j}]`, o]),
     ]),
   ];
 
@@ -226,6 +220,54 @@ function enforceLifeLeadsTowardNonOverlap(draft: PathReportDraft, idealLife: str
   draft.life_it_leads_toward = kept.join(' ');
 }
 
+// ── Summary trajectory-language check (log-only) ────────────────────────
+
+// #139: Summary's own hard boundary is "never speculate about future
+// scale, reputation, or trajectory" — that's What This Could Be's job
+// entirely. Deliberately log-only, not a retry trigger: this is a register/
+// scope violation the same family as a genericness slip, not a trust/
+// compliance issue like a must-avoid touch, and the phrase list below is a
+// heuristic (a real sentence can legitimately contain one of these words in
+// a present-tense, non-speculative sense) — a false positive shouldn't burn
+// the one retry this module has.
+const TRAJECTORY_LANGUAGE_PATTERN =
+  /\b(eventually|one day|over time|in a few years|down the line|down the road|becomes known for|reputation for|grows into|scales? (up|into)|expand(s|ing)? (into|to)|someday)\b/i;
+
+function logTrajectoryLanguageInSummary(draft: PathReportDraft): void {
+  if (TRAJECTORY_LANGUAGE_PATTERN.test(draft.summary)) {
+    console.warn(
+      `path_report: summary contains trajectory/scale-shaped language, which is What This Could Be's job, ` +
+      `not Summary's: "${draft.summary}"`,
+    );
+  }
+}
+
+// ── Strategic Decisions research-claim check (log-only) ─────────────────
+
+// #139: "No web search, no research claims" is a hard content rule per the
+// brief — the model hasn't looked anything up, so nothing here should read
+// as confirmed fact about a real market/competitor/industry. Log-only for
+// the same reason as logTrajectoryLanguageInSummary: a phrase heuristic
+// over prose that legitimately discusses markets and competition as
+// directions to investigate (the section's actual job) will have false
+// positives, so this is a backstop to catch a real slip, not a retry
+// trigger that could burn the one retry on a borderline phrasing.
+const RESEARCH_CLAIM_PATTERN =
+  /\b(studies show|research shows|data shows|the market (is|has)|demand (is|has) (high|growing|increasing)|competitors (are|have)|industry (data|reports|trends) show|according to)\b/i;
+
+function logResearchClaimsInStrategicDecisions(draft: PathReportDraft): void {
+  const flagged = draft.strategic_decisions.filter(
+    sd => RESEARCH_CLAIM_PATTERN.test(sd.why_it_matters) || sd.live_options.some(o => RESEARCH_CLAIM_PATTERN.test(o)),
+  );
+  if (flagged.length > 0) {
+    console.warn(
+      'path_report: strategic_decisions contains language shaped like a confident real-world research claim ' +
+      '(the model has not looked anything up):',
+      flagged.map(sd => sd.decision).join(', '),
+    );
+  }
+}
+
 async function requestReportDraft(
   context: PathReportGenerationContext,
   steer: string | undefined,
@@ -237,6 +279,8 @@ async function requestReportDraft(
     must_avoids: context.must_avoids,
     ideal_life: context.ideal_life,
     primary_constellation: context.primary_constellation,
+    energisers: context.energisers,
+    friction_points: context.friction_points,
     ...(steer ? { steer } : {}),
   };
 
@@ -257,13 +301,15 @@ async function requestReportDraft(
 
   logPlaceholderBracketsInReport(parsed);
   enforceLifeLeadsTowardNonOverlap(parsed, context.ideal_life);
+  logTrajectoryLanguageInSummary(parsed);
+  logResearchClaimsInStrategicDecisions(parsed);
 
   return parsed;
 }
 
 /**
- * Scans every text field of a draft — including each master_strategy
- * objective's name/description/sequencing_rationale, not just the top-level
+ * Scans every text field of a draft — including each strategic_decisions
+ * entry's decision/why_it_matters/live_options[], not just the top-level
  * prose fields — for must-avoid violations. Deduplicates by must_avoid
  * string so a phrase touched in two different fields is only reported once.
  * Exported (not kept private) so it's directly fixture-testable without a
@@ -272,12 +318,11 @@ async function requestReportDraft(
  */
 export function findMustAvoidViolationsInReport(draft: PathReportDraft, mustAvoids: string[]): MustAvoidViolation[] {
   const fields = [
-    draft.thesis,
-    draft.what_it_is,
+    draft.summary,
+    draft.what_this_could_be,
     draft.why_it_fits,
-    draft.honest_cost,
     draft.life_it_leads_toward,
-    ...draft.master_strategy.flatMap(o => [o.name, o.description, o.sequencing_rationale]),
+    ...draft.strategic_decisions.flatMap(sd => [sd.decision, sd.why_it_matters, ...sd.live_options]),
   ];
 
   const seen = new Set<string>();

@@ -98,12 +98,14 @@ function buildGenerationContext(
 
   return {
     context: {
-      chosen_candidate: { name: chosen.name, description: chosen.description },
+      chosen_candidate: { name: chosen.name, description: chosen.description, core_statement: chosen.core_statement },
       comments: optionsContent.comments ?? '',
       must_haves: directionContent.must_haves ?? [],
       must_avoids: directionContent.must_avoids ?? [],
       ideal_life: directionContent.ideal_life ?? '',
       primary_constellation: identityReport.primary_constellation,
+      energisers: identityReport.energisers,
+      friction_points: identityReport.friction_points,
     },
     chosenCandidateId: chosen.id,
   };
@@ -131,6 +133,7 @@ async function runGeneration(
         id: chosenCandidateId,
         name: context.chosen_candidate.name,
         description: context.chosen_candidate.description,
+        core_statement: context.chosen_candidate.core_statement,
       },
       comments: context.comments,
     };
@@ -238,7 +241,12 @@ export async function GET(_req: NextRequest) {
         // generation runs. Not cast to PathReportContent; see
         // PathReportRowRaw's own comment above.
         content: {
-          chosen_candidate: { id: chosenCandidateId, name: context.chosen_candidate.name, description: context.chosen_candidate.description },
+          chosen_candidate: {
+            id: chosenCandidateId,
+            name: context.chosen_candidate.name,
+            description: context.chosen_candidate.description,
+            core_statement: context.chosen_candidate.core_statement,
+          },
           comments: context.comments,
         },
       })
