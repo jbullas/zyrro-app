@@ -65,17 +65,17 @@ function cleanDraft(): PathReportDraft {
         decision: 'How this actually reaches its first clients',
         why_it_matters: 'Without a first real engagement, everything else here is theoretical.',
         live_options: [
-          'Referral-only through your existing network',
-          'A visible body of writing that pulls inbound interest',
-          'Direct outreach to a short, named list of target companies',
+          { option: 'Referral-only through your existing network', context: 'You lean on people who already trust your work to introduce you directly.' },
+          { option: 'A visible body of writing that pulls inbound interest', context: 'You publish real analysis of problems you have actually solved, and let interest come to you.' },
+          { option: 'Direct outreach to a short, named list of target companies', context: 'You pick a handful of specific companies and reach out with a concrete pitch tailored to each.' },
         ],
       },
       {
         decision: 'How much of the business side you handle yourself',
         why_it_matters: 'Admin and business development compete directly with billable hours in the early months.',
         live_options: [
-          'Handle everything yourself at first',
-          'Hire a part-time bookkeeper once there are 2+ clients',
+          { option: 'Handle everything yourself at first', context: 'You keep costs at zero and learn the business side directly, at the expense of billable time.' },
+          { option: 'Hire a part-time bookkeeper once there are 2+ clients', context: 'You offload the parts that do not need your judgment as soon as there is real revenue to justify it.' },
         ],
       },
     ],
@@ -112,11 +112,11 @@ function cleanDraft(): PathReportDraft {
 
 {
   const draft = cleanDraft();
-  draft.strategic_decisions[0].live_options[0] = 'Tolerate real micromanagement from early clients while you establish trust';
+  draft.strategic_decisions[0].live_options[0].context = 'Tolerate real micromanagement from early clients while you establish trust.';
   const violations = findMustAvoidViolationsInReport(draft, MUST_AVOIDS);
   assertTrue(
     violations.some(v => v.must_avoid === 'Micromanagement'),
-    'a genuine (non-negated) violation nested inside strategic_decisions[i].live_options is detected — proves the field-flattening actually reaches into the array, not just the top-level prose fields',
+    'a genuine (non-negated) violation nested inside strategic_decisions[i].live_options[j].context is detected — proves the field-flattening actually reaches into the option/context pair, not just the top-level prose fields',
   );
 }
 
@@ -215,9 +215,9 @@ async function runRealGeneration() {
     report.strategic_decisions.every(sd =>
       sd.decision.trim().length > 0 && sd.why_it_matters.trim().length > 0 &&
       sd.live_options.length >= 2 && sd.live_options.length <= 4 &&
-      sd.live_options.every(o => o.trim().length > 0),
+      sd.live_options.every(o => o.option.trim().length > 0 && o.context.trim().length > 0),
     ),
-    'every strategic_decisions entry has non-empty decision/why_it_matters and 2-4 non-empty live_options',
+    'every strategic_decisions entry has non-empty decision/why_it_matters and 2-4 live_options with non-empty option+context',
   );
   assertTrue(
     !('thesis' in report) && !('honest_cost' in report) && !('master_strategy' in report) && !('what_it_is' in report),
