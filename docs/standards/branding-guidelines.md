@@ -157,6 +157,18 @@ Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 * Text: `--color-text-primary`, `--font-size-body`, `--font-weight-semibold`
 * Use: actions that confirm progress (e.g. Continue, Next, Login, Signup, Submit)
 
+**Exception, recorded for #137**: `/path`'s Options step "Confirm selection"
+button (`components/OptionsFlow.tsx`, #143) is a `PrimaryButton`, not
+Secondary, even though it reads as a progress action on the surface (it
+advances the flow, like Direction's three "Continue" buttons, which stay
+Secondary). Reasoning: Confirm selection is the only action in the entire
+`/path` flow that triggers actual report generation — a real LLM call and
+real cost — not just navigation to the next screen. That's a substantively
+different kind of action, not just a more important-feeling one, and is why
+it gets the Primary CTA treatment reserved above for conversion moments. A
+future button-consistency pass (#137) should not "correct" this back to
+Secondary without accounting for this distinction.
+
 # Spacing & Layout
 
 Use CSS variables from `globals.css`:

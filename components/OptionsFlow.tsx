@@ -1,7 +1,6 @@
 import GeneratingState from '@/components/GeneratingState';
 import MessageState from '@/components/MessageState';
 import PrimaryButton from '@/components/PrimaryButton';
-import SecondaryButton from '@/components/SecondaryButton';
 import LinkButton from '@/components/LinkButton';
 import SubmitError from '@/components/SubmitError';
 import ConstellationCard from '@/components/ConstellationCard';
@@ -74,6 +73,35 @@ import type { PathOptionsState } from '@/lib/use-path-options';
 //   Left rendering here too (harmless, unreachable) rather than deleted,
 //   same "flag, don't necessarily delete yet" posture this exact dead
 //   branch already had before #138 touched this file.
+//
+// #143 — select/confirm UX fix, confirmed via live testing to read as
+// broken: the comment textarea + Confirm/Change-selection controls used to
+// render in a separate card below all four candidates, disconnected from
+// which one was actually selected (Confirm visually nested inside the
+// "ANYTHING ELSE?" box, reading as if commenting were required to
+// proceed). Renamed `tentativeId` → `activeId` throughout (name change
+// only, same semantics `!tentativeId` had in #138 §3's note above) and:
+// - Replaced the SecondaryButton select control with a checkbox-style
+//   toggle (.option-select-toggle) — checking selects, unchecking
+//   deselects, no separate "Change selection" control anymore. Styled with
+//   the existing .btn-link brand color (var(--color-grad-2)) via
+//   accent-color, not a new token.
+// - Comment textarea + Confirm now render inline inside the selected
+//   candidate's own ConstellationCard, not a separate card at the bottom.
+// - `comments` (single shared string) replaced with `commentsByCandidate`,
+//   a `Record<string, string>` keyed by candidate id and owned here at the
+//   parent level — deliberately, so comment text survives regardless of
+//   what happens to individual card markup in a future restructuring, per
+//   the brief's own reasoning. Switching candidates shows each one's own
+//   entry; nothing leaks across candidates.
+// - Confirm selection is now a PrimaryButton, not SecondaryButton — a
+//   deliberate exception to this flow's otherwise-consistent
+//   Secondary-for-progression pattern (Direction's three Continue buttons
+//   stay Secondary). Reasoning: Confirm is the only action in /path that
+//   triggers actual report generation (a real LLM call and cost), not just
+//   navigation to the next screen. Recorded in
+//   docs/standards/branding-guidelines.md's Buttons section too, so a
+//   future #137 button-consistency pass doesn't "correct" this back.
 
 const OPTIONS_INTRO =
   'Four directions, built from what you just told us matters. Pick the one that’s closest to right — or tell us ' +
@@ -112,8 +140,8 @@ type OptionsFlowProps = {
 };
 
 export default function OptionsFlow({ options }: OptionsFlowProps) {
-  const [tentativeId, setTentativeId] = useState<string | null>(null);
-  const [comments, setComments] = useState('');
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [commentsByCandidate, setCommentsByCandidate] = useState<Record<string, string>>({});
   const [refineText, setRefineText] = useState('');
 
   const optionsCover = (
@@ -184,9 +212,8 @@ export default function OptionsFlow({ options }: OptionsFlowProps) {
   const { candidates } = options.content;
   const atCap = candidates.length >= 8;
 
-  async function handleConfirm() {
-    if (!tentativeId) return;
-    await options.submitSelect(tentativeId, comments);
+  async function handleConfirm(candidateId: string) {
+    await options.submitSelect(candidateId, commentsByCandidate[candidateId] ?? '');
   }
 
   async function handleRefine() {
@@ -204,59 +231,64 @@ export default function OptionsFlow({ options }: OptionsFlowProps) {
           <p className="eyebrow">CHECKPOINT 2 · OPTIONS</p>
           <p className="documentation">{OPTIONS_EXPLANATION}</p>
 
-          {candidates.map((c, i) => (
-            <ConstellationCard key={c.id} badge={i + 1} title={c.name}>
-              <p className="core-statement">{c.core_statement}</p>
-              <p className="evidence-analysis">{c.description}</p>
-              <p className="evidence-analysis"><strong>Select this if:</strong> {c.select_if}</p>
-              <div className="tension-block">
-                <span className="tension-label">TENSION</span>
-                <p>{c.tension}</p>
-              </div>
-              <div className="stat-row fit-stat-row">
-                <div className="score-chip">
-                  <span className="score-chip-label">Overall fit</span>
-                  <span className="score-chip-value">{c.fit_score ?? '—'}</span>
+          {candidates.map((c, i) => {
+            const isActive = activeId === c.id;
+            return (
+              <ConstellationCard key={c.id} badge={i + 1} title={c.name}>
+                <p className="core-statement">{c.core_statement}</p>
+                <p className="evidence-analysis">{c.description}</p>
+                <p className="evidence-analysis"><strong>Select this if:</strong> {c.select_if}</p>
+                <div className="tension-block">
+                  <span className="tension-label">TENSION</span>
+                  <p>{c.tension}</p>
                 </div>
-                <div className="score-chip">
-                  <span className="score-chip-label">Confidence</span>
-                  <span className="score-chip-value">{c.fit_confidence ?? '—'}</span>
+                <div className="stat-row fit-stat-row">
+                  <div className="score-chip">
+                    <span className="score-chip-label">Overall fit</span>
+                    <span className="score-chip-value">{c.fit_score ?? '—'}</span>
+                  </div>
+                  <div className="score-chip">
+                    <span className="score-chip-label">Confidence</span>
+                    <span className="score-chip-value">{c.fit_confidence ?? '—'}</span>
+                  </div>
                 </div>
-              </div>
-              <p className="card-sub-label" style={{ margin: '14px 16px 6px' }}>DRAWS ON</p>
-              <ChipRow items={c.signatures_engaged} wrapperClassName="option-card-sigs" />
-              <div className="option-card-footer">
-                <SecondaryButton onClick={() => setTentativeId(c.id)} disabled={options.submitting}>
-                  {tentativeId === c.id ? 'Selected ✓' : 'Select This Path →'}
-                </SecondaryButton>
-              </div>
-            </ConstellationCard>
-          ))}
+                <p className="card-sub-label" style={{ margin: '14px 16px 6px' }}>DRAWS ON</p>
+                <ChipRow items={c.signatures_engaged} wrapperClassName="option-card-sigs" />
+                <div className="option-card-footer">
+                  <label className="option-select-toggle">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={() => setActiveId(isActive ? null : c.id)}
+                      disabled={options.submitting}
+                    />
+                    Select this path
+                  </label>
+                </div>
+                {isActive && (
+                  <div className="option-card-confirm">
+                    <p className="card-sub-label">ANYTHING ELSE?</p>
+                    <p className="documentation">{COMMENTS_EXPLANATION}</p>
+                    <textarea
+                      className="input-field input-field--textarea"
+                      value={commentsByCandidate[c.id] ?? ''}
+                      onChange={(e) =>
+                        setCommentsByCandidate(prev => ({ ...prev, [c.id]: e.target.value }))
+                      }
+                      placeholder="Any additional comments, wishes, or requests before we build this out."
+                      disabled={options.submitting}
+                    />
+                    <SubmitError error={options.submitError} />
+                    <PrimaryButton onClick={() => handleConfirm(c.id)} disabled={options.submitting}>
+                      {options.submitting ? 'Confirming…' : 'Confirm selection →'}
+                    </PrimaryButton>
+                  </div>
+                )}
+              </ConstellationCard>
+            );
+          })}
 
-          {tentativeId && (
-            <div className="card">
-              <p className="card-sub-label">ANYTHING ELSE?</p>
-              <p className="documentation">{COMMENTS_EXPLANATION}</p>
-              <textarea
-                className="input-field input-field--textarea"
-                value={comments}
-                onChange={(e) => setComments(e.target.value)}
-                placeholder="Any additional comments, wishes, or requests before we build this out."
-                disabled={options.submitting}
-              />
-              <SubmitError error={options.submitError} />
-              <div className="option-card-footer">
-                <LinkButton onClick={() => setTentativeId(null)} disabled={options.submitting}>
-                  Change selection
-                </LinkButton>
-                <SecondaryButton onClick={handleConfirm} disabled={options.submitting}>
-                  {options.submitting ? 'Confirming…' : 'Confirm selection →'}
-                </SecondaryButton>
-              </div>
-            </div>
-          )}
-
-          {!atCap && !tentativeId && (
+          {!atCap && !activeId && (
             <div className="card">
               <p className="card-sub-label">Want a different option?</p>
               <p className="documentation">{REFINE_EXPLANATION}</p>

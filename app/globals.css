@@ -595,6 +595,36 @@ p {
   border-top: 0.5px solid rgba(0,0,0,0.07);
 }
 
+/* #143: checkbox-style select toggle, replacing the old select/deselect
+   button — reuses .btn-link's brand color (var(--color-grad-2)) via
+   accent-color rather than introducing a new color token. */
+.option-select-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-grad-2);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.option-select-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-grad-2);
+  cursor: pointer;
+}
+
+/* #143: inline comment + confirm section inside the selected candidate's
+   own card, replacing the old separate bottom-of-page card. */
+.option-card-confirm {
+  padding: 14px 16px;
+  border-top: 0.5px solid rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* ── PLAN PHASE CARD ── */
 .phase-milestones {
   padding: 12px 16px;
