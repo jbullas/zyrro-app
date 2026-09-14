@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 import LinkButton from '@/components/LinkButton';
 import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
@@ -23,12 +24,15 @@ export default function IdentityCard() {
   const [content, setContent] = useState<IdentityCardContent | null>(null);
   const [expanded, setExpanded] = useState(false);
 
+  const { user: authUser, loading: authLoading } = useAuthUser();
+
   useEffect(() => {
+    if (authLoading) return;
     const supabase = createClient();
     let cancelled = false;
 
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       if (!user) { if (!cancelled) setState('no-artifact'); return; }
 
       const { data, error } = await getCurrentArtifact<{ status: string; content: unknown }>(
@@ -56,7 +60,7 @@ export default function IdentityCard() {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [authLoading, authUser]);
 
   if (state === 'loading') {
     return (

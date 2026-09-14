@@ -1,5 +1,74 @@
 # #146 — Concurrent Supabase auth clients cause lock contention, can hang /path on forever-spinner after checkout
 
+## Status (2026-09-14, addendum session) — NOT Done: real Stripe checkout pass outstanding
+
+Real fix landed and verified by every synthetic/seeded-session check this
+addendum required: `docs/briefs/146-addendum-dedupe-getuser.md`. Root
+cause was concurrent `getUser()`/`getSession()` calls, not multiple client
+instances (that theory is what the singleton below disproved). New
+`lib/use-auth-user.tsx` (`AuthUserProvider` + `useAuthUser()`) calls `getUser()`
+exactly once per full page load, mounted once at `app/layout.tsx`, and every
+call site that used to independently call `createClient()` + `getUser()`/
+`getSession()` on mount now reads from it instead:
+`components/Header.tsx`, `components/BottomNav.tsx`, `components/IdentityCard.tsx`,
+`components/MomentumCard.tsx` (found mid-verification — both render together on
+`/dashboard` and had the identical independent-call pattern, not on the
+addendum's original page-level list, but the same bug), `app/path/page.tsx`,
+`app/dashboard/page.tsx`, `app/account/page.tsx`, `app/identity/page.tsx`,
+`app/plan/page.tsx`, `app/start/page.tsx`. `app/mentor/page.tsx`'s initial
+check is deduped the same way, but its `onAuthStateChange` subscription is
+deliberately KEPT (not stripped like the addendum brief assumed) — real,
+load-bearing behavior once Stripe subscription billing (#30) ships and real
+users can reach the chat, not incidental reactivity; logged as an explicit,
+accepted exception, not an oversight. `app/login/page.tsx`/`app/signup/page.tsx`
+audited and confirmed clean — neither ever called `getUser()`/`getSession()`
+at all. Two deliberate non-dedup exceptions, both by design: `/path`'s own
+retry button and `/identity`'s `handleRetry` still make their own direct,
+fresh `getUser()` call — both are one-off, user-triggered actions that fire
+well after mount, never concurrent with the shared hook's own fetch, so
+reusing the one-shot cached value there would make retry retry nothing.
+
+Verified live: forced-race repro against `/path` and `/dashboard` (25
+iterations each, `/auth/v1/user` delayed ~3s per request) — **exactly 1
+request and 0 lock-contention console lines per page load, 25/25, both
+pages** (previously 25/25 lock-contention failures on `/path` even after the
+singleton). Real browser pass, logged in and out, across `/dashboard`,
+`/identity`, `/path`, `/plan`, `/start`: Header's avatar/login-icon and
+BottomNav's active-tab logic all correct — 30/30 assertions. Re-ran the
+already-landed backstop check (forced outright `getUser()` rejection) through
+the new plumbing to confirm the restructuring didn't silently break it: still
+reaches the `'error'` state with a working retry, not `'anonymous'`, not
+stuck. Broader smoke pass across all 7 converted pages logged in: zero stuck
+states, zero console errors.
+
+**Not Done, and here's why that's a real gap, not a formality**: the
+*original* #146 brief's verification section (below) requires three things
+before Done, and one of them — "an actual Stripe test-mode checkout, real
+redirect back to `/path?session_id=...`, in a normal (non-incognito) browser
+session" — has never actually been run, in this session or the prior one.
+Every check done across both sessions used a synthetic bootstrapped test user
+(`generateLink` + `/auth/callback`) or forced route interception, never a
+real `/api/checkout` → Stripe hosted page → real redirect round-trip. That
+matters here specifically: the whole ticket exists because a real user hit
+this bug *right after a real Stripe checkout redirect* — the one navigation
+type guaranteed to remount everything at once, per the addendum's own root-
+cause section. A synthetic full-page-load repro is strong evidence the fix
+generalizes, but it is not the same event as the one that actually happened
+to a real user, and per this project's Definition of Done, "the code is
+provably unchanged/verified another way" is supporting evidence, never a
+substitute for a passing live test of the actual path in scope. This session
+didn't attempt it because `NEXT_PUBLIC_SITE_URL` isn't set in `.env.local` (so
+`/api/checkout`'s `success_url`/`cancel_url` don't resolve to a usable local
+redirect), not because it was judged unnecessary — that's a blocker to route
+around, not a reason to skip the check. Closing this ticket needs one of:
+(a) set `NEXT_PUBLIC_SITE_URL` locally and actually run the real checkout
+pass, or (b) Miroslav's explicit, logged acceptance of this specific
+untested gap (Definition of Done path 3) — not an agent's own judgment that
+the risk is probably low.
+
+Full terminal output for all of the above is in the corresponding changelog
+entry, not just this summary.
+
 ## Status (2026-09-14 session) — NOT Done, part 1 disproven
 
 - **`utils/supabase/client.ts` singleton**: implemented and kept in the codebase as

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
@@ -38,7 +39,10 @@ export default function PlanPage() {
   const genPhase = useGenerationStatus(artifactId);
   const plan     = genPhase.phase === 'ready' ? genPhase.content as PathPlanArtifactContent : null;
 
+  const { user: authUser, loading: authLoading } = useAuthUser();
+
   useEffect(() => {
+    if (authLoading) return;
     const supabase = createClient();
     let cancelled = false;
 
@@ -76,7 +80,7 @@ export default function PlanPage() {
     }
 
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
 
       if (!user) {
         if (!cancelled) setPageState('anonymous');
@@ -133,7 +137,7 @@ export default function PlanPage() {
       cancelled = true;
       stopPolling();
     };
-  }, [stopPolling]);
+  }, [stopPolling, authLoading, authUser]);
 
   async function handleRetry() {
     if (!userId || !activeSelection) return;

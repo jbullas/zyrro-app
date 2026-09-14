@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 
 const TRAILING_WINDOW_DAYS = 30;
 
@@ -15,12 +16,15 @@ export default function MomentumCard() {
   const [state, setState] = useState<CardState>('loading');
   const [conversationCount, setConversationCount] = useState(0);
 
+  const { user: authUser, loading: authLoading } = useAuthUser();
+
   useEffect(() => {
+    if (authLoading) return;
     const supabase = createClient();
     let cancelled = false;
 
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       if (!user) { if (!cancelled) setState('ready'); return; }
 
       const cutoff = new Date(Date.now() - TRAILING_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -39,7 +43,7 @@ export default function MomentumCard() {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [authLoading, authUser]);
 
   if (state === 'loading') {
     return (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
@@ -191,8 +192,11 @@ export default function IdentityPage() {
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
 
+  const { user: authUser, loading: authLoading } = useAuthUser();
+
   // Main load — finds the artifact ID and hands polling to useGenerationStatus
   useEffect(() => {
+    if (authLoading) return;
     const supabase = createClient();
     let cancelled  = false;
 
@@ -230,7 +234,7 @@ export default function IdentityPage() {
     }
 
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
 
       if (!user) {
         if (!cancelled) setPageState('anonymous');
@@ -259,7 +263,7 @@ export default function IdentityPage() {
 
     init();
     return () => { cancelled = true; };
-  }, [router]);
+  }, [router, authLoading, authUser]);
 
   // ── Loading ────────────────────────────────────────────────────────
   if (pageState === 'loading') return null;

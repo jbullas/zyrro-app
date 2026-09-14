@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { createConversation, listConversations, type ConversationListItem } from "@/lib/conversations";
 import { saveMessage, listMessages } from "@/lib/messages";
 import { createClient } from "@/utils/supabase/client";
+import { useAuthUser } from "@/lib/use-auth-user";
 import GatedState from "@/components/GatedState";
 import SecondaryButton from "@/components/SecondaryButton";
 import LinkButton from "@/components/LinkButton";
@@ -38,16 +39,29 @@ export default function MentorPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  const { user: authUser, loading: authHookLoading } = useAuthUser();
+
+  // Seeds initial state from the shared, deduped useAuthUser() fetch (see
+  // lib/use-auth-user.ts, #146's real fix) instead of this page's own
+  // independent getSession() call — that call used to be one more
+  // concurrent lock acquisition alongside Header/BottomNav on every mount.
+  // onAuthStateChange (below) is deliberately KEPT, unlike every other
+  // audited page: mentor's chat is fully built and only unreachable by real
+  // users today because subscription billing (#30) isn't live yet — once it
+  // is, a session expiring or completing in another tab mid-conversation is
+  // real, load-bearing behavior this page needs to react to live, not
+  // incidental reactivity to strip. Its own initial-session emit still
+  // acquires the lock once per mount (see onAuthStateChange's own
+  // implementation) — a deliberate, accepted trade-off, not something this
+  // pass tries to also dedupe.
+  useEffect(() => {
+    if (authHookLoading) return;
+    setIsAuthenticated(!!authUser);
+    setAuthChecked(true);
+  }, [authHookLoading, authUser]);
+
   useEffect(() => {
     const supabase = createClient();
-
-    async function checkAuth() {
-      const { data, error } = await supabase.auth.getSession();
-      setIsAuthenticated(!error && !!data.session);
-      setAuthChecked(true);
-    }
-
-    checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session);

@@ -1,31 +1,26 @@
 'use client';
 
-import { createClient } from '@/utils/supabase/client';
-import { useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { useAuthUser } from '@/lib/use-auth-user';
 import { IconLogin } from '@tabler/icons-react';
 
 type HeaderProps = {
   showLogin?: boolean;
 };
 
-export default function Header({ showLogin = true }: HeaderProps) {
-  const [userInitials, setUserInitials] = useState<string | null>(null);
+function computeInitials(user: User): string {
+  const email = user.email ?? '';
+  const meta = user.user_metadata;
+  const name: string = meta?.full_name ?? meta?.name ?? email;
+  const parts = name.trim().split(' ');
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+}
 
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        const email = data.user.email ?? '';
-        const meta = data.user.user_metadata;
-        const name: string = meta?.full_name ?? meta?.name ?? email;
-        const parts = name.trim().split(' ');
-        const initials = parts.length >= 2
-          ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-          : name.slice(0, 2).toUpperCase();
-        setUserInitials(initials);
-      }
-    });
-  }, []);
+export default function Header({ showLogin = true }: HeaderProps) {
+  const { user } = useAuthUser();
+  const userInitials = user ? computeInitials(user) : null;
 
   return (
     <header className="w-full flex-shrink-0 sticky top-0 z-50 bg-gradient-brand">

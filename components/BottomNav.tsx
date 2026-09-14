@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   IconLayoutDashboard,
@@ -9,7 +8,7 @@ import {
   IconCalendar,
   IconCompass,
 } from '@tabler/icons-react';
-import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: IconLayoutDashboard },
@@ -21,16 +20,9 @@ const NAV_ITEMS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setIsAuthenticated(!!data?.user);
-      setAuthChecked(true);
-    });
-  }, []);
+  const { user, loading } = useAuthUser();
+  const isAuthenticated = !!user;
+  const authChecked = !loading;
 
   if (pathname === '/') return null;
   if (pathname === '/start' && (!authChecked || !isAuthenticated)) return null;

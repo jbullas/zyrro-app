@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 import { IconPencil } from '@tabler/icons-react';
 import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
@@ -120,11 +121,14 @@ export default function AccountPage() {
   const [isPaid, setIsPaid]           = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
+  const { user: authUser, loading: authLoading } = useAuthUser();
+
   useEffect(() => {
+    if (authLoading) return;
     const supabase = createClient();
 
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       if (!user) {
         router.push('/login');
         return;
@@ -155,7 +159,7 @@ export default function AccountPage() {
     }
 
     init();
-  }, [router]);
+  }, [router, authLoading, authUser]);
 
   async function handleSaveName(newName: string) {
     if (!userId) return;

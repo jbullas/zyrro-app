@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { IconArrowRight } from '@tabler/icons-react';
 import { QUESTIONS, mergeAnswersWithQuestions, type MergedAnswer } from '@/lib/identity-questions';
 import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
 import LinkButton from '@/components/LinkButton';
@@ -95,18 +96,25 @@ export default function StartPage() {
   const [qaItems, setQaItems] = useState<MergedAnswer[]>([]);
   const [submitError, setSubmitError] = useState('');
 
+  const { user: authUser, loading: authLoading } = useAuthUser();
+
   // #20 State 2/3 branch: resolve auth + discovery_answers once on mount.
   // The identity gate (clearStorageUnlessOwnedBy) runs first, synchronously
   // within this same async function, before anything reads
   // zyrro_discovery_answers into UI state — folding the old always-on,
   // unconditional prefill effect in here (rather than keeping it as a
   // separate effect) is what closes the race that used to let a prior
-  // browser occupant's answers get prefilled before auth was resolved.
+  // browser occupant's answers get prefilled before auth was resolved. The
+  // user itself now comes from the shared, deduped useAuthUser() fetch (see
+  // lib/use-auth-user.ts, #146's real fix) rather than its own getUser()
+  // call — this effect waits for that shared fetch to resolve before doing
+  // anything, so the ordering guarantee is unchanged.
   useEffect(() => {
+    if (authLoading) return;
     let cancelled = false;
 
     async function resolveMode() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authUser;
       const resolvedOwnerId = user?.id ?? null;
 
       clearStorageUnlessOwnedBy(resolvedOwnerId);
@@ -153,7 +161,7 @@ export default function StartPage() {
 
     resolveMode();
     return () => { cancelled = true; };
-  }, [supabase]);
+  }, [supabase, authLoading, authUser]);
 
   const currentQuestion = QUESTIONS[questionIndex];
   const currentAnswer = answers[questionIndex] || '';

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
+import { AuthUserProvider } from '@/lib/use-auth-user';
 
 export const metadata: Metadata = {
   title: 'Zyrro',
@@ -22,11 +23,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Header />
-        <main className="app-main">
-          {children}
-        </main>
-        <BottomNav />
+        <AuthUserProvider>
+          <Header />
+          <main className="app-main">
+            {children}
+          </main>
+          <BottomNav />
+        </AuthUserProvider>
       </body>
     </html>
   );

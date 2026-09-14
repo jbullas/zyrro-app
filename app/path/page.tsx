@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { isAuthSessionMissingError } from '@supabase/supabase-js';
+import { useAuthUser } from '@/lib/use-auth-user';
 import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
@@ -65,14 +66,32 @@ export default function PathPage() {
   const report = usePathReport(options.status === 'complete');
   const naming = useProjectNaming();
 
-  // ── Entry gating — unchanged from the pre-Stage-D page ──────────────
+  const { user: authUser, loading: authLoading, error: authError } = useAuthUser();
+
+  // ── Entry gating ──────────────────────────────────────────────────
   useEffect(() => {
+    // First run waits for the shared, deduped getUser() fetch (see
+    // lib/use-auth-user.ts, #146's real fix) rather than calling getUser()
+    // itself — this is what removes this effect's own contribution to the
+    // Header/BottomNav/path concurrent-lock race.
+    if (entryRetryKey === 0 && authLoading) return;
+
     const supabase = createClient();
     let cancelled = false;
 
     async function init() {
       try {
-        const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+        // A retry click performs its own fresh getUser() call instead of
+        // reusing the shared one-shot fetch — deliberate: useAuthUser()
+        // fetches exactly once per page load and never refetches, so
+        // reusing it here would make "Try again" retry nothing. A retry is
+        // a one-off, user-triggered action that fires well after mount,
+        // never concurrent with Header/BottomNav's own mount-time calls, so
+        // a direct call here doesn't reintroduce the race this effect
+        // exists to avoid.
+        const { data: { user }, error: getUserError } = entryRetryKey > 0
+          ? await supabase.auth.getUser()
+          : { data: { user: authUser }, error: authError };
 
         // getUser() doesn't always throw on failure — a retryable fetch
         // failure (e.g. an #141-style transient Supabase outage) resolves as
@@ -156,7 +175,7 @@ export default function PathPage() {
 
     init();
     return () => { cancelled = true; };
-  }, [entryRetryKey]);
+  }, [entryRetryKey, authLoading, authUser, authError]);
 
   // The old "kick off/resume the checkpoint session" bootstrap effect that
   // used to live here (POSTing /api/generate-path-options, setting sessionId/

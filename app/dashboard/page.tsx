@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/lib/use-auth-user';
 import GatedState from '@/components/GatedState';
 import IdentityCard from '@/components/IdentityCard';
 import MomentumCard from '@/components/MomentumCard';
@@ -12,18 +12,11 @@ type MetaBundle = {
 };
 
 export default function DashboardPage() {
-  const [authChecked, setAuthChecked] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, loading } = useAuthUser();
+  const authChecked = !loading;
+  const isAuthenticated = !!user;
   const [metaBundle, setMetaBundle] = useState<MetaBundle | null>(null);
   const [metaBundleLoading, setMetaBundleLoading] = useState(true);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setIsAuthenticated(!!data?.user);
-      setAuthChecked(true);
-    });
-  }, []);
 
   useEffect(() => {
     if (!authChecked || !isAuthenticated) return;
