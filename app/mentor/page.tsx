@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { createConversation, listConversations, type ConversationListItem } from "@/lib/conversations";
 import { saveMessage, listMessages } from "@/lib/messages";
 import { createClient } from "@/utils/supabase/client";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { useAuthUser } from "@/lib/use-auth-user";
 import GatedState from "@/components/GatedState";
 import SecondaryButton from "@/components/SecondaryButton";
@@ -63,7 +64,7 @@ export default function MentorPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setIsAuthenticated(!!session);
       setAuthChecked(true);
     });
