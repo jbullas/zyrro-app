@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
+import { hasPaidEntitlement } from '@/lib/entitlements';
 import Link from 'next/link';
 
 export default async function Home() {
@@ -7,7 +8,8 @@ export default async function Home() {
   const { data } = await supabase.auth.getUser();
 
   if (data?.user) {
-    redirect('/dashboard');
+    const entitled = await hasPaidEntitlement(data.user.id);
+    redirect(entitled ? '/path' : '/identity');
   }
 
   return (
