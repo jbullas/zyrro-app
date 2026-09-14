@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/path?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/path`,
       metadata: { user_id },
+      allow_promotion_codes: true,
     });
 
     return NextResponse.json({ url: session.url });
