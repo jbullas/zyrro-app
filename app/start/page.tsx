@@ -19,7 +19,7 @@ const DELIVERABLES = [
   'What energises you, and what drains you',
 ];
 
-type Screen = 'intro' | 'question' | 'contact' | 'check-email';
+type Screen = 'intro' | 'question' | 'contact' | 'check-email' | 'already-registered';
 
 // #20: auth-awareness layered on top of the pre-existing anonymous flow.
 // 'checking' while auth + discovery_answers are being resolved; 'anonymous'
@@ -286,6 +286,21 @@ export default function StartPage() {
       return;
     }
 
+    // Supabase's anti-enumeration behavior: signing up again with an email
+    // that already belongs to a CONFIRMED account returns 200 with a user
+    // object (a decoy id, not the real account's) but an empty `identities`
+    // array — no error, no actual email sent. `identities` can also come
+    // back undefined depending on client/project config, so treat anything
+    // that isn't a non-empty array as the same case. Must not be read as
+    // success: don't stamp localStorage with the decoy id, and keep the
+    // staged discovery answers so they're still there if the person logs
+    // into their real account instead.
+    if (!signUpData.user.identities || signUpData.user.identities.length === 0) {
+      setSubmitting(false);
+      setScreen('already-registered');
+      return;
+    }
+
     const nameData: StoredUserName = { ownerId: signUpData.user.id, name };
     localStorage.setItem(USER_NAME_KEY, JSON.stringify(nameData));
     localStorage.removeItem(DISCOVERY_ANSWERS_KEY);
@@ -359,6 +374,23 @@ export default function StartPage() {
 
             <p className="form-helper">Free. No credit card required.</p>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ALREADY REGISTERED ────────────────────────────────────────────
+  if (screen === 'already-registered') {
+    return (
+      <div className="flow-container">
+        <div className="scroll-area scroll-area--intro">
+          <p className="eyebrow">ONE MORE STEP</p>
+
+          <h1>You already have an account</h1>
+
+          <p>An account for {email} already exists. Log in to pick up where you left off.</p>
+
+          <PrimaryButton href="/login">Log in</PrimaryButton>
         </div>
       </div>
     );
