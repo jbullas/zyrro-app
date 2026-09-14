@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { isAuthSessionMissingError } from '@supabase/supabase-js';
 import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
@@ -18,10 +19,12 @@ import { usePathOptions } from '@/lib/use-path-options';
 import { usePathReport } from '@/lib/use-path-report';
 import { useProjectNaming } from '@/lib/use-project-naming';
 
-type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'checkpoint-flow';
+type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'checkpoint-flow' | 'error';
 
 export default function PathPage() {
   const [pageState, setPageState]             = useState<PageState>('loading');
+  const [entryError, setEntryError]           = useState<string | null>(null);
+  const [entryRetryKey, setEntryRetryKey]     = useState(0);
   const [userId, setUserId]                   = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [grantLoading, setGrantLoading]       = useState(false);
@@ -68,73 +71,92 @@ export default function PathPage() {
     let cancelled = false;
 
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      try {
+        const { data: { user }, error: getUserError } = await supabase.auth.getUser();
 
-      if (!user) {
-        if (!cancelled) setPageState('anonymous');
-        return;
-      }
+        // getUser() doesn't always throw on failure — a retryable fetch
+        // failure (e.g. an #141-style transient Supabase outage) resolves as
+        // { user: null, error: AuthRetryableFetchError } rather than
+        // rejecting, so it has to be checked explicitly here or it silently
+        // reads as "not logged in". A genuinely missing session also
+        // resolves this way (AuthSessionMissingError) — that one IS the real
+        // "not logged in" case, so it's excluded from the throw below.
+        if (getUserError && !isAuthSessionMissingError(getUserError)) {
+          throw getUserError;
+        }
 
-      if (!cancelled) setUserId(user.id);
-
-      const sessionIdParam = new URLSearchParams(window.location.search).get('session_id');
-      if (sessionIdParam) {
-        if (!cancelled) setPageState('verifying');
-        const res = await fetch('/api/verify-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionIdParam }),
-        });
-        const { granted } = await res.json() as { granted: boolean };
-        window.history.replaceState({}, '', '/path');
-        if (cancelled) return;
-        if (granted) {
-          if (!cancelled) setPageState('checkpoint-flow');
+        if (!user) {
+          if (!cancelled) setPageState('anonymous');
           return;
         }
-      }
 
-      if (cancelled) return;
+        if (!cancelled) setUserId(user.id);
 
-      const { data: reportArtifact } = await getCurrentArtifact<{ content: unknown }>(
-        supabase,
-        user.id,
-        'identity_report',
-        { status: 'ready', select: 'content' },
-      );
-
-      if (!reportArtifact) {
-        if (!cancelled) setPageState('no-report');
-        return;
-      }
-
-      if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
-        const { data: entitlement } = await supabase
-          .from('entitlements')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product', 'onetime_payment')
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (!entitlement) {
-          if (!cancelled) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const content = reportArtifact.content as any;
-            setReframeTeaser(content?.reframe_teaser ?? null);
-            setPrimaryConstellation(Array.isArray(content?.primary_constellation) ? content.primary_constellation : []);
-            setPageState('unpaid');
+        const sessionIdParam = new URLSearchParams(window.location.search).get('session_id');
+        if (sessionIdParam) {
+          if (!cancelled) setPageState('verifying');
+          const res = await fetch('/api/verify-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionIdParam }),
+          });
+          const { granted } = await res.json() as { granted: boolean };
+          window.history.replaceState({}, '', '/path');
+          if (cancelled) return;
+          if (granted) {
+            if (!cancelled) setPageState('checkpoint-flow');
+            return;
           }
+        }
+
+        if (cancelled) return;
+
+        const { data: reportArtifact } = await getCurrentArtifact<{ content: unknown }>(
+          supabase,
+          user.id,
+          'identity_report',
+          { status: 'ready', select: 'content' },
+        );
+
+        if (!reportArtifact) {
+          if (!cancelled) setPageState('no-report');
           return;
         }
-      }
 
-      if (!cancelled) setPageState('checkpoint-flow');
+        if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
+          const { data: entitlement } = await supabase
+            .from('entitlements')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product', 'onetime_payment')
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (!entitlement) {
+            if (!cancelled) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const content = reportArtifact.content as any;
+              setReframeTeaser(content?.reframe_teaser ?? null);
+              setPrimaryConstellation(Array.isArray(content?.primary_constellation) ? content.primary_constellation : []);
+              setPageState('unpaid');
+            }
+            return;
+          }
+        }
+
+        if (!cancelled) setPageState('checkpoint-flow');
+      } catch (err) {
+        console.error('Path entry gating failed:', err);
+        if (!cancelled) {
+          setEntryError(err instanceof Error ? err.message : 'Something went wrong.');
+          setPageState('error');
+        }
+      }
     }
 
     init();
     return () => { cancelled = true; };
-  }, []);
+  }, [entryRetryKey]);
 
   // The old "kick off/resume the checkpoint session" bootstrap effect that
   // used to live here (POSTing /api/generate-path-options, setting sessionId/
@@ -214,6 +236,28 @@ export default function PathPage() {
     return (
       <GeneratingState
         heading={pageState === 'verifying' ? 'Confirming your payment…' : undefined}
+      />
+    );
+  }
+
+  // ── Entry gating failed (#146 backstop) ─────────────────────────────
+  if (pageState === 'error') {
+    return (
+      <MessageState
+        eyebrow="YOUR PATH"
+        heading="Something went wrong."
+        body={entryError ?? 'We couldn’t load this page. Please try again.'}
+        cta={
+          <PrimaryButton
+            onClick={() => {
+              setEntryError(null);
+              setPageState('loading');
+              setEntryRetryKey(k => k + 1);
+            }}
+          >
+            Try again
+          </PrimaryButton>
+        }
       />
     );
   }
