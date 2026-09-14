@@ -1,5 +1,32 @@
 # #146 — Concurrent Supabase auth clients cause lock contention, can hang /path on forever-spinner after checkout
 
+## Status (2026-09-14, closeout) — DONE
+
+The one outstanding item from the status section directly below (a real
+Stripe test-mode checkout pass, never run in either prior session) is now
+complete. Miroslav ran it against the dev Preview deployment for commit
+`bfe9aa6`: fresh test account, real checkout, redirect back to
+`/path?session_id=...` resolved cleanly with no stall. Console showed none
+of this ticket's own failure signatures — no lock-contention warning, no
+`NavigatorLockAcquireTimeoutError`/`AbortError`, no aborted-fetch-reported-
+as-CORS error on `/auth/v1/user`.
+
+One console error did appear, repeating: `share-modal.js: Cannot read
+properties of null (reading 'addEventListener')`. Ruled out as unrelated to
+#146, not a new finding requiring its own follow-up: it's the same error
+present in the original bug report, before any of this ticket's fixes
+existed; `share-modal.js` isn't a file tracked in this repo (not touched,
+not even present, in either #146 session's changes); and nothing in the
+singleton, the backstop, or the `useAuthUser()` dedupe touches sharing/modal
+code in any way that could plausibly produce or suppress it. All three of
+this ticket's required verification items (forced-race repro, deterministic
+backstop check, real Stripe checkout pass) are now satisfied — the last one
+live, on a real deployment, by Miroslav directly, not just synthetically by
+an agent. Both brief files (this one and
+`docs/briefs/146-addendum-dedupe-getuser.md`) are deleted in their own
+commit per the standard protocol; see the 2026-09-14 changelog for the full
+history this status section summarizes.
+
 ## Status (2026-09-14, addendum session) — NOT Done: real Stripe checkout pass outstanding
 
 Real fix landed and verified by every synthetic/seeded-session check this
