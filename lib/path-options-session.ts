@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import { withDbRetry } from '@/lib/with-db-retry';
 
 // #134 Slice 2 — Checkpoint 2 "Options": data-access/state-machine layer,
 // mirroring lib/path-checkpoint.ts's shape (not lib/path-direction.ts's —
@@ -162,17 +163,19 @@ export async function startOrReuseOptionsSession(
   // (two requests landing here with no row yet) — the read above already
   // handles the common "a row already exists" case, which used to fall
   // through to here unguarded.
-  const { data: inserted, error } = await supabase
-    .from('artifacts')
-    .insert({
-      user_id: userId,
-      type: 'path_options_session',
-      access_level: 'paid',
-      status: 'generating',
-      content: EMPTY_CONTENT,
-    })
-    .select(SESSION_SELECT)
-    .single();
+  const { data: inserted, error } = await withDbRetry('startOrReuseOptionsSession:insert', () =>
+    supabase
+      .from('artifacts')
+      .insert({
+        user_id: userId,
+        type: 'path_options_session',
+        access_level: 'paid',
+        status: 'generating',
+        content: EMPTY_CONTENT,
+      })
+      .select(SESSION_SELECT)
+      .single()
+  );
 
   if (error?.code === '23505') {
     const { data: current, error: rereadError } = await getCurrentArtifact<PathOptionsSessionRow>(
@@ -208,13 +211,15 @@ export async function claimGeneration(
   supabase: Client,
   sessionId: string,
 ): Promise<PathOptionsSessionRow | null> {
-  const { data, error } = await supabase
-    .from('artifacts')
-    .update({ status: 'generating' })
-    .eq('id', sessionId)
-    .neq('status', 'generating')
-    .select(SESSION_SELECT)
-    .maybeSingle();
+  const { data, error } = await withDbRetry('claimGeneration', () =>
+    supabase
+      .from('artifacts')
+      .update({ status: 'generating' })
+      .eq('id', sessionId)
+      .neq('status', 'generating')
+      .select(SESSION_SELECT)
+      .maybeSingle()
+  );
 
   if (error) throw error;
   return (data as PathOptionsSessionRow | null) ?? null;
@@ -239,12 +244,14 @@ export async function appendCandidates(
     candidates: [...priorContent.candidates, ...newCandidates],
   };
 
-  const { data, error } = await supabase
-    .from('artifacts')
-    .update({ status: 'awaiting_checkpoint', content: nextContent })
-    .eq('id', sessionId)
-    .select(SESSION_SELECT)
-    .single();
+  const { data, error } = await withDbRetry('appendCandidates', () =>
+    supabase
+      .from('artifacts')
+      .update({ status: 'awaiting_checkpoint', content: nextContent })
+      .eq('id', sessionId)
+      .select(SESSION_SELECT)
+      .single()
+  );
 
   if (error || !data) throw error ?? new Error('Failed to append path_options_session candidates');
   return data as PathOptionsSessionRow;

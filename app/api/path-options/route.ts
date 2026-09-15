@@ -204,44 +204,56 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ error: 'Direction step is not complete' }, { status: 409 });
   }
 
-  const { session, created } = await startOrReuseOptionsSession(supabase, user.id);
-  const context = buildGenerationContext(identityReport, directionContent);
+  // #146: startOrReuseOptionsSession/claimGeneration below can still throw
+  // (e.g. a genuinely non-transient DB error, or a transient one that
+  // withDbRetry's single retry didn't recover) — this catch-all is a
+  // backstop so any such failure returns a controlled JSON error instead of
+  // a bare 500 with no body, matching the shape every other error path here
+  // already returns. It doesn't change or widen the handled 401/403/404/409
+  // paths above, which return before this point regardless.
+  try {
+    const { session, created } = await startOrReuseOptionsSession(supabase, user.id);
+    const context = buildGenerationContext(identityReport, directionContent);
 
-  // Lost the create race (concurrent double-load) — someone else's request
-  // already owns this session and will run the initial generation. Don't
-  // run it twice, same contract as path_direction_session/
-  // path_checkpoint_session's own creation-race handling.
-  if (created) {
-    after(() => runInitialGeneration(session.id, context, session.content));
-    return NextResponse.json({ session_id: session.id, status: session.status, content: session.content });
-  }
-
-  // Reused an existing row. If a prior generation attempt crashed (status
-  // 'failed' — written by runInitialGeneration/runRefineGeneration's own
-  // catch block, or by useCheckpointSessionStatus's client-side stranded-
-  // row flip), this GET is the only place that can ever resume it: nothing
-  // else re-polls a session nobody is actively viewing. claimGeneration's
-  // conditional UPDATE (flips to 'generating' only if not already
-  // 'generating') guards the same "two concurrent requests both try to
-  // resume it" race the old generate-path-options route relied on it for.
-  if (session.status === 'failed') {
-    const claimed = await claimGeneration(supabase, session.id);
-    if (claimed) {
-      after(() => runInitialGeneration(session.id, context, claimed.content));
-      return NextResponse.json({ session_id: session.id, status: claimed.status, content: claimed.content });
+    // Lost the create race (concurrent double-load) — someone else's request
+    // already owns this session and will run the initial generation. Don't
+    // run it twice, same contract as path_direction_session/
+    // path_checkpoint_session's own creation-race handling.
+    if (created) {
+      after(() => runInitialGeneration(session.id, context, session.content));
+      return NextResponse.json({ session_id: session.id, status: session.status, content: session.content });
     }
-    // Lost the claim race — another concurrent request already claimed it
-    // and will run the resume. Report 'generating' (the now-true state),
-    // not the stale 'failed' this read predates — same precedent as the
-    // old generate-path-options route's own claim-race handling.
-    return NextResponse.json({ session_id: session.id, status: 'generating', content: session.content });
-  }
 
-  return NextResponse.json({
-    session_id: session.id,
-    status: session.status,
-    content: session.content,
-  });
+    // Reused an existing row. If a prior generation attempt crashed (status
+    // 'failed' — written by runInitialGeneration/runRefineGeneration's own
+    // catch block, or by useCheckpointSessionStatus's client-side stranded-
+    // row flip), this GET is the only place that can ever resume it: nothing
+    // else re-polls a session nobody is actively viewing. claimGeneration's
+    // conditional UPDATE (flips to 'generating' only if not already
+    // 'generating') guards the same "two concurrent requests both try to
+    // resume it" race the old generate-path-options route relied on it for.
+    if (session.status === 'failed') {
+      const claimed = await claimGeneration(supabase, session.id);
+      if (claimed) {
+        after(() => runInitialGeneration(session.id, context, claimed.content));
+        return NextResponse.json({ session_id: session.id, status: claimed.status, content: claimed.content });
+      }
+      // Lost the claim race — another concurrent request already claimed it
+      // and will run the resume. Report 'generating' (the now-true state),
+      // not the stale 'failed' this read predates — same precedent as the
+      // old generate-path-options route's own claim-race handling.
+      return NextResponse.json({ session_id: session.id, status: 'generating', content: session.content });
+    }
+
+    return NextResponse.json({
+      session_id: session.id,
+      status: session.status,
+      content: session.content,
+    });
+  } catch (error) {
+    console.error('GET /api/path-options failed', { userId: user.id, error });
+    return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 });
+  }
 }
 
 type Body =
