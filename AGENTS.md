@@ -41,15 +41,12 @@ Changelogs are append-only history. Never edit past entries.
 
 ## `bundle`
 
-When the user sends **`bundle`**, **`bundle path`**, or **`bundle identity`**,
-optionally followed by one or more file paths (e.g. `bundle path
-components/OptionsFlow.tsx app/path/page.tsx`):
+When the user sends **`bundle`**:
 
-1. Run `npm run bundle`, passing `path` or `identity` as a positional argument
-   if given, and each given file path as its own `--include <path>`.
+1. Run `npm run bundle`.
 2. Report the `context-bundle.zip` path and size — that's the file to attach
    to the planning chat, not the `.md`.
-3. Do not commit the bundle file.
+3. Do not commit the bundle files.
 
 ## Definition of Done
 
