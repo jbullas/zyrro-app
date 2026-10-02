@@ -39,6 +39,18 @@ When the user sends **`session end`**, wrap up:
 
 Changelogs are append-only history. Never edit past entries.
 
+## `bundle`
+
+When the user sends **`bundle`**, **`bundle path`**, or **`bundle identity`**,
+optionally followed by one or more file paths (e.g. `bundle path
+components/OptionsFlow.tsx app/path/page.tsx`):
+
+1. Run `npm run bundle`, passing `path` or `identity` as a positional argument
+   if given, and each given file path as its own `--include <path>`.
+2. Report the `context-bundle.zip` path and size — that's the file to attach
+   to the planning chat, not the `.md`.
+3. Do not commit the bundle file.
+
 ## Definition of Done
 
 A ticket can only be marked Done when one of these is true:
@@ -51,7 +63,7 @@ If none of these apply — some path is untested, nothing else has claimed it, a
 
 ## Planning-surface context
 
-- The claude.ai planning surface is blind to this repo. To refresh it, run `node scripts/make-bundle.mjs`, which writes `context-bundle.md` (gitignored) to attach to the planning chat.
+- The claude.ai planning surface is blind to this repo. To refresh it, run `npm run bundle`, which writes `context-bundle.md` (gitignored) to attach to the planning chat.
 - Code owns the volatile facts (routes, file structure, build status, runtime model). Don't restate them in docs — reference the code.
 
 ## Live verification pass
