@@ -66,7 +66,8 @@ All sub-headings in the card use the grey eyebrow style.
 | New section | Source today | Change |
 |---|---|---|
 | H1 | `cover.named_identity` | none |
-| Prepared for | `cover.prepared_for` | drop `identity_context` from display |
+| Prepared for | `cover.prepared_for` | none |
+| Identity context | `cover.identity_context` | **retire**: remove from /identity, from the Path report cover line (`PathReportFlow`), from Path report generation and `app/api/path-report`, and from the identity prompt and schema |
 | Thesis headline | `cover.identity_thesis` | none (check tone against Jeff's snapshot) |
 | Thesis summary | `constellation_synthesis.synthesis` | check length (Jeff: 80–120 words) |
 | Domain bars + scores | `domain_profile` (code-computed, 10–100) | display only |
@@ -74,17 +75,17 @@ All sub-headings in the card use the grey eyebrow style.
 | Card short definition | `lib/signatures.ts` `description` | replace with Jeff-style headlines ("Brings clarity to complexity."): static, all 25 to be written |
 | Row bars + score | `primary_constellation[].score`, `secondary_signature_analysis[].score` | display only |
 | Personal line | `core_statement` | likely reuse |
-| What this means + Evidence | `evidence_analysis` | split into two fields; evidence must cite real answers |
+| What this means + Evidence | `evidence_analysis` (read by /path) | **new** separate fields; `evidence_analysis` keeps being generated unchanged for /path; evidence must cite real answers |
 | Shows up / Serves you | none | **new** generated lists |
-| Operate tiles + Under pressure | `how_you_operate` (once per report) | **new** per-signature fields; retire report-level `how_you_operate` |
+| Operate tiles + Under pressure | `how_you_operate` (once per report, read by /path Options and Mentor) | **new** per-signature fields; report-level `how_you_operate` keeps being generated, only stops being displayed |
 | Potential friction | `tension` | rename, possibly lengthen |
 | Works with (card) | none | **new** generated: per signature, 1–2 partners, written from this signature's side; each 2–3 sentences + evidence |
 | Secondary rows (expanded) | `secondary_signature_analysis` (core_statement + analysis only) | **new**: same full structure as primaries |
 | Pairings (section) | none | top 2–3 pairings as one short line each, drawn from the same per-signature pairing data |
 | Distinctive Pattern | none | **new** generated: 3–5 step sequence + 2 paragraphs |
 | The Pattern to Notice | none | **new** generated: headline, body, one-line takeaway |
-| Energy / Drains | `energisers`, `friction_points` | prompt change: one-line phrases (3–6 words) that answer the heading's question |
-| Path CTAs | `reframe_teaser` → `ReframeCtaBlock` | static copy (value and benefits, "One-time payment of $49"); `reframe_teaser` retired |
+| Energy / Drains | `energisers`, `friction_points` (seed /path Direction, feed Path report) | prompt change: one-line phrases (3–6 words) that answer the heading's question; done together with #136 |
+| Path CTAs | `reframe_teaser` → `ReframeCtaBlock` | /identity uses static copy (value and benefits, "One-time payment of $49"); `reframe_teaser` keeps being generated because the /path unpaid paywall screen renders it |
 | Disclaimer | static | Jeff's text |
 
 Also remove the "scientific" static copy (Research Foundation: wiring, fixed identity, validated) and the `/start` headline "Find out exactly how you're wired".
@@ -93,24 +94,26 @@ Also remove the "scientific" static copy (Research Foundation: wiring, fixed ide
 
 One ticket, **#154 Identity Report redesign**, worked in this order:
 
-1. **Generated content** (prompt and schema). Per signature, primaries and secondaries with the same structure: What this means, Evidence from your story, How this shows up, Where this serves you, Works with, four operating notes, Potential friction, Under pressure. Report-level: Pairings short lines, Distinctive Pattern, The Pattern to Notice, Energy/Drains phrasing. Retire `domain_profile_summary`, `how_you_operate`, `reframe_teaser`, `identity_context`, `what_this_report_is`. Jeff's text snapshot is the writing-quality benchmark. Verify by generating against real reports before any UI work.
+1. **Generated content** (prompt and schema). Per signature, primaries and secondaries with the same structure: What this means, Evidence from your story, How this shows up, Where this serves you, Works with, four operating notes, Potential friction, Under pressure. Report-level: Pairings short lines, Distinctive Pattern, The Pattern to Notice, Energy/Drains phrasing (with #136). Additive for /path: `reframe_teaser`, `how_you_operate`, `evidence_analysis`, `core_statement`, `tension`, `energisers` and `friction_points` keep being generated. Retire `domain_profile_summary`, `what_this_report_is` and `identity_context` (the last also from the Path report). Jeff's text snapshot is the writing-quality benchmark. Verify by generating against real reports, including a /path run on the new output, before any UI work.
 2. **Static copy.** 25 signature headlines, score and domain explanation lines, three Path CTAs, footer disclaimer, removal of scientific claims (including `/start`).
 3. **Layout and app shell** per V3, including header nav replacing BottomNav on all pages. Layout comments expected during the build.
 4. **Existing reports:** fallback rendering for missing new fields, or regeneration.
 
-Settled since the first draft: secondary signatures get the same full card structure as primaries; `reframe_teaser` is retired in favour of static CTA copy; price is $49.
+Settled since the first draft: secondary signatures get the same full card structure as primaries; /identity uses static CTA copy while `reframe_teaser` stays for the /path paywall; price is $49.
+
+**Constraint:** nothing /path reads may be dropped or changed in meaning. The one deliberate exception is `identity_context`, removed from both reports.
 
 ### Effect on other tickets
 
 | Ticket | Change |
 |---|---|
-| #151 Pullquotes repeat "outgrown" narrative | Fold into #154 (writing quality, Jeff's snapshot as benchmark) |
-| #58 Strip unused generation instructions | Narrow to path_options / path_plan; #154 handles the identity prompt. Keep `signature_profile_summary` (mentor reads it) |
-| #88 Identity context career phase | Drop: #154 retires `identity_context` |
+| #151 Pullquotes repeat "outgrown" narrative | No change: the pullquote is `reframe_teaser`, which stays for the /path paywall |
+| #58 Strip unused generation instructions | #154 retires `domain_profile_summary` and `what_this_report_is`; other identity fields are read by /path or Mentor and stay. Remaining scope: path_options / path_plan audit |
+| #88 Identity context career phase | Drop: #154 retires `identity_context` from both the Identity Report and the Path report |
 | #56 Renumber signature_number | Drop, unless `signature_number` is read elsewhere |
-| #92 Zero-evidence secondary scores render 0 | Raise to Medium; fix before #154 ships (secondary rows now show bar and score) |
+| #92 Zero-evidence secondary scores render 0 | Already visible today; handle a 0 while building #154's signature rows |
 | #133 Content from absent domains | Keep, scope widens to #154's new per-signature fields |
-| #136 Direction UI restructure | Coordinate one phrasing rule for must-haves/avoids and Energy/Drains |
+| #136 Direction UI restructure | Do together with #154's Energy/Drains rephrasing, since those fields seed Direction |
 | #152 BottomNav mute (Done) | Superseded; muted-item behaviour carries over to the header nav |
 | #54 Shared header (homepage) | Review alongside #154's header change |
 | #97 British English convention | Do as part of #154's prompt rewrite |
