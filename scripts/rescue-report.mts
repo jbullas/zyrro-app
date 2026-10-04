@@ -3,10 +3,17 @@
  * Reads existing discovery_answers — never re-inserts them.
  * Only regenerates when status is 'generating' or 'failed'.
  *
- * Usage:
- *   npx tsx --env-file=.env.local scripts/rescue-report.mts <email> [--info]
+ * With --new-version, a user whose current report is already 'ready' gets a
+ * NEW identity_report row instead (identity_report is append-only, #59) —
+ * the existing row is never touched. If that generation fails, the new row is
+ * deleted by its exact id: /identity shows the latest row regardless of
+ * status, so a leftover failed row would shadow the good version.
  *
- *   --info   Look up and print user data; write nothing.
+ * Usage:
+ *   npx tsx --env-file=.env.local scripts/rescue-report.mts <email> [--info] [--new-version]
+ *
+ *   --info          Look up and print user data; write nothing.
+ *   --new-version   If the current report is ready, generate a new version.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -16,9 +23,10 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 // ── Args ──────────────────────────────────────────────────────────────────────
 const email = process.argv[2];
 const INFO_ONLY = process.argv.includes('--info');
+const NEW_VERSION = process.argv.includes('--new-version');
 
 if (!email) {
-  console.error('Usage: npx tsx --env-file=.env.local scripts/rescue-report.mts <email> [--info]');
+  console.error('Usage: npx tsx --env-file=.env.local scripts/rescue-report.mts <email> [--info] [--new-version]');
   process.exit(1);
 }
 
@@ -76,8 +84,10 @@ if (INFO_ONLY) {
 }
 
 // ── Guards ────────────────────────────────────────────────────────────────────
-if (artifact?.status === 'ready') {
-  console.log('Artifact is already ready — nothing to rescue. Stopping.');
+const isNewVersion = NEW_VERSION && artifact?.status === 'ready';
+
+if (artifact?.status === 'ready' && !isNewVersion) {
+  console.log('Artifact is already ready — nothing to rescue. Stopping. (Pass --new-version to generate a new version.)');
   process.exit(0);
 }
 
@@ -91,20 +101,41 @@ if (!answers?.length || answers.length < 13) {
   process.exit(1);
 }
 
-if (artifact.status !== 'generating' && artifact.status !== 'failed') {
+if (!isNewVersion && artifact.status !== 'generating' && artifact.status !== 'failed') {
   console.error(`Unexpected artifact status '${artifact.status}' — stopping. Check manually.`);
   process.exit(1);
 }
 
+// ── New version: append a fresh row, never touch the existing one ────────────
+let targetId = artifact.id;
+if (isNewVersion) {
+  const { data: inserted, error: insertError } = await supabase
+    .from('artifacts')
+    .insert({
+      user_id: userId,
+      type: 'identity_report',
+      access_level: 'free',
+      status: 'generating',
+      content: {},
+    })
+    .select('id')
+    .single();
+  if (insertError || !inserted) { console.error('new-version insert failed:', insertError); process.exit(1); }
+  targetId = inserted.id;
+  console.log(`New version row inserted: ${targetId} (previous ready row ${artifact.id} left untouched)`);
+}
+
 // ── Generate via shared module (same code path as the app) ───────────────────
 console.log('Generating via lib/generate-identity-report…');
-await generateIdentityReport({ artifactId: artifact.id, answers, name });
+const startedAt = Date.now();
+await generateIdentityReport({ artifactId: targetId, answers, name });
+const elapsedMs = Date.now() - startedAt;
 
 // ── Verify ────────────────────────────────────────────────────────────────────
 const { data: verify } = await supabase
   .from('artifacts')
   .select('id, status, content')
-  .eq('id', artifact.id)
+  .eq('id', targetId)
   .single();
 
 if (verify?.status === 'ready') {
@@ -114,8 +145,14 @@ if (verify?.status === 'ready') {
   console.log('artifact id:   ', verify.id);
   console.log('status:        ', verify.status);
   console.log('named_identity:', namedIdentity);
+  console.log('elapsed:       ', `${Math.round(elapsedMs / 1000)}s`);
   console.log('─────────────────────────────────────────────────');
 } else {
   console.error('\nGeneration failed — artifact status:', verify?.status ?? 'unknown');
+  if (isNewVersion) {
+    const { error: deleteError } = await supabase.from('artifacts').delete().eq('id', targetId);
+    if (deleteError) console.error(`Failed to delete new-version row ${targetId}:`, deleteError);
+    else console.error(`Deleted failed new-version row ${targetId}; previous row ${artifact.id} remains current.`);
+  }
   process.exit(1);
 }
