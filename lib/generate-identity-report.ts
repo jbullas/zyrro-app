@@ -831,13 +831,48 @@ type EvidenceMode = 'standard' | 'reduced';
 const REDUCED_LIST_ITEMS = 2;
 
 /**
+ * #154 follow-up: pairings may only reference a pair that a kept works_with
+ * entry backs (one card naming the other as partner). Any other pairing —
+ * including one built on an entry enforceWorksWithKinds dropped — is logged
+ * and dropped.
+ */
+export function filterPairingsToWorksWith(pairings: PairingLine[], dives: SignatureDeepDive[]): PairingLine[] {
+  const key = (a: string, b: string) => [a, b].sort().join('|');
+  const backed = new Set(dives.flatMap(d => d.works_with.map(w => key(d.name, w.partner))));
+  return pairings.filter(p => {
+    if (backed.has(key(p.a, p.b))) return true;
+    console.warn(`#154 Layer 3: pairing ${p.a} + ${p.b} dropped (not backed by a kept works_with entry)`);
+    return false;
+  });
+}
+
+/**
  * #154 follow-up: works_with is one "Works best with" (synergy) entry plus at
  * most one "Watch out for" (tension) entry with a different partner, and no
  * tension in reduced mode. Enforced here, not trusted to the prompt: an entry
  * without a valid kind is treated as synergy, then extras are logged and
- * dropped (first of each kind kept). Synergy is returned first.
+ * dropped (first of each kind kept). Synergy is returned first. Before that,
+ * any entry whose partner is the card's own signature or not a signature in
+ * this report is logged and dropped (it would render a card for a pattern the
+ * report never shows).
  */
-export function enforceWorksWithKinds(name: string, entries: WorksWith[], mode: EvidenceMode): WorksWith[] {
+export function enforceWorksWithKinds(
+  name: string,
+  entries: WorksWith[],
+  mode: EvidenceMode,
+  namesInReport: ReadonlySet<string>,
+): WorksWith[] {
+  entries = entries.filter(w => {
+    if (w.partner === name) {
+      console.warn(`#154 Layer 3: ${name}.works_with[${w.partner}] dropped (partner is the card's own signature)`);
+      return false;
+    }
+    if (!namesInReport.has(w.partner)) {
+      console.warn(`#154 Layer 3: ${name}.works_with[${w.partner}] dropped (partner is not a signature in this report)`);
+      return false;
+    }
+    return true;
+  });
   let synergy: WorksWith | undefined;
   let tension: WorksWith | undefined;
   for (const raw of entries) {
@@ -883,6 +918,7 @@ async function generateLayer3(report: Record<string, unknown>, evidenceUnits: un
       }))
     : [];
   const signaturesInReport = signatures.map(s => ({ name: s.name, kind: s.kind, domain: s.domain, score: s.score, core_statement: s.core_statement }));
+  const namesInReport = new Set(signatures.map(s => s.name));
 
   // Identical across every deep-dive call for this user and placed first in
   // the user message, so it extends the cached system-prompt prefix. All
@@ -963,7 +999,7 @@ async function generateLayer3(report: Record<string, unknown>, evidenceUnits: un
         }
       }
     }
-    dive.works_with = enforceWorksWithKinds(signature.name, dive.works_with, mode);
+    dive.works_with = enforceWorksWithKinds(signature.name, dive.works_with, mode, namesInReport);
     return dive;
   });
   const deepDives = deepDiveResults.filter((d): d is SignatureDeepDive => d !== null);
@@ -997,7 +1033,7 @@ async function generateLayer3(report: Record<string, unknown>, evidenceUnits: un
     // Pairings are only ever drawn from works_with: with no works_with data
     // there is nothing to build them from, so they are omitted, not invented.
     if (deepDives.some(d => d.works_with.length > 0)) {
-      result.pairings = reportLevel.pairings;
+      result.pairings = filterPairingsToWorksWith(reportLevel.pairings, deepDives);
     } else {
       console.warn('#154 Layer 3: no works_with data in any deep dive — pairings omitted');
     }
