@@ -129,6 +129,13 @@ export function sortByScoreDescending(items: unknown): void {
  * *some* tagged evidence, just from the wrong signature); this only
  * guarantees no signature is ever narrated with literally zero evidence
  * behind it.
+ *
+ * #92: "tagged" means through EITHER candidate field (taggedEvidenceUnits,
+ * the same check Layer 3 uses). Detection often tags a secondary signature's
+ * units through primary_signature_candidate; counting only
+ * secondary_signature_candidate gave about 1 in 4 stored secondaries the
+ * fallback despite real evidence, and fed that fallback to Layer 3 as the
+ * secondary's main report text.
  */
 export function enforceSecondaryEvidenceFloor(
   secondaryAnalysis: unknown,
@@ -139,9 +146,7 @@ export function enforceSecondaryEvidenceFloor(
   for (const entry of secondaryAnalysis) {
     if (!entry || typeof entry !== 'object' || typeof (entry as { name?: unknown }).name !== 'string') continue;
     const name = (entry as { name: string }).name;
-    const hasEvidence = evidenceUnits.some(
-      (u) => u && typeof u === 'object' && (u as { secondary_signature_candidate?: unknown }).secondary_signature_candidate === name
-    );
+    const hasEvidence = taggedEvidenceUnits(evidenceUnits, name).length > 0;
     if (!hasEvidence) {
       (entry as { analysis: string }).analysis =
         `${name} surfaced through detection scoring, but no specific evidence was tagged to it strongly enough to describe here — the score and domain above are the fuller picture for this pattern right now.`;
@@ -593,9 +598,9 @@ type EvidenceUnit = {
 };
 
 /**
- * Evidence units tagged to a signature through EITHER candidate field — the
- * #92 handling approved for #154 (deliberately not the secondary-field-only
- * check enforceSecondaryEvidenceFloor uses; that mismatch is #92's to fix).
+ * Evidence units tagged to a signature through EITHER candidate field. Used
+ * by Layer 3 (#154) and by enforceSecondaryEvidenceFloor (#92), so both agree
+ * on what counts as evidence for a signature.
  */
 function taggedEvidenceUnits(evidenceUnits: unknown, name: string): EvidenceUnit[] {
   if (!Array.isArray(evidenceUnits)) return [];
