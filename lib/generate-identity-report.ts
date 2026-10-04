@@ -1010,6 +1010,24 @@ function mentionsName(text: string, name: string): boolean {
 const TRAILING_INTERPRETIVE_CLAUSE =
   /,\s*(?:which\s+\w+\s+)?(indicating|demonstrating|showing|showcasing|highlighting|requiring|seeking|reflecting|revealing|suggesting|signalling|signaling|illustrating|underscoring|emphasising|emphasizing|evidencing|proving|activating|energising|energizing)\b/i;
 
+function firstMentionIndex(text: string, name: string): number {
+  const m = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').exec(text);
+  return m ? m.index : Infinity;
+}
+
+/**
+ * #154 follow-up (#158): works_with.text should have the partner as its
+ * subject (what the partner does for this card's signature). Simple
+ * heuristic, log-only: flags a text that names the card's own signature
+ * before the partner (or names only itself). Misses wrong-side texts that
+ * name neither signature or put the partner first; can false-positive on a
+ * passive sentence such as "your <own> drive is steadied by <partner>".
+ */
+export function worksWithFromOwnSide(text: string, ownName: string, partner: string): boolean {
+  const own = firstMentionIndex(text, ownName);
+  return own !== Infinity && own < firstMentionIndex(text, partner);
+}
+
 function trailingInterpretiveClause(text: string): string | null {
   const match = TRAILING_INTERPRETIVE_CLAUSE.exec(text);
   return match ? match[1].toLowerCase() : null;
@@ -1089,6 +1107,9 @@ function logLayer3Gaps(result: Layer3Result, report: Record<string, unknown>, ev
       const allowed = new Set([...ownQuestions, ...questionsFor(w.partner)]);
       if (!allowed.has(w.source_question)) {
         gaps.push(`${dive.name}.works_with[${w.partner}]: source_question ${w.source_question} is not among ${dive.name}'s or ${w.partner}'s tagged units' questions [${[...allowed].join(', ')}]`);
+      }
+      if (worksWithFromOwnSide(w.text, dive.name, w.partner)) {
+        gaps.push(`${dive.name}.works_with[${w.partner}].text: possibly written from the card's own side (${dive.name} named before ${w.partner}): "${w.text}"`);
       }
     }
 

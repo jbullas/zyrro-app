@@ -114,9 +114,9 @@ Standard: 3–4 short phrases. Reduced: exactly 2. Where this pattern is a genui
 ### works_with
 Standard: 1–2 entries. Reduced: exactly 1. Each partner must be another signature listed in signatures_in_report, never the target signature itself. Pick the signatures that most clearly interact with this one in the person's evidence.
 
-Write each entry from the target signature's side: what the partner signature does for THIS signature — how it shapes, steadies, extends or redirects it in this person. Do not describe what this signature does for the partner; that belongs on the partner's own card.
+Each entry describes what the partner signature does for the target signature — how it shapes, steadies, extends or redirects it in this person. The direction is fixed: the partner is the one acting, and the target signature is the one being helped. The target signature must never be the one doing the helping, complementing, supporting or enhancing. What the target signature does for the partner belongs on the partner's own card, never here.
 - partner: the partner signature's exact name.
-- text: 2–3 sentences on how the partner shapes this signature in this person.
+- text: 2–3 sentences on how the partner shapes the target signature in this person. The partner signature is the grammatical subject of the first sentence and is named before the target signature; the target signature appears only as the one receiving the effect.
 - evidence: one sentence, past tense, grounding the interaction in one concrete evidence unit. State only what happened. Do not add any clause that interprets it — nothing saying what it shows, demonstrates, indicates, reflects or reveals, and no trait, quality or pattern attached to the event; the interpretation belongs in text, not here.
 - source_question: the source_question of that evidence unit. The unit must be tagged to the target signature or to the partner signature (see the evidence units in the report context); never a unit tagged only to some other signature.
 
@@ -134,7 +134,7 @@ These are specific to this signature. Do not restate the report-wide how_you_ope
 ### under_pressure
 1–2 sentences: what happens to this pattern under pressure. Honest, specific, grounded.
 
-Before returning the JSON, check that what_this_means is exactly two strings and never names the signature, that evidence has no more than max_evidence_items entries, that every evidence source_question appears in tagged_evidence_units, that the list sizes match evidence_mode, and that every works_with partner is a different signature listed in signatures_in_report with a source_question from a unit tagged to the target or that partner.`;
+Before returning the JSON, check that what_this_means is exactly two strings and never names the signature, that evidence has no more than max_evidence_items entries, that every evidence source_question appears in tagged_evidence_units, that the list sizes match evidence_mode, and that every works_with partner is a different signature listed in signatures_in_report with a source_question from a unit tagged to the target or that partner, and that every works_with text has the partner as its subject acting on the target signature, never the reverse.`;
 
 export const LAYER_3_REPORT_LEVEL_PROMPT = `${LAYER_3_SHARED_RULES}
 
