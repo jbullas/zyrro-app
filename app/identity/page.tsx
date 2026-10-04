@@ -2,168 +2,67 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { IconArrowRight, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
 import PrimaryButton from '@/components/PrimaryButton';
+import LinkButton from '@/components/LinkButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
-import ConstellationCard from '@/components/ConstellationCard';
 import IdentityBadge from '@/components/IdentityBadge';
-import DomainRadarChart from '@/components/DomainRadarChart';
-import PrimarySignatureBars from '@/components/PrimarySignatureBars';
-import QuestionAnswerList from '@/components/QuestionAnswerList';
-import ReframeCtaBlock from '@/components/ReframeCtaBlock';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
-import { mergeAnswersWithQuestions, type MergedAnswer } from '@/lib/identity-questions';
-import type { ReframeTeaser } from '@/lib/artifact-schemas';
+import { IDENTITY_REPORT_COPY as COPY, signatureHeadline } from '@/lib/identity-report-copy';
+import type {
+  SignatureDeepDive,
+  PairingLine,
+  DistinctivePattern,
+  PatternToNotice,
+} from '@/lib/artifact-schemas';
 
 type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
 
 interface PrimarySignatureEntry {
-  signature_number: string;
   name: string;
   domain: string;
   score: number;
   core_statement: string;
-  evidence_analysis: string;
-  tension: string;
-  frequency?: number;
-  intensity?: number;
-  confidence?: string;
 }
 
 interface SecondarySignatureEntry {
-  signature_number: string;
   name: string;
   domain: string;
   score: number;
   core_statement: string;
-  analysis: string;
 }
 
+// Only the fields /identity renders. Layer 3 fields (#154 step 1) are optional:
+// absent on pre-1.4 reports and on any 1.4 report whose Layer 3 call failed.
 interface IdentityReport {
   cover: {
     prepared_for: string;
     named_identity: string;
-    identity_context?: string; // #154: retired, absent on 1.4 reports
-    report_metadata: string;
     identity_thesis: string;
   };
   primary_constellation: PrimarySignatureEntry[];
-  secondary_signature_summary: string;
-  secondary_signature_analysis: SecondarySignatureEntry[];
-  constellation_synthesis: {
-    named_identity: string;
-    synthesis: string;
-  };
-  how_you_operate: {
-    work_style: string;
-    thinking_style: string;
-    relationship_style: string;
-    decision_style: string;
-    stress_pattern: string;
-  };
+  secondary_signature_analysis?: SecondarySignatureEntry[];
+  constellation_synthesis: { synthesis: string };
   energisers: string[];
   friction_points: string[];
-  domain_profile: {
-    Visioning: number;
-    Thinking: number;
-    Connecting: number;
-    Driving: number;
-    Sensing: number;
-  };
-  domain_profile_summary?: string;
-  reframe_teaser?: ReframeTeaser;
+  domain_profile: Record<string, number>;
+  signature_deep_dives?: SignatureDeepDive[];
+  pairings?: PairingLine[];
+  distinctive_pattern?: DistinctivePattern;
+  pattern_to_notice?: PatternToNotice;
 }
 
-const DOMAIN_PROFILE_EXPLANATION =
-  'Your identity lives at the intersection of 5 domains: Visioning, Thinking, Connecting, Driving, ' +
-  'and Sensing. Each domain is made up of 5 possible signatures, the specific patterns that define ' +
-  'how you operate. Your Domain Profile score is calculated from the combined strength of whichever ' +
-  'signatures were detected within each domain: a high score means more of your strongest patterns ' +
-  'cluster there, a low score means fewer do. This is a summary view of the same evidence used to ' +
-  'identify the signatures below.';
-
-const SIGNATURE_PROFILE_EXPLANATION =
-  'Signatures are specific, recurring patterns in how you think, act, and respond, detected ' +
-  'directly from your answers, not labels chosen for you. There are 25 possible signatures in ' +
-  'total. This chart shows every signature found in your answers, ranked from strongest to ' +
-  'weakest. What each one means, and the evidence behind it, is explained in the sections below.';
-
-const PRIMARY_SIGNATURES_EXPLANATION =
-  'Your Primary Signatures are the patterns that most consistently and forcefully define how you ' +
-  'operate. They are not preferences you’ve expressed, but patterns detected directly in what you ' +
-  'described about your own history. Each is scored on two dimensions: Frequency, how often it shows ' +
-  'up across your history, and Intensity, how strongly it shows up when it does. The five ' +
-  'highest-scoring patterns form your Primary Constellation.';
-
-const SECONDARY_SIGNATURES_EXPLANATION =
-  'Secondary Signatures are patterns detected in your history that cleared the evidence bar, but ' +
-  'showed up less often or with less force than the patterns in your Primary Constellation. They are ' +
-  'still real, established patterns, not weaker guesses, and they still shape how you think, act, and ' +
-  'respond in specific situations, just not as consistently as your top five. If this section is short ' +
-  'or empty, that’s informative too: it means your operating patterns are concentrated rather than ' +
-  'spread across many active signatures.';
-
-const HOW_YOU_OPERATE_EXPLANATION =
-  'Your signatures describe stable patterns. How You Operate shows what those patterns actually look ' +
-  'like in practice: the conditions you gravitate toward at work, the way your mind naturally works ' +
-  'through a problem, how you show up in relationships with colleagues and collaborators, what ' +
-  'actually drives a decision once you’re in one, and what specifically breaks down when the pressure ' +
-  'is on. None of this is separate from your signatures. It’s the same evidence, described at the ' +
-  'level of daily behaviour rather than underlying pattern.';
-
-const ENERGISERS_EXPLANATION =
-  'Energisers are the conditions, activities, and types of work that align with how you naturally ' +
-  'operate: situations where your patterns are an asset rather than friction. They’re drawn from your ' +
-  'own history, from moments you described feeling most effective, engaged, or in flow.';
-
-const FRICTION_POINTS_EXPLANATION =
-  'Friction Points are the conditions that work against how you naturally operate: situations that ' +
-  'consistently cost you energy or performance because they run counter to your patterns. Like ' +
-  'Energisers, they’re drawn from your own history, not a general list of workplace stressors. These ' +
-  'are the specific frictions your patterns predict for you.';
-
-const WHAT_THIS_REPORT_IS =
-  'This is pattern recognition, not personality typing, not a career assessment, and not coaching. ' +
-  'Your Identity Signatures are stable, recurring operating patterns detected from your actual ' +
-  'life and work history. They describe how you have consistently thought, acted, and perceived ' +
-  'across multiple chapters of your life, not who you want to be, or who you were once. The report ' +
-  'does not tell you what to do. It shows you what is already true about how you operate.';
-
-const RESEARCH_PILLARS = [
-  {
-    title: 'Narrative Identity Theory, McAdams (1993)',
-    body:  'Your Identity Signature Report is grounded in narrative identity research, which holds that identity is constructed through the stories we tell about ourselves across time. The patterns detected in your report reflect recurring themes across your personal narrative: not isolated moments, but the operating logic that appears consistently across different chapters of your life.',
-  },
-  {
-    title: 'Flow Theory, Csikszentmihalyi (1990)',
-    body:  'Flow research identifies states of peak performance where skill meets challenge. Your Energisers map directly to the conditions most likely to produce your flow states: environments and activities that align with your signature operating patterns. Misalignment between your signatures and your current context produces the friction described in this report.',
-  },
-  {
-    title: 'Self-Determination Theory, Deci & Ryan (1985)',
-    body:  'SDT establishes that sustained motivation requires autonomy, competence, and relatedness. Your Identity Signatures reveal which environments support these three needs and which work against them. The Stress Pattern section identifies what specifically threatens your sense of competence and autonomy under pressure.',
-  },
-  {
-    title: 'Neural Patterning, Doidge (2007)',
-    body:  'Neuroplasticity research confirms that repeated patterns of thought and behaviour become hardwired over time. The signatures identified in your report are not preferences or values. They are neural grooves formed through years of consistent activation. They describe how your brain has learned to process and respond to the world.',
-  },
-];
-
-const HOW_OPERATE_LABELS: { key: keyof IdentityReport['how_you_operate']; label: string }[] = [
-  { key: 'work_style',         label: 'Work Style' },
-  { key: 'thinking_style',     label: 'Thinking Style' },
-  { key: 'relationship_style', label: 'Relationship Style' },
-  { key: 'decision_style',     label: 'Decision Style' },
-  { key: 'stress_pattern',     label: 'Stress Pattern' },
-];
-
-function splitNamedIdentity(namedIdentity: string): [string, string] {
-  const idx = namedIdentity.lastIndexOf(' ');
-  if (idx === -1) return [namedIdentity, ''];
-  return [namedIdentity.slice(0, idx), namedIdentity.slice(idx + 1)];
-}
+type SignatureRowData = {
+  name: string;
+  domain: string;
+  score: number;
+  coreStatement: string;
+  secondary: boolean;
+};
 
 function getScoreBand(score: number): string {
   if (score >= 20) return 'Dominant';
@@ -172,13 +71,32 @@ function getScoreBand(score: number): string {
   return 'Weak';
 }
 
+// Hero signature cards show Dominant / Strong / Moderate only (#154): a score
+// that would be "Weak" shows Moderate. Applied here, not inside getScoreBand.
+function heroBand(score: number): string {
+  const band = getScoreBand(score);
+  return band === 'Weak' ? 'Moderate' : band;
+}
+
 function bandClass(band: string): string {
   switch (band.toLowerCase()) {
     case 'dominant': return 'band-dominant';
     case 'strong':   return 'band-strong';
-    case 'moderate': return 'band-moderate';
-    default:         return 'band-weak';
+    default:         return 'band-moderate';
   }
+}
+
+// what_this_means is a [string, string] on current reports, but reports from
+// between the step 1 iterations stored a single string: render that as one
+// paragraph rather than failing.
+function paragraphs(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((p): p is string => typeof p === 'string' && p.trim() !== '');
+  if (typeof value === 'string' && value.trim()) return [value];
+  return [];
+}
+
+function rowId(name: string): string {
+  return `deep-dive-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
 
 export default function IdentityPage() {
@@ -186,8 +104,10 @@ export default function IdentityPage() {
   const [pageState, setPageState]   = useState<PageState>('loading');
   const [artifactId, setArtifactId] = useState<string | null>(null);
   const [userId, setUserId]         = useState<string | null>(null);
-  const [qaItems, setQaItems]       = useState<MergedAnswer[]>([]);
+  // Same entitlement read as app/path/page.tsx: null until checked.
+  const [entitled, setEntitled]     = useState<boolean | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [openRows, setOpenRows]     = useState<Set<string>>(new Set());
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
@@ -223,14 +143,22 @@ export default function IdentityPage() {
         .eq('user_id', uid);
     }
 
-    async function loadAnswers(uid: string) {
-      const { data: rows } = await supabase
-        .from('discovery_answers')
-        .select('question_number, answer_text')
-        .eq('user_id', uid);
-
-      if (cancelled) return;
-      if (rows) setQaItems(mergeAnswersWithQuestions(rows));
+    // Mirrors app/path/page.tsx's entitlement gate exactly, including the
+    // NEXT_PUBLIC_OPEN_ACCESS bypass. Read-only: entitlement and checkout
+    // logic are unchanged.
+    async function loadEntitlement(uid: string) {
+      if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') {
+        if (!cancelled) setEntitled(true);
+        return;
+      }
+      const { data: entitlement } = await supabase
+        .from('entitlements')
+        .select('id')
+        .eq('user_id', uid)
+        .eq('product', 'onetime_payment')
+        .eq('status', 'active')
+        .maybeSingle();
+      if (!cancelled) setEntitled(!!entitlement);
     }
 
     async function init() {
@@ -258,7 +186,7 @@ export default function IdentityPage() {
       }
 
       await loadArtifact(user.id);
-      await loadAnswers(user.id);
+      await loadEntitlement(user.id);
     }
 
     init();
@@ -327,6 +255,16 @@ export default function IdentityPage() {
     }
   }
 
+  // Both "Find your path" buttons: entitled users go straight to /path, everyone
+  // else starts the existing checkout.
+  function handleFindPath() {
+    if (entitled) {
+      router.push('/path');
+      return;
+    }
+    handleCheckout();
+  }
+
   // ── has-artifact: hook-driven generation states ────────────────────
   if (genPhase.phase === 'idle') {
     return (
@@ -376,227 +314,365 @@ export default function IdentityPage() {
   const {
     cover,
     primary_constellation,
-    secondary_signature_summary,
-    secondary_signature_analysis,
     constellation_synthesis,
-    how_you_operate,
     energisers,
     friction_points,
     domain_profile,
-    domain_profile_summary,
-    reframe_teaser,
+    pairings,
+    distinctive_pattern,
+    pattern_to_notice,
   } = report;
+  const secondaries = report.secondary_signature_analysis ?? [];
 
-  const [nameLine1, nameLine2] = splitNamedIdentity(cover.named_identity);
+  const deepDives = new Map((report.signature_deep_dives ?? []).map(d => [d.name, d]));
+  const secondaryNames = new Set(secondaries.map(s => s.name));
+  const rows: SignatureRowData[] = [
+    ...primary_constellation.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: false })),
+    ...secondaries.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: true })),
+  ];
+  const domains = Object.entries(domain_profile ?? {}).sort((a, b) => b[1] - a[1]);
+  const hasPairings = Array.isArray(pairings) && pairings.length > 0;
+  const hasPattern = !!distinctive_pattern;
+  const ctaDisabled = checkoutLoading || entitled === null;
+
+  function toggleRow(name: string) {
+    setOpenRows(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }
+
+  function findPathButton(label: string, light = false) {
+    return (
+      <button
+        type="button"
+        className={`btn-cta${light ? ' btn-cta--light' : ''}`}
+        onClick={handleFindPath}
+        disabled={ctaDisabled}
+      >
+        {checkoutLoading ? 'Redirecting…' : label}
+        <IconArrowRight size={18} stroke={2.2} aria-hidden="true" />
+      </button>
+    );
+  }
+
+  const pairingsCard = hasPairings && (
+    <div className="card flex flex-col gap-12">
+      <p className="eyebrow">{COPY.pairings.eyebrow}</p>
+      <div className="divided-list">
+        {pairings!.map(p => (
+          <div key={`${p.a}|${p.b}`} className="flex flex-col gap-8">
+            <h3>{COPY.pairings.title(p.a, p.b)}</h3>
+            <p>{p.line}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const patternCard = hasPattern && (
+    <div className="card flex flex-col gap-12">
+      <p className="eyebrow">{COPY.distinctivePattern.eyebrow}</p>
+      <div className="chips-wrap items-center">
+        {distinctive_pattern!.steps.map((step, i) => (
+          <span key={`${step}-${i}`} className="inline-flex items-center gap-8">
+            <span className="chip-tag">{step}</span>
+            {i < distinctive_pattern!.steps.length - 1 && (
+              <IconArrowRight size={18} stroke={2.2} color="var(--color-grad-2)" aria-hidden="true" />
+            )}
+          </span>
+        ))}
+      </div>
+      {paragraphs(distinctive_pattern!.paragraphs).map((para, i) => <p key={i}>{para}</p>)}
+    </div>
+  );
 
   return (
-    <div className="flow-container">
-      <div className="scroll">
+    <div className="flow-container flow-container--wide">
+      <div className="scroll gap-16">
 
-        {/* ── Section 0: Cover ─────────────────────────────── */}
-        <div className="section cover">
-          <p className="eyebrow">Identity Signature Report</p>
-          <IdentityBadge primarySignatureName={primary_constellation[0]?.name} />
-          <h1>
-            {nameLine2 ? <>{nameLine1}<br />{nameLine2}</> : nameLine1}
-          </h1>
-          {/* #154: identity_context is absent on 1.4 reports — guarded so the line doesn't end in a dangling separator; pre-1.4 reports render unchanged. */}
-          <p className="cover-context-line">{cover.prepared_for}{cover.identity_context ? ` · ${cover.identity_context}` : ''}</p>
-          <p className="identity-thesis">{cover.identity_thesis}</p>
-          <p>{constellation_synthesis.synthesis}</p>
-        </div>
-
-        {/* #100 Stage 2 (2026-08-05 full restructure, refined 2026-08-06):
-            Domain Profile / Primary Signatures / Secondary Signatures / How
-            You Operate / Energisers / Friction Points, each a standalone
-            top-level section with its own fixed .documentation explanation
-            near its card(s) — see docs/briefs/100-full-restructure-brief.md
-            and docs/briefs/100-card-consistency-brief.md. */}
-          {/* ── Domain Profile ───────────────────────────────────────── */}
-          <div className="section">
-            <p className="eyebrow">DOMAIN PROFILE</p>
-            <p className="documentation">{DOMAIN_PROFILE_EXPLANATION}</p>
-            <div className="card">
-              <DomainRadarChart domainProfile={domain_profile} />
-              {domain_profile_summary && <p>{domain_profile_summary}</p>}
-            </div>
+        {/* ── Hero row: identity card + domain profile ─────────────── */}
+        <div className="grid-split">
+          <div className="card flex flex-col gap-12">
+            <p className="eyebrow">{COPY.hero.eyebrow}</p>
+            <h1 className="hero-title">{cover.named_identity}</h1>
+            <p className="cover-context-line">{COPY.hero.preparedFor(cover.prepared_for)}</p>
+            <p className="identity-thesis">{cover.identity_thesis}</p>
+            <p>{constellation_synthesis.synthesis}</p>
           </div>
 
-          {/* ── Signature Profile — combined Primary + Secondary bar chart ── */}
-          <div className="section">
-            <p className="eyebrow">SIGNATURE PROFILE</p>
-            <p className="documentation">{SIGNATURE_PROFILE_EXPLANATION}</p>
-            <div className="card">
-              <PrimarySignatureBars signatures={primary_constellation} showLabel={false} />
-              {secondary_signature_analysis.length > 0 && secondary_signature_analysis.map((sig, i) => (
-                <div key={sig.name} className="sig-row">
-                  <div className="sig-num-circle-muted">{i + 6}</div>
-                  <div className="sig-info">
-                    <div className="sig-name-meta">
-                      <span className="sig-name">{sig.name}</span>
-                      <span className="sig-breakdown">{sig.domain}</span>
-                    </div>
-                    <div className="sig-bar-track">
-                      <div className="sig-bar-fill-muted" style={{ width: `${(sig.score / 25) * 100}%` }} />
-                    </div>
+          <div className="card flex flex-col gap-12">
+            <p className="eyebrow">{COPY.domains.eyebrow}</p>
+            <p className="documentation">{COPY.domains.explanation}</p>
+            <div className="flex flex-col gap-12">
+              {domains.map(([domain, value]) => (
+                <div key={domain} className="flex flex-col gap-8">
+                  <div className="row-between">
+                    <span className="sig-name">{domain}</span>
+                    <span className="sig-score-label">{value}</span>
                   </div>
-                  <span className="sig-score-label-muted">{sig.score}</span>
+                  <div className="sig-bar-track sig-bar-track--lg">
+                    <div className="sig-bar-fill" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+        </div>
 
-          {/* ── Primary Signatures — deep-dive cards ─────────────────── */}
-          <div className="section">
-            <p className="eyebrow">PRIMARY SIGNATURES</p>
-            <p className="documentation">{PRIMARY_SIGNATURES_EXPLANATION}</p>
-            {primary_constellation.map((sig, i) => {
-              const band = getScoreBand(sig.score);
+        {/* ── Primary signature cards ─────────────────────────────── */}
+        <div className="flex flex-col gap-12">
+          <p className="eyebrow">{COPY.primarySignatures.eyebrow}</p>
+          <div className="grid-5">
+            {primary_constellation.map(sig => {
+              const band = heroBand(sig.score);
               return (
-                <ConstellationCard
-                  key={sig.name}
-                  badge={i + 1}
-                  title={sig.name}
-                  meta={`${sig.domain} · ${sig.score}/25`}
-                  pill={<span className={`score-band-pill ${bandClass(band)}`}>{band}</span>}
-                >
-                  <p className="core-statement">{sig.core_statement}</p>
-                  <p>{sig.evidence_analysis}</p>
-                  <div className="tension-block">
-                    <span className="tension-label">TENSION</span>
-                    <p>{sig.tension}</p>
+                <div key={sig.name} className="card sig-card">
+                  <IdentityBadge primarySignatureName={sig.name} size="md" />
+                  <div className="flex flex-col gap-8">
+                    <h3>{sig.name}</h3>
+                    <p className="card-sub-label">{sig.domain}</p>
+                    <p>{signatureHeadline(sig.name)}</p>
                   </div>
-                  <div className="stat-row scoring-chips">
-                    <div className="score-chip">
-                      <span className="score-chip-label">Frequency</span>
-                      <span className="score-chip-value">{sig.frequency ?? '—'}</span>
-                    </div>
-                    <div className="score-chip">
-                      <span className="score-chip-label">Intensity</span>
-                      <span className="score-chip-value">{sig.intensity ?? '—'}</span>
-                    </div>
-                    <div className="score-chip">
-                      <span className="score-chip-label">Score</span>
-                      <span className="score-chip-value">{sig.score}</span>
-                    </div>
-                    <div className="score-chip">
-                      <span className="score-chip-label">Confidence</span>
-                      <span className="score-chip-value">{sig.confidence ?? '—'}</span>
-                    </div>
-                  </div>
-                </ConstellationCard>
+                  <span className={`score-band-pill ${bandClass(band)}`}>{band}</span>
+                </div>
               );
             })}
           </div>
+        </div>
 
-          {/* ── Secondary Signatures — always renders, branches on empty ── */}
-          <div className="section">
-            <p className="eyebrow">SECONDARY SIGNATURES</p>
-            {secondary_signature_analysis.length === 0 ? (
-              <>
-                <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
-                <div className="card">
-                  <p>{secondary_signature_summary}</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="documentation">{SECONDARY_SIGNATURES_EXPLANATION}</p>
-                {secondary_signature_analysis.map((sig, i) => (
-                  <ConstellationCard
-                    key={sig.name}
-                    badge={i + 6}
-                    muted
-                    title={sig.name}
-                    meta={`${sig.domain} · ${sig.score}/25`}
-                  >
-                    <p className="core-statement">{sig.core_statement}</p>
-                    <p>{sig.analysis}</p>
-                  </ConstellationCard>
-                ))}
-              </>
-            )}
+        {/* ── Hero Path CTA ───────────────────────────────────────── */}
+        <div className="cta-card">
+          <div className="flex flex-col gap-8">
+            <h3>{COPY.heroCta.heading}</h3>
+            <p>{COPY.heroCta.body}</p>
+            <p className="cover-context-line">{COPY.heroCta.price}</p>
           </div>
+          {findPathButton(COPY.heroCta.button)}
+        </div>
 
-          {/* ── How You Operate — 5 separate cards ────────────────────── */}
-          <div className="section">
-            <p className="eyebrow">HOW YOU OPERATE</p>
-            <p className="documentation">{HOW_YOU_OPERATE_EXPLANATION}</p>
-            {HOW_OPERATE_LABELS.map(({ key, label }) => (
-              <div key={key} className="card">
-                <h3>{label}</h3>
-                <p>{how_you_operate[key]}</p>
+        {/* ── Signatures in depth: one row per signature ──────────── */}
+        <div className="flex flex-col gap-12">
+          <div className="flex flex-col gap-8">
+            <p className="eyebrow">{COPY.depth.eyebrow}</p>
+            <p className="documentation">{COPY.depth.scoreExplanation}</p>
+          </div>
+          {rows.map(row => {
+            const dive = deepDives.get(row.name);
+            const open = !!dive && openRows.has(row.name);
+            const scored = row.score >= 1;
+            const id = rowId(row.name);
+            return (
+              <div key={row.name} className={`card flex flex-col gap-20${open ? ' card--active' : ''}`}>
+                <div className="sig-depth-row">
+                  <IdentityBadge primarySignatureName={row.name} size="sm" muted={row.secondary} />
+                  <div className="flex flex-col gap-4">
+                    <h3>{row.name}</h3>
+                    <p className="card-sub-label">{row.domain}</p>
+                  </div>
+                  <div className="sig-bar-track sig-bar-track--lg">
+                    {scored && (
+                      <div
+                        className={row.secondary ? 'sig-bar-fill-muted' : 'sig-bar-fill'}
+                        style={{ width: `${Math.min(100, (row.score / 25) * 100)}%` }}
+                      />
+                    )}
+                  </div>
+                  <span className={row.secondary ? 'sig-score-label-muted' : 'sig-score-label'}>
+                    {scored ? COPY.depth.scoreOutOf(row.score) : COPY.depth.noScore}
+                  </span>
+                  {dive ? (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-expanded={open}
+                      aria-controls={id}
+                      aria-label={open ? COPY.depth.collapse(row.name) : COPY.depth.expand(row.name)}
+                      onClick={() => toggleRow(row.name)}
+                    >
+                      {open ? <IconChevronUp size={20} stroke={2} /> : <IconChevronDown size={20} stroke={2} />}
+                    </button>
+                  ) : (
+                    <span aria-hidden="true" />
+                  )}
+                </div>
+                {dive && open && (
+                  <DeepDive
+                    id={id}
+                    name={row.name}
+                    coreStatement={row.coreStatement}
+                    dive={dive}
+                    secondaryNames={secondaryNames}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Pairings + Distinctive Pattern (each omitted when missing) ── */}
+        {pairingsCard && patternCard ? (
+          <div className="grid-2">{pairingsCard}{patternCard}</div>
+        ) : (pairingsCard || patternCard || null)}
+
+        {/* ── Energy / Drains ─────────────────────────────────────── */}
+        <div className="grid-2">
+          <div className="card flex flex-col gap-12">
+            <p className="eyebrow">{COPY.energy.eyebrow}</p>
+            <ul className="energiser-bullets">
+              {energisers.map(item => (
+                <li key={item}><span className="bullet-icon">+</span><span>{item}</span></li>
+              ))}
+            </ul>
+          </div>
+          <div className="card flex flex-col gap-12">
+            <p className="eyebrow">{COPY.drains.eyebrow}</p>
+            <ul className="friction-bullets">
+              {friction_points.map(item => (
+                <li key={item}><span className="bullet-icon">–</span><span>{item}</span></li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* ── Path invitation ─────────────────────────────────────── */}
+        <div className="row-between flex-wrap gap-16">
+          <p>{COPY.pathInvitation.body}</p>
+          <LinkButton href="/path" inline>
+            <span className="inline-flex items-center gap-8">
+              {COPY.pathInvitation.link}
+              <IconArrowRight size={16} stroke={2.2} aria-hidden="true" />
+            </span>
+          </LinkButton>
+        </div>
+
+        {/* ── The Pattern to Notice ───────────────────────────────── */}
+        {pattern_to_notice && (
+          <div className="card flex flex-col gap-12">
+            <p className="eyebrow">{COPY.patternToNotice.eyebrow}</p>
+            <h2>{pattern_to_notice.headline}</h2>
+            <p>{pattern_to_notice.body}</p>
+            <p><strong>{pattern_to_notice.takeaway}</strong></p>
+          </div>
+        )}
+
+        {/* ── Bottom CTA strip ────────────────────────────────────── */}
+        <div className="section-cta section-cta--report">
+          <div className="flex flex-col gap-8">
+            <h2>{COPY.bottomCta.heading}</h2>
+            <p>{COPY.bottomCta.body}</p>
+          </div>
+          <div>
+            {findPathButton(COPY.bottomCta.button, true)}
+            <p>{COPY.bottomCta.price}</p>
+          </div>
+        </div>
+
+        {/* ── Footer (no links until Privacy/Terms/Help pages exist — #157) ── */}
+        <footer className="report-footer">
+          <p className="documentation">{COPY.footer.disclaimer}</p>
+          <div className="flex items-baseline gap-12">
+            <strong>{COPY.footer.brand}</strong>
+            <span className="cover-context-line">{COPY.footer.tagline}</span>
+          </div>
+        </footer>
+
+      </div>{/* end .scroll */}
+    </div>
+  );
+}
+
+function DeepDive({
+  id,
+  name,
+  coreStatement,
+  dive,
+  secondaryNames,
+}: {
+  id: string;
+  name: string;
+  coreStatement: string;
+  dive: SignatureDeepDive;
+  secondaryNames: Set<string>;
+}) {
+  const labels = COPY.deepDive.operatingLabels;
+  return (
+    <div id={id} className="flex flex-col gap-20">
+      <div className="flex flex-col gap-8">
+        <h2>{signatureHeadline(name)}</h2>
+        <p>{coreStatement}</p>
+      </div>
+
+      <div className="grid-split">
+        <div className="flex flex-col gap-20">
+          <div className="flex flex-col gap-8">
+            <p className="card-sub-label">{COPY.deepDive.whatThisMeans}</p>
+            {paragraphs(dive.what_this_means).map((para, i) => <p key={i}>{para}</p>)}
+          </div>
+          {dive.evidence.length > 0 && (
+            <div className="flex flex-col gap-12">
+              <p className="card-sub-label">{COPY.deepDive.evidence}</p>
+              {dive.evidence.map((e, i) => <p key={i} className="evidence-item">{e.text}</p>)}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-12">
+          <div className="panel flex flex-col gap-8">
+            <p className="card-sub-label">{COPY.deepDive.showsUp}</p>
+            <ul className="bullet-list">
+              {dive.shows_up.map(item => <li key={item} className="bullet-item"><span className="bullet-dot" />{item}</li>)}
+            </ul>
+          </div>
+          <div className="panel flex flex-col gap-8">
+            <p className="card-sub-label">{COPY.deepDive.servesYou}</p>
+            <ul className="bullet-list">
+              {dive.serves_you.map(item => <li key={item} className="bullet-item"><span className="bullet-dot" />{item}</li>)}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {dive.works_with.length > 0 && (
+        <div className="flex flex-col gap-12">
+          <p className="card-sub-label">{COPY.deepDive.worksWith}</p>
+          <div className="grid-2">
+            {dive.works_with.map(w => (
+              <div key={w.partner} className="panel flex flex-col gap-8">
+                <div className="flex items-center gap-12">
+                  <IdentityBadge primarySignatureName={w.partner} size="sm" muted={secondaryNames.has(w.partner)} />
+                  <h3>{w.partner}</h3>
+                </div>
+                <p>{w.text}</p>
+                <p className="evidence-item">{w.evidence}</p>
               </div>
             ))}
           </div>
+        </div>
+      )}
 
-          {/* ── Energisers ─────────────────────────────────────────────  */}
-          <div className="section">
-            <p className="eyebrow">ENERGISERS</p>
-            <p className="documentation">{ENERGISERS_EXPLANATION}</p>
-            <div className="card">
-              <ul className="energiser-bullets">
-                {energisers.map(item => (
-                  <li key={item}><span className="bullet-icon">+</span><span>{item}</span></li>
-                ))}
-              </ul>
+      <div className="flex flex-col gap-12">
+        <p className="card-sub-label">{COPY.deepDive.operating}</p>
+        <div className="grid-4">
+          {(Object.keys(labels) as (keyof typeof labels)[]).map(key => (
+            <div key={key} className="panel flex flex-col gap-8">
+              <h3>{labels[key]}</h3>
+              <p>{dive.operating[key]}</p>
             </div>
-          </div>
-
-          {/* ── Friction Points ────────────────────────────────────────  */}
-          <div className="section">
-            <p className="eyebrow">FRICTION POINTS</p>
-            <p className="documentation">{FRICTION_POINTS_EXPLANATION}</p>
-            <div className="card">
-              <ul className="friction-bullets">
-                {friction_points.map(item => (
-                  <li key={item}><span className="bullet-icon">–</span><span>{item}</span></li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-        {/* Reframe teaser CTA — locked 6-component composition, shared with
-            /path (see docs/briefs/reframe-teaser-redesign-brief.md). Generated
-            as part of identity_report's own Layer 2 call (#113), so it's
-            already in `report` by the time this page renders. No second
-            artifact fetch, no polling. ReframeCtaBlock supplies its own
-            outer .section wrapper (see
-            docs/briefs/cta-headline-restructure-brief.md) — no double-wrap
-            here. Now a flat sibling of every other .section above (no more
-            .report-sections wrapper), per
-            docs/briefs/123-section-divider-consolidation-brief.md. */}
-        {reframe_teaser?.recap && reframe_teaser.reframe && reframe_teaser.forward_frame && (
-          <ReframeCtaBlock
-            reframeTeaser={reframe_teaser}
-            primaryConstellation={primary_constellation}
-            onCheckout={handleCheckout}
-            checkoutLoading={checkoutLoading}
-          />
-        )}
-
-        {/* Bottom documentation: What This Report Is / Research Foundation
-            — reinstated from docs/content/identity-static-content-for-91.md
-            per #100's restructure brief, resolves #91's placement question. */}
-        <div className="section documentation">
-          <h2>About This Report</h2>
-
-          <h3>What this report is</h3>
-          <p>{WHAT_THIS_REPORT_IS}</p>
-
-          <h3>Research foundation</h3>
-          {RESEARCH_PILLARS.map((pillar) => (
-            <p key={pillar.title}><em>{pillar.title}.</em> {pillar.body}</p>
           ))}
         </div>
+      </div>
 
-        {/* ── Your Answers — read-only, same component as /start's State 2 ── */}
-        <div className="section">
-          <p className="eyebrow">YOUR ANSWERS</p>
-          <QuestionAnswerList items={qaItems} />
+      <div className="grid-2">
+        <div className="panel panel--warm flex flex-col gap-8">
+          <p className="card-sub-label">{COPY.deepDive.friction}</p>
+          <p>{dive.friction}</p>
         </div>
-
-      </div>{/* end .scroll */}
+        <div className="panel panel--warm flex flex-col gap-8">
+          <p className="card-sub-label">{COPY.deepDive.underPressure}</p>
+          <p>{dive.under_pressure}</p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -54,6 +54,10 @@
   --color-nav-inactive:    #CCCCCC;
   --color-success:         #1E8E5A;
   --color-failure:         #D8483B;
+  /* #154: hero Path CTA tint (planning decision 13) and the opaque grey used
+     for secondary signatures' shield and bar. */
+  --color-accent-tint:     #FFF1EA;
+  --color-muted-fill:      #A9A6AE;
   --font-size-subheading:  17px;
   --font-size-body:        16px;
   --font-size-label:       13px;
@@ -1044,20 +1048,6 @@ p {
   flex-shrink: 0;
 }
 
-.sig-num-circle-muted {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: #6E6E6E;
-  flex-shrink: 0;
-}
-
 .sig-info {
   flex: 1;
   display: flex;
@@ -1099,7 +1089,7 @@ p {
 
 .sig-bar-fill-muted {
   height: 100%;
-  background: rgba(0,0,0,0.2);
+  background: var(--color-muted-fill); /* #154: matches the grey secondary shield */
   border-radius: 999px;
 }
 
@@ -1194,7 +1184,6 @@ p {
 .band-dominant { background: rgba(198,5,103,0.1); color: #C60567; }
 .band-strong   { background: rgba(81,0,133,0.1);  color: #510085; }
 .band-moderate { background: rgba(0,0,0,0.07);    color: #6E6E6E; }
-.band-weak     { background: rgba(0,0,0,0.05);    color: #999999; }
 
 .named-identity { text-transform: uppercase; }
 
@@ -1300,7 +1289,7 @@ p {
    regardless of column count. Originally duplicated verbatim into a
    separate .fit-stat-row class (#138 §6) rather than extracted, which was
    the wrong call: caught during this session's own commit-prep review and
-   extracted here instead. .scoring-chips/.fit-stat-row below set ONLY
+   extracted here instead. .fit-stat-row below sets ONLY
    grid-template-columns, a property .stat-row never touches — so there's no
    cascade-tie risk between them (that risk is specifically about two
    same-specificity classes fighting over the SAME property; these don't
@@ -1316,11 +1305,8 @@ p {
   border-top: 0.5px solid rgba(0,0,0,0.07);
 }
 
-.scoring-chips { grid-template-columns: repeat(4, 1fr); }
-
 /* #138 §6: option cards' 2-box "Overall fit"/"Confidence" stat row —
-   combined with .stat-row in markup (`className="stat-row fit-stat-row"`),
-   same pattern as .scoring-chips above. */
+   combined with .stat-row in markup (`className="stat-row fit-stat-row"`). */
 .fit-stat-row { grid-template-columns: repeat(2, 1fr); }
 
 .score-chip {
@@ -1400,18 +1386,6 @@ p {
 }
 .documentation p + p {
   margin-top: 12px;
-}
-.documentation h2 {
-  font-size: 16px;
-  font-weight: 500;
-  color: #6E6E6E;
-  margin: 0 0 4px;
-}
-.documentation h3 {
-  font-size: 13px;
-  font-weight: 500;
-  color: #6E6E6E;
-  margin: 16px 0 4px;
 }
 .documentation em {
   font-style: italic;
@@ -2045,4 +2019,238 @@ p {
   .nav-bar { padding: 10px 16px; }
   .nav-inner { display: none; }
   .nav-end > .icon-btn { display: flex; }
+}
+
+/* ── IDENTITY REPORT V3 LAYOUT (#154 step 3 Part B) ── */
+/* Wide page for /identity only — every other page keeps .flow-container's
+   640px. The page column is the .scroll inside it (gap via a gap-* utility). */
+.flow-container--wide {
+  max-width: 1160px;
+}
+
+.flow-container--wide .scroll {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 40px;
+}
+
+/* On the wide report, spacing comes from gap-* utilities on flex columns, so
+   the flow-layout margins these shared classes carry elsewhere are zeroed. */
+.flow-container--wide .card-sub-label,
+.flow-container--wide .bullet-list {
+  margin: 0;
+}
+
+.flow-container--wide .card p + p {
+  margin-top: 0;
+}
+
+/* .btn-cta is inline-block for the homepage's text-only links; the report's
+   CTA buttons carry a trailing arrow icon, so lay them out in a row. */
+.flow-container--wide .btn-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* General-purpose grids; collapse at 1000px / 700px (media queries below). */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Main + side column: hero row and the expanded signature card body. */
+.grid-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+/* Branding "Active state": 1.5px accent border (expanded signature row). */
+.card--active {
+  border: 1.5px solid var(--color-accent);
+}
+
+.hero-title {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.08;
+}
+
+/* Primary signature card: badge, name, domain, definition, band pill. */
+.sig-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sig-bar-track--lg {
+  height: 10px;
+}
+
+/* Signature row: badge | name + domain | bar | score | toggle. */
+.sig-depth-row {
+  display: grid;
+  grid-template-columns: 44px minmax(150px, 220px) minmax(0, 1fr) 56px 44px;
+  align-items: center;
+  gap: 16px;
+}
+
+.identity-badge-wrap stop:nth-of-type(1) { stop-color: var(--color-grad-1); }
+.identity-badge-wrap stop:nth-of-type(2) { stop-color: var(--color-grad-2); }
+.identity-badge-wrap stop:nth-of-type(3) { stop-color: var(--color-grad-3); }
+
+.identity-badge-wrap--md {
+  width: 44px;
+  height: 48px;
+}
+
+.identity-badge-wrap--sm {
+  width: 40px;
+  height: 44px;
+}
+
+.identity-badge-wrap--muted path {
+  fill: var(--color-muted-fill);
+}
+
+/* Inner tinted box inside a card (lists, works-with blocks, operate tiles). */
+.panel {
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+/* Warm tint for Potential friction / Under pressure — same value
+   .tension-block already uses. */
+.panel--warm {
+  background: rgba(254,86,24,0.05);
+}
+
+/* Hero Path CTA: light orange tint + orange border (planning decision 13). */
+.cta-card {
+  background: var(--color-accent-tint);
+  border: 1.5px solid rgba(254,86,24,0.45);
+  border-radius: var(--radius-card);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.cta-card > :first-child {
+  flex: 1 1 380px;
+}
+
+/* Evidence line with a 3px gradient rule beside it (branding gradient list). */
+.evidence-item {
+  position: relative;
+  padding-left: 15px;
+}
+
+.evidence-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--gradient);
+}
+
+/* Stacked items separated by a hairline (pairings). */
+.divided-list > * + * {
+  border-top: 0.5px solid rgba(0,0,0,0.07);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+/* Report CTA strip: rounded, row layout, left-aligned — the only gradient
+   surface on /identity besides the header, badges and bars. */
+.section-cta--report {
+  background: var(--gradient-cta);
+  border-radius: var(--radius-badge);
+  padding: 36px 40px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  text-align: left;
+  gap: 24px;
+}
+
+.section-cta--report h2 {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.section-cta--report p {
+  color: rgba(255,255,255,0.92);
+}
+
+.section-cta--report > :first-child {
+  flex: 1 1 420px;
+}
+
+.section-cta--report > :last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-cta--light {
+  background-color: var(--color-surface);
+  color: var(--color-grad-2);
+  border-color: transparent;
+  margin-top: 0;
+}
+
+.report-footer {
+  border-top: 0.5px solid rgba(0,0,0,0.07);
+  padding-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.report-footer strong {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-grad-3);
+}
+
+@media (max-width: 1000px) {
+  .grid-split { grid-template-columns: minmax(0, 1fr); }
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .flow-container--wide .scroll { padding: 16px 16px 32px; }
+  .grid-2, .grid-4, .grid-5 { grid-template-columns: minmax(0, 1fr); }
+  .hero-title { font-size: 30px; }
+  .sig-card { flex-direction: row; align-items: center; gap: 12px; }
+  .sig-depth-row { grid-template-columns: 40px minmax(0, 1fr) 44px; gap: 12px; }
+  .sig-depth-row > .sig-bar-track { grid-column: 1 / -1; order: 5; }
+  .sig-depth-row > .sig-score-label,
+  .sig-depth-row > .sig-score-label-muted { display: none; }
+  .section-cta--report { padding: 28px 22px; }
+  .section-cta--report h2 { font-size: 24px; }
 }
