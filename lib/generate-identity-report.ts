@@ -510,6 +510,20 @@ export function logEnergiserFrictionLengthGaps(report: { energisers?: unknown; f
  * contain generated prose that can't be synthesized in code if Layer 2
  * diverges — so this is a log-only check, not a rewrite.
  */
+/**
+ * #154: the named identity always reads "The <X> <Y>". If Layer 2's
+ * cover.named_identity doesn't start with "The " (case-insensitive), prepend
+ * it and log. Leaves a missing or empty value alone.
+ */
+export function ensureNamedIdentityArticle(report: { cover?: { named_identity?: unknown } }): void {
+  const named = report?.cover?.named_identity;
+  if (typeof named !== 'string') return;
+  const trimmed = named.trim();
+  if (!trimmed || /^the\s/i.test(trimmed)) return;
+  report.cover!.named_identity = `The ${trimmed}`;
+  console.warn(`#154 cover.named_identity: missing "The", prepended: "${trimmed}" -> "The ${trimmed}"`);
+}
+
 function logCategorizationComplianceGaps(
   report: { primary_constellation?: unknown; secondary_signature_analysis?: unknown },
   expected: { primary: string[]; secondary: string[] }
@@ -1213,6 +1227,10 @@ export async function buildIdentityReport({
   });
 
   const report = JSON.parse(reportContent ?? '{}');
+
+  // #154: Layer 2 sometimes drops the leading "The" from named_identity
+  // ("Pathfinder Illuminator"). Code owns that convention; log when it fires.
+  ensureNamedIdentityArticle(report);
 
   // The detection prompt's "Rank by score" rule governs Top-5 *selection*,
   // not output array order — so array order isn't reliably descending by
