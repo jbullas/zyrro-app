@@ -75,7 +75,7 @@ Use this exact structure:
   "shows_up": [],
   "serves_you": [],
   "works_with": [
-    { "partner": "", "text": "", "evidence": "", "source_question": 0 }
+    { "kind": "synergy", "partner": "", "text": "", "evidence": "", "source_question": 0 }
   ],
   "operating": {
     "at_work": "",
@@ -112,11 +112,15 @@ Standard: 3–4 short phrases. Reduced: exactly 2. Where this pattern shows up i
 Standard: 3–4 short phrases. Reduced: exactly 2. Where this pattern is a genuine advantage for this person. Concrete, grounded in their evidence, not praise.
 
 ### works_with
-Standard: 1–2 entries. Reduced: exactly 1. Each partner must be another signature listed in signatures_in_report, never the target signature itself. Pick the signatures that most clearly interact with this one in the person's evidence.
+One or two entries, each with a kind. Each partner must be another signature listed in signatures_in_report, never the target signature itself.
+- kind "synergy" — exactly one entry, in both evidence modes: the partner signature whose interaction with the target signature is the strongest synergy in this person's evidence. The partner amplifies, steadies or extends the target signature.
+- kind "tension" — at most one entry, and never in reduced mode: the partner signature whose interaction with the target signature is the sharpest tension in this person's evidence. The partner pulls against, competes with or undercuts the target signature. Include it only when the evidence actually shows that tension between the two signatures; when it does not, leave this entry out rather than stretching for one. Its text is about the interaction between the two signatures, never a restatement of the target signature's own friction or under_pressure.
+- The synergy and tension entries must name different partners.
 
-Each entry describes what the partner signature does for the target signature — how it shapes, steadies, extends or redirects it in this person. The direction is fixed: the partner is the one acting, and the target signature is the one being helped. The target signature must never be the one doing the helping, complementing, supporting or enhancing. What the target signature does for the partner belongs on the partner's own card, never here.
+Direction, for both kinds: each entry describes what the partner signature does to the target signature in this person. The direction is fixed: the partner is the one acting, and the target signature is the one affected — amplified for synergy, pulled against for tension. The target signature must never be the one acting on the partner (helping, complementing, supporting, enhancing, or straining it). What the target signature does to the partner belongs on the partner's own card, never here.
+- kind: "synergy" or "tension".
 - partner: the partner signature's exact name.
-- text: 2–3 sentences on how the partner shapes the target signature in this person. The partner signature is the grammatical subject of the first sentence and is named before the target signature; the target signature appears only as the one receiving the effect.
+- text: 2–3 sentences on how the partner affects the target signature in this person. The partner signature is the grammatical subject of the first sentence and is named before the target signature; the target signature appears only as the one receiving the effect.
 - evidence: one sentence, past tense, grounding the interaction in one concrete evidence unit. State only what happened. Do not add any clause that interprets it — nothing saying what it shows, demonstrates, indicates, reflects or reveals, and no trait, quality or pattern attached to the event; the interpretation belongs in text, not here.
 - source_question: the source_question of that evidence unit. The unit must be tagged to the target signature or to the partner signature (see the evidence units in the report context); never a unit tagged only to some other signature.
 
@@ -134,7 +138,7 @@ These are specific to this signature. Do not restate the report-wide how_you_ope
 ### under_pressure
 1–2 sentences: what happens to this pattern under pressure. Honest, specific, grounded.
 
-Before returning the JSON, check that what_this_means is exactly two strings and never names the signature, that evidence has no more than max_evidence_items entries, that every evidence source_question appears in tagged_evidence_units, that the list sizes match evidence_mode, and that every works_with partner is a different signature listed in signatures_in_report with a source_question from a unit tagged to the target or that partner, and that every works_with text has the partner as its subject acting on the target signature, never the reverse.`;
+Before returning the JSON, check that what_this_means is exactly two strings and never names the signature, that evidence has no more than max_evidence_items entries, that every evidence source_question appears in tagged_evidence_units, that the list sizes match evidence_mode, and that every works_with partner is a different signature listed in signatures_in_report with a source_question from a unit tagged to the target or that partner, and that every works_with text has the partner as its subject acting on the target signature, never the reverse, and that works_with has exactly one synergy entry and at most one tension entry (none in reduced mode) with a different partner.`;
 
 export const LAYER_3_REPORT_LEVEL_PROMPT = `${LAYER_3_SHARED_RULES}
 

@@ -599,6 +599,9 @@ function DeepDive({
   secondaryNames: Set<string>;
 }) {
   const labels = COPY.deepDive.operatingLabels;
+  // Entries without a kind (reports before "Watch out for") are synergy.
+  const worksBestWith = dive.works_with.filter(w => w.kind !== 'tension');
+  const watchOutFor = dive.works_with.filter(w => w.kind === 'tension');
   return (
     <div id={id} className="flex flex-col gap-20">
       <div className="flex flex-col gap-8">
@@ -635,21 +638,26 @@ function DeepDive({
         </div>
       </div>
 
-      {dive.works_with.length > 0 && (
-        <div className="flex flex-col gap-12">
-          <p className="eyebrow">{COPY.deepDive.worksWith}</p>
-          <div className="grid-2">
-            {dive.works_with.map(w => (
-              <div key={w.partner} className="panel flex flex-col gap-8">
-                <div className="flex items-center gap-12">
-                  <IdentityBadge primarySignatureName={w.partner} size="sm" muted={secondaryNames.has(w.partner)} />
-                  <h3>{w.partner}</h3>
+      {(worksBestWith.length > 0 || watchOutFor.length > 0) && (
+        <div className="grid-2">
+          {([
+            [COPY.deepDive.worksBestWith, worksBestWith],
+            [COPY.deepDive.watchOutFor, watchOutFor],
+          ] as const).map(([heading, entries]) => entries.length > 0 && (
+            <div key={heading} className="flex flex-col gap-12">
+              <p className="eyebrow">{heading}</p>
+              {entries.map(w => (
+                <div key={w.partner} className="panel flex flex-col gap-8">
+                  <div className="flex items-center gap-12">
+                    <IdentityBadge primarySignatureName={w.partner} size="sm" muted={secondaryNames.has(w.partner)} />
+                    <h3>{w.partner}</h3>
+                  </div>
+                  <p>{w.text}</p>
+                  <p className="evidence-item">{w.evidence}</p>
                 </div>
-                <p>{w.text}</p>
-                <p className="evidence-item">{w.evidence}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
 

@@ -222,7 +222,7 @@ export interface SignatureDeepDive {
   evidence: EvidenceItem[];     // 0-3, capped at the signature's own tagged evidence units
   shows_up: string[];           // 3-4 short phrases (2 when 1 tagged unit)
   serves_you: string[];         // 3-4 short phrases (2 when 1 tagged unit)
-  works_with: WorksWith[];      // 1-2 (1 when 1 tagged unit)
+  works_with: WorksWith[];      // 1 synergy + at most 1 tension (no tension when 1 tagged unit)
   operating: {
     at_work: string;            // one sentence each, minimum 12 words, target 16
     thinking: string;
@@ -239,8 +239,11 @@ export interface EvidenceItem {
 }
 
 export interface WorksWith {
+  // "Works best with" (synergy) or "Watch out for" (tension). Optional: reports
+  // generated before this field render every entry as "Works best with".
+  kind?: 'synergy' | 'tension';
   partner: string;              // another signature in this report
-  text: string;                 // 2-3 sentences: what the partner does for THIS signature
+  text: string;                 // 2-3 sentences: what the partner does to THIS signature
   evidence: string;             // one sentence
   source_question: number;      // from a unit tagged to this signature or the partner
 }

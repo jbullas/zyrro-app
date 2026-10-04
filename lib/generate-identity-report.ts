@@ -743,7 +743,10 @@ function validateDeepDive(parsed: unknown): SignatureDeepDive | null {
         isNonEmptyString((w as WorksWith).text) &&
         isNonEmptyString((w as WorksWith).evidence) &&
         typeof (w as WorksWith).source_question === 'number')
-      .map(w => ({ partner: w.partner, text: w.text, evidence: w.evidence, source_question: w.source_question })),
+      .map(w => ({
+        ...(w.kind === 'synergy' || w.kind === 'tension' ? { kind: w.kind } : {}),
+        partner: w.partner, text: w.text, evidence: w.evidence, source_question: w.source_question,
+      })),
     operating: {
       at_work: operating.at_work,
       thinking: operating.thinking,
@@ -826,7 +829,37 @@ function layer3Signatures(report: Record<string, unknown>): Layer3Signature[] {
 type EvidenceMode = 'standard' | 'reduced';
 
 const REDUCED_LIST_ITEMS = 2;
-const REDUCED_WORKS_WITH = 1;
+
+/**
+ * #154 follow-up: works_with is one "Works best with" (synergy) entry plus at
+ * most one "Watch out for" (tension) entry with a different partner, and no
+ * tension in reduced mode. Enforced here, not trusted to the prompt: an entry
+ * without a valid kind is treated as synergy, then extras are logged and
+ * dropped (first of each kind kept). Synergy is returned first.
+ */
+export function enforceWorksWithKinds(name: string, entries: WorksWith[], mode: EvidenceMode): WorksWith[] {
+  let synergy: WorksWith | undefined;
+  let tension: WorksWith | undefined;
+  for (const raw of entries) {
+    const w: WorksWith = raw.kind === 'synergy' || raw.kind === 'tension' ? raw : { ...raw, kind: 'synergy' };
+    if (w !== raw) console.warn(`#154 Layer 3: ${name}.works_with[${w.partner}] had no valid kind — treated as synergy`);
+    if (w.kind === 'synergy') {
+      if (!synergy) synergy = w;
+      else console.warn(`#154 Layer 3: ${name}.works_with[${w.partner}] dropped (extra synergy; kept ${synergy.partner})`);
+    } else if (mode === 'reduced') {
+      console.warn(`#154 Layer 3: ${name}.works_with[${w.partner}] dropped (tension not allowed in reduced mode)`);
+    } else if (!tension) {
+      tension = w;
+    } else {
+      console.warn(`#154 Layer 3: ${name}.works_with[${w.partner}] dropped (extra tension; kept ${tension.partner})`);
+    }
+  }
+  if (tension && synergy && tension.partner === synergy.partner) {
+    console.warn(`#154 Layer 3: ${name}.works_with[${tension.partner}] tension dropped (same partner as synergy)`);
+    tension = undefined;
+  }
+  return [synergy, tension].filter((w): w is WorksWith => !!w);
+}
 
 function evidenceModeFor(unitCount: number): EvidenceMode {
   return unitCount === 1 ? 'reduced' : 'standard';
@@ -929,11 +962,8 @@ async function generateLayer3(report: Record<string, unknown>, evidenceUnits: un
           dive[key] = dive[key].slice(0, REDUCED_LIST_ITEMS);
         }
       }
-      if (dive.works_with.length > REDUCED_WORKS_WITH) {
-        console.warn(`#154 Layer 3: ${signature.name}.works_with trimmed from ${dive.works_with.length} to ${REDUCED_WORKS_WITH} (reduced mode)`);
-        dive.works_with = dive.works_with.slice(0, REDUCED_WORKS_WITH);
-      }
     }
+    dive.works_with = enforceWorksWithKinds(signature.name, dive.works_with, mode);
     return dive;
   });
   const deepDives = deepDiveResults.filter((d): d is SignatureDeepDive => d !== null);
@@ -981,7 +1011,6 @@ async function generateLayer3(report: Record<string, unknown>, evidenceUnits: un
 // revised in the 2026-10-04 review of verification 3.
 const WHAT_THIS_MEANS_PARAGRAPH_WORDS: Record<EvidenceMode, [number, number]> = { standard: [40, 70], reduced: [30, 50] };
 const LIST_ITEMS: Record<EvidenceMode, [number, number]> = { standard: [3, 4], reduced: [2, 2] };
-const WORKS_WITH_ENTRIES: Record<EvidenceMode, [number, number]> = { standard: [1, 2], reduced: [1, 1] };
 const EVIDENCE_TEXT_MAX_WORDS = 30;
 const OPERATING_MIN_WORDS = 12; // floor only; the prompt asks for a target of 16
 // Prompt asks for minimum 35, target 50 per paragraph; flag under 35 or over 70.
@@ -1086,9 +1115,8 @@ function logLayer3Gaps(result: Layer3Result, report: Record<string, unknown>, ev
     for (const key of ['shows_up', 'serves_you'] as const) {
       if (outside(dive[key].length, LIST_ITEMS[mode])) gaps.push(`${dive.name}.${key}: ${dive[key].length} items (target ${LIST_ITEMS[mode].join('-')}, ${mode})`);
     }
-    if (outside(dive.works_with.length, WORKS_WITH_ENTRIES[mode])) {
-      gaps.push(`${dive.name}.works_with: ${dive.works_with.length} entries (target ${WORKS_WITH_ENTRIES[mode].join('-')}, ${mode})`);
-    }
+    const synergies = dive.works_with.filter(w => w.kind !== 'tension').length;
+    if (synergies !== 1) gaps.push(`${dive.name}.works_with: ${synergies} synergy entries (target exactly 1)`);
     for (const [key, value] of Object.entries(dive.operating)) {
       const wc = countWords(value);
       if (wc < OPERATING_MIN_WORDS) gaps.push(`${dive.name}.operating.${key}: ${wc} words (floor ${OPERATING_MIN_WORDS})`);
@@ -1110,6 +1138,10 @@ function logLayer3Gaps(result: Layer3Result, report: Record<string, unknown>, ev
       }
       if (worksWithFromOwnSide(w.text, dive.name, w.partner)) {
         gaps.push(`${dive.name}.works_with[${w.partner}].text: possibly written from the card's own side (${dive.name} named before ${w.partner}): "${w.text}"`);
+      }
+      if (w.kind === 'tension') {
+        if (overlaps(w.text, dive.friction)) gaps.push(`${dive.name}.works_with[${w.partner}] (tension): overlaps the card's own friction`);
+        if (overlaps(w.text, dive.under_pressure)) gaps.push(`${dive.name}.works_with[${w.partner}] (tension): overlaps the card's own under_pressure`);
       }
     }
 

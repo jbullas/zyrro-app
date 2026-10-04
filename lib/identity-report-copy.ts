@@ -38,7 +38,8 @@ export const IDENTITY_REPORT_COPY = {
     evidence: 'Evidence from your story',
     showsUp: 'How this shows up in your life',
     servesYou: 'Where this serves you',
-    worksWith: 'Works with',
+    worksBestWith: 'Works best with',
+    watchOutFor: 'Watch out for',
     operating: 'How it shapes the way you operate',
     operatingLabels: {
       at_work: 'At work',
