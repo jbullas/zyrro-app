@@ -66,7 +66,7 @@ Do not hardcode font sizes inline.
 ## Page layout
 - All pages use the same max-width container 
   as the homepage
-- Content and bottom nav must be the same width
+- The header carries the main navigation; its inner container is max-width 1160px, centred (see branding-guidelines.md, Header)
 - Screen padding: 16-18px horizontal
 
 Routes are defined by `app/`. See `product-decisions.md`

@@ -428,35 +428,25 @@ p {
   width: 100%;
 }
 
-/* ── BOTTOM NAV SHELL ── */
-.bottom-nav {
-  background: #fff;
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-  padding-bottom: 10px;
-}
-
 /* ── HEADER NAV ── */
-.nav-spacer {
-  height: 12px;
-}
-
+/* #154: the main nav lives in the header (the old bottom nav is gone). Inner
+   container matches the V3 page width; under 700px the nav row collapses to a
+   menu button (see the 700px media query at the end of the file). */
 .nav-bar {
-  display: grid;
-  grid-template-columns: 48px 1fr 48px;
-  align-items: center;
-  padding: 8px 16px 14px;
-}
-
-.nav-center {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 12px 24px;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .nav-end {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 8px;
 }
 
 .nav-icon-link {
@@ -472,39 +462,29 @@ p {
   width: auto;
 }
 
-/* ── BOTTOM NAV ── */
+/* Nav row and its items: white on the header gradient. Also used for the items
+   inside the mobile menu panel (.nav-menu), which sits on the same gradient. */
 .nav-inner {
-  max-width: 640px;
-  margin: 0 auto;
   display: flex;
-  width: 100%;
+  align-items: center;
+  gap: 6px;
 }
 
 .nav-btn {
-  flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 0 3px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #1E1E1E;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 400;
+  color: rgba(255,255,255,0.9);
   background: none;
   border: none;
+  border-radius: 999px;
+  text-decoration: none;
   cursor: pointer;
-  position: relative;
-}
-
-.nav-active-bar {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 24px;
-  height: 2px;
-  background: var(--gradient-cta);
-  border-radius: 0 0 2px 2px;
+  white-space: nowrap;
 }
 
 /* ── CTA BUTTON ── */
@@ -1959,14 +1939,23 @@ p {
   margin: 0;
 }
 
-/* ── BOTTOM NAV: muted items + "coming soon" message ── */
+/* ── HEADER NAV (#154): item states, brand, menu, avatar ── */
+/* Active item: white, bold, translucent pill. Muted ("Coming soon") items:
+   45% white. Muted comes after active so a muted page that is also active
+   (e.g. /dashboard) keeps its pill but stays dimmed, as the old bottom nav did. */
+.nav-btn--active {
+  color: #fff;
+  font-weight: 700;
+  background: rgba(255,255,255,0.16);
+}
+
 .nav-btn--muted {
-  opacity: 0.25;
+  color: rgba(255,255,255,0.45);
 }
 
 .nav-coming-soon {
   position: absolute;
-  top: -28px;
+  top: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
   font-size: 12px;
@@ -1976,4 +1965,84 @@ p {
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   white-space: nowrap;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.nav-tagline {
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+}
+
+.nav-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-avatar-bg);
+  border: 1.5px solid rgba(255,255,255,0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+/* Mobile menu panel: drops down from the header on the same gradient surface. */
+.nav-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--gradient);
+  padding: 8px 16px 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+
+.nav-menu nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 44x44 transparent icon button (menu button; /identity row toggles). */
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* The header menu button only shows once the nav row collapses (700px below). */
+.nav-end > .icon-btn {
+  display: none;
+  color: #fff;
+}
+
+@media (max-width: 1000px) {
+  .nav-tagline { display: none; }
+}
+
+@media (max-width: 700px) {
+  .nav-bar { padding: 10px 16px; }
+  .nav-inner { display: none; }
+  .nav-end > .icon-btn { display: flex; }
 }

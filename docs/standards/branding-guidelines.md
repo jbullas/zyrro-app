@@ -53,7 +53,7 @@ Always appears in:
 * Progress bar (question flow)  
 * Step number circles  
 * Active card border (gradient outline, 1.5px)  
-* Bottom nav active indicator (top edge of active tab)  
+* Evidence line rule (3px rule beside each "Evidence from your story" line in the expanded signature card on /identity)  
 * CTA strip at bottom of report
 
 Never appears in :
@@ -71,7 +71,7 @@ Never appears in :
 ## Icons
 
 * header UI icons (share, login): rgba(255,255,255,0.85)
-* nav: `--color-text-primary`
+* header nav and menu button: white on the gradient (see Header below)
 
 # Typography
 
@@ -106,6 +106,7 @@ Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 * Plan: ti-calendar  
 * Mentor: ti-compass  
 * Login: ti-login (pre-registration only)  
+* Menu: ti-menu-2 (header, under 700px; ti-x while open)  
 * Share: ti-share  
 * Arrow: ti-arrow-right (active/CTA)
 
@@ -114,18 +115,17 @@ Tabler Icons (ti- prefix). All UI icons drawn from this set exclusively.
 ## Header
 
 * Background: brand gradient  
-* Height: auto — status bar \+ nav row \+ optional greeting  
-* Logo full wordmark left, login/account icon right  
+* Inner container: max-width 1160px, centred  
+* Left: full logo (image) and the tagline "Know Yourself. Create What's Next." (tagline hidden under 1000px)  
+* Right: main nav, then the login/account icon  
 * No page titles.  
 * No back links.  
-* Navigation via bottom nav only.
-
-## Bottom Navigation
-
-* Background: `--color-surface`
-* Border top: 0.5px solid rgba(0,0,0,0.07)
-* Active indicator: 2px `--gradient` bar at top edge, 24px wide, centered on active tab
-* Label: `--color-text-primary`
+* The header carries the main navigation: Dashboard, Identity, Path, Plan, Mentor (text items).  
+  * Active item: white, bold, on a translucent white pill.  
+  * Muted ("Coming soon") items: 45% white; tapping shows "Coming soon" and does not navigate.  
+  * Other items: 90% white.  
+  * Hidden on the homepage, and on /start until the user is logged in.  
+  * Under 700px the nav collapses to a 44px menu button that opens the same items on the gradient; it closes on selection, on Escape and on a tap outside.
 
 ## Cards
 

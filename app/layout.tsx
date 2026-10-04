@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Header from '@/components/Header';
-import BottomNav from '@/components/BottomNav';
 import { AuthUserProvider } from '@/lib/use-auth-user';
 
 export const metadata: Metadata = {
@@ -28,7 +27,6 @@ export default function RootLayout({
           <main className="app-main">
             {children}
           </main>
-          <BottomNav />
         </AuthUserProvider>
       </body>
     </html>

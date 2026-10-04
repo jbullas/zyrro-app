@@ -22,9 +22,13 @@ This section is the tier/purpose map, not the route source.
 
 ---
 
-## Bottom Navigation
-Logged-in: visible on all pages.
-Logged-out: hidden on all pages.
+## Navigation
+The header carries the main navigation: Dashboard, Identity, Path, Plan, Mentor (text items).
+- Active item: white, bold, on a translucent white pill.
+- Muted ("Coming soon") items: 45% white; tapping shows "Coming soon" and does not navigate.
+- Other items: 90% white.
+- Hidden on the homepage, and on /start until the user is logged in.
+- Under 700px the nav collapses to a 44px menu button that opens the same items on the gradient; it closes on selection, on Escape and on a tap outside.
 The page handles gating, not the nav.
 
 ---
