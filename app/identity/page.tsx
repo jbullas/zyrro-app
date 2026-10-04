@@ -46,7 +46,7 @@ interface IdentityReport {
   cover: {
     prepared_for: string;
     named_identity: string;
-    identity_context: string;
+    identity_context?: string; // #154: retired, absent on 1.4 reports
     report_metadata: string;
     identity_thesis: string;
   };
@@ -400,7 +400,8 @@ export default function IdentityPage() {
           <h1>
             {nameLine2 ? <>{nameLine1}<br />{nameLine2}</> : nameLine1}
           </h1>
-          <p className="cover-context-line">{cover.prepared_for} · {cover.identity_context}</p>
+          {/* #154: identity_context is absent on 1.4 reports — guarded so the line doesn't end in a dangling separator; pre-1.4 reports render unchanged. */}
+          <p className="cover-context-line">{cover.prepared_for}{cover.identity_context ? ` · ${cover.identity_context}` : ''}</p>
           <p className="identity-thesis">{cover.identity_thesis}</p>
           <p>{constellation_synthesis.synthesis}</p>
         </div>

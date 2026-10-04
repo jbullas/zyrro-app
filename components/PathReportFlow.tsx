@@ -181,7 +181,7 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
   const content = report.content;
   const {
     chosen_candidate, summary, what_this_could_be, why_it_fits, life_it_leads_toward, strategic_decisions,
-    prepared_for, identity_context, project_name,
+    prepared_for, project_name,
   } = content;
 
   // why_it_fits and life_it_leads_toward are both generated as two
@@ -254,7 +254,8 @@ export default function PathReportFlow({ report, naming }: PathReportFlowProps) 
           <div className="section cover">
             <p className="eyebrow">Your Path</p>
             <h1>{chosen_candidate.name}</h1>
-            <p className="cover-context-line">{prepared_for} · {identity_context}</p>
+            {/* #154: identity_context retired from both reports — old rows that still store it render without it too. */}
+            <p className="cover-context-line">{prepared_for}</p>
             {project_name && <p className="cover-context-line">{project_name}</p>}
             <p className="identity-thesis">{chosen_candidate.core_statement}</p>
             <p>{summary}</p>

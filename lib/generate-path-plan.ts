@@ -4,6 +4,7 @@ import { getChatCompletion } from '@/lib/llm';
 import { PATH_PLAN_PROMPT } from '@/lib/prompts/path-plan';
 import type { PathPlanArtifactContent, PathOption } from '@/lib/artifact-schemas';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import { omitLayer3Fields } from '@/lib/generate-identity-report';
 
 function createServiceClient() {
   return createSupabaseAdmin(
@@ -37,7 +38,9 @@ async function runPlanGeneration(
         { role: 'system', content: PATH_PLAN_PROMPT },
         {
           role: 'user',
-          content: JSON.stringify({ identity_report: identityReport, chosen_option: chosenOption }),
+          // #154: Layer 3 fields (deep dives etc.) are /identity display content,
+          // not plan input — stripped so the plan prompt's input doesn't grow by their size.
+          content: JSON.stringify({ identity_report: omitLayer3Fields(identityReport), chosen_option: chosenOption }),
         },
       ],
       max_tokens: 6000,

@@ -108,7 +108,9 @@ export interface ReportCover {
   report_title: "ZYRRO IDENTITY REPORT";
   prepared_for: string;
   named_identity: string;       // "THE [Identity Name]"
-  identity_context: string;     // "[role] · [industry] · [phase]"
+  // #154: retired — no longer generated (identity prompt) or shown (/identity,
+  // Path report cover). Optional so pre-1.4 reports, which all have it, still parse.
+  identity_context?: string;    // "[role] · [industry] · [phase]"
   report_metadata: string;      // "Discovery Report · Version 1.0 · [year]"
   identity_thesis: string;      // 8-18 words
 }
@@ -169,9 +171,10 @@ export interface ReframeTeaser {
 
 export interface IdentitySignatureReportArtifactContent {
   artifact_type: "identity_signature_report";
-  schema_version: "1.0" | "1.1" | "1.2" | "1.3";
+  schema_version: "1.0" | "1.1" | "1.2" | "1.3" | "1.4";
   cover: ReportCover;
-  what_this_report_is: string;                                // 80-140 words
+  // #154: retired (never rendered). Optional so pre-1.4 reports still parse.
+  what_this_report_is?: string;                               // 80-140 words
   signature_profile_summary: SignatureProfileSummary;
   primary_constellation: PrimarySignatureAnalysis[];          // exactly 5
   secondary_signature_summary: string;                        // always present, even when secondary_signature_analysis is empty
@@ -181,6 +184,7 @@ export interface IdentitySignatureReportArtifactContent {
   energisers: string[];      // 6-10 items
   friction_points: string[]; // 6-10 items
   domain_profile: DomainProfile;
+  // #154: retired — no longer generated from 1.4 on.
   // #103: Layer 2's own prose summary of domain_profile. Optional —
   // undefined on every report generated before this shipped (no backfill,
   // same non-determinism precedent as #62's raw_signature_analysis).
@@ -201,6 +205,61 @@ export interface IdentitySignatureReportArtifactContent {
     emerging_signatures: string[];
     suppressed_signatures: string[];
   };
+  // #154 step 1: Layer 3 content (lib/generate-identity-report.ts's
+  // generateLayer3). All optional — absent on every pre-1.4 report, and on a
+  // 1.4 report whose Layer 3 failed (the Layer 2 report is saved without them).
+  // Not read by /path: generate-path-plan strips them from its input
+  // (omitLayer3Fields).
+  signature_deep_dives?: SignatureDeepDive[]; // one per primary/secondary signature with ≥1 tagged evidence unit
+  pairings?: PairingLine[];                   // 2-3
+  distinctive_pattern?: DistinctivePattern;
+  pattern_to_notice?: PatternToNotice;
+}
+
+export interface SignatureDeepDive {
+  name: string;                 // matches a primary_constellation or secondary_signature_analysis name
+  what_this_means: [string, string]; // 2 paragraphs, ~40-70 words each (~30-50 when the signature has 1 tagged unit)
+  evidence: EvidenceItem[];     // 0-3, capped at the signature's own tagged evidence units
+  shows_up: string[];           // 3-4 short phrases (2 when 1 tagged unit)
+  serves_you: string[];         // 3-4 short phrases (2 when 1 tagged unit)
+  works_with: WorksWith[];      // 1-2 (1 when 1 tagged unit)
+  operating: {
+    at_work: string;            // one sentence each, minimum 12 words, target 16
+    thinking: string;
+    with_people: string;
+    deciding: string;
+  };
+  friction: string;             // 2-3 sentences
+  under_pressure: string;       // 1-2 sentences
+}
+
+export interface EvidenceItem {
+  text: string;                 // one sentence, ≤30 words
+  source_question: number;      // 1-13, from one of this signature's tagged evidence units
+}
+
+export interface WorksWith {
+  partner: string;              // another signature in this report
+  text: string;                 // 2-3 sentences: what the partner does for THIS signature
+  evidence: string;             // one sentence
+  source_question: number;      // from a unit tagged to this signature or the partner
+}
+
+export interface PairingLine {
+  a: string;
+  b: string;
+  line: string;                 // one short sentence
+}
+
+export interface DistinctivePattern {
+  steps: string[];              // 3-5
+  paragraphs: [string, string];
+}
+
+export interface PatternToNotice {
+  headline: string;
+  body: string;                 // 2-4 sentences
+  takeaway: string;
 }
 
 // Identity Reframe (artifact type: "identity_reframe")

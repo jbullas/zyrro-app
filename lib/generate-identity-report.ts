@@ -1,9 +1,18 @@
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
-import { getChatCompletion } from '@/lib/llm';
+import { getChatCompletion, getChatCompletionDetailed } from '@/lib/llm';
 import { DETECTION_PROMPT } from '@/lib/prompts/identity-analysis';
 import { LAYER_2_PROMPT } from '@/lib/prompts/identity-report';
+import { LAYER_3_SIGNATURE_PROMPT, LAYER_3_REPORT_LEVEL_PROMPT } from '@/lib/prompts/identity-report-deep-dive';
 import { DOMAINS } from '@/lib/signatures';
-import type { DomainProfile } from '@/lib/artifact-schemas';
+import type {
+  DomainProfile,
+  SignatureDeepDive,
+  EvidenceItem,
+  WorksWith,
+  PairingLine,
+  DistinctivePattern,
+  PatternToNotice,
+} from '@/lib/artifact-schemas';
 
 export type DiscoveryAnswer = {
   question_number: number;
@@ -375,33 +384,23 @@ function logReframeTeaserRecapOverlap(
 // (2026-08-10 changelog) — the old floors (evidence_analysis 200,
 // how_you_operate 120) were never once cleared across 30 real samples
 // each, so they were lowered to what the fields actually produce rather
-// than kept as an unenforceable aspiration. domain_profile_summary's
-// floor moved up slightly (80→90) since its old range's ceiling was never
-// approached either. These are still just a floor for the log-only
-// check below, same "not a hard requirement to optimize for" framing as
-// the prompt's own new guidance — see logStage2WordCountAndDomainGaps.
+// than kept as an unenforceable aspiration. These are still just a floor
+// for the log-only check below, same "not a hard requirement to optimize
+// for" framing as the prompt's own new guidance — see
+// logStage2WordCountGaps. (#154 retired domain_profile_summary and its
+// floor/domain-mention checks along with it.)
 const EVIDENCE_ANALYSIS_MIN_WORDS = 140;
 const HOW_YOU_OPERATE_MIN_WORDS = 120;
-const DOMAIN_PROFILE_SUMMARY_MIN_WORDS = 90;
-const DOMAIN_NAMES = ['Visioning', 'Thinking', 'Connecting', 'Driving', 'Sensing'] as const;
 
 /**
  * #112 Stage 2: same "prompt instruction isn't reliably honored" pattern as
- * logReframeTeaserWordCountGaps above, applied to the three fields whose
- * targets were revised this stage. Log-only, no retry loop, same
- * convention as everywhere else in this file.
- *
- * Also checks domain_profile_summary names all 5 domains — a cheap,
- * mechanical proxy for this stage's new "name all 5 domains' relative
- * strength, not just the top 1-2" content rule, not a full quality check
- * (doesn't verify the field actually describes relative strength, or that
- * it avoids restating identity_thesis/constellation_synthesis — those need
- * eyes-on review, not a regex).
+ * logReframeTeaserWordCountGaps above, applied to the fields whose targets
+ * were revised this stage. Log-only, no retry loop, same convention as
+ * everywhere else in this file.
  */
-function logStage2WordCountAndDomainGaps(report: {
+function logStage2WordCountGaps(report: {
   primary_constellation?: unknown;
   how_you_operate?: unknown;
-  domain_profile_summary?: unknown;
 }): void {
   const gaps: string[] = [];
 
@@ -423,22 +422,31 @@ function logStage2WordCountAndDomainGaps(report: {
     }
   }
 
-  const domainSummaryWords = countWords(report.domain_profile_summary);
-  if (domainSummaryWords < DOMAIN_PROFILE_SUMMARY_MIN_WORDS) {
-    gaps.push(`domain_profile_summary: ${domainSummaryWords} words (floor ${DOMAIN_PROFILE_SUMMARY_MIN_WORDS})`);
-  }
-
   if (gaps.length > 0) {
     console.warn('#112 Stage 2 word-count floor gap(s):', gaps.join('; '));
   }
+}
 
-  if (typeof report.domain_profile_summary === 'string') {
-    const missingDomains = DOMAIN_NAMES.filter(
-      name => !new RegExp(`\\b${name}\\b`, 'i').test(report.domain_profile_summary as string)
-    );
-    if (missingDomains.length > 0) {
-      console.warn(`domain_profile_summary: missing domain name mention(s): ${missingDomains.join(', ')}`);
-    }
+const ENERGISER_FRICTION_MIN_WORDS = 3;
+const ENERGISER_FRICTION_MAX_WORDS = 6;
+
+/**
+ * #154: energisers / friction_points are short phrases (minimum 3 words,
+ * target 4, maximum 6 — see the Layer 2 prompt). Log-only, same convention
+ * as the other log… functions: the exact strings seed /path Direction, which
+ * validates selections against them, so they are never rewritten here.
+ * Exported so verification scripts can run it against Layer 2 output alone.
+ */
+export function logEnergiserFrictionLengthGaps(report: { energisers?: unknown; friction_points?: unknown }): void {
+  for (const key of ['energisers', 'friction_points'] as const) {
+    const items = report[key];
+    if (!Array.isArray(items)) continue;
+    items.forEach((item, i) => {
+      const wc = countWords(item);
+      if (wc < ENERGISER_FRICTION_MIN_WORDS || wc > ENERGISER_FRICTION_MAX_WORDS) {
+        console.warn(`#154 ${key}[${i}]: "${item}" is ${wc} word(s) (target ${ENERGISER_FRICTION_MIN_WORDS}-${ENERGISER_FRICTION_MAX_WORDS})`);
+      }
+    });
   }
 }
 
@@ -469,6 +477,756 @@ function logCategorizationComplianceGaps(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// #154 step 1 — Layer 3: per-signature deep dives + report-level sections.
+//
+// Separate step after Layer 2 rather than a bigger Layer 2 call: Layer 2
+// already produces the whole /path-read report in one 8000-token call, and
+// a single combined Layer 3 call measurably dropped signatures (5/8 and 3/5
+// deep dives in the 2026-10-04 timing probe) where one call per signature
+// stayed complete. Shape: one call per signature with ≥1 tagged evidence
+// unit, at most LAYER_3_CONCURRENCY in flight (the org's gpt-4o limit is
+// 30k TPM — an uncapped 8-way fan-out right after Layer 2 hit 429s in the
+// probe), then one report-level call that builds pairings from the deep
+// dives' works_with. Calls fail independently: a deep dive that still fails
+// after its retries is omitted (that signature renders like the 0-unit
+// case), and a failed report-level call omits only pairings /
+// distinctive_pattern / pattern_to_notice. Layer 2's report is never lost
+// (see buildIdentityReport). Concurrency 3 and 8 rate-limit retries come from
+// the 2026-10-04 verification, where 4-way concurrency used up all 5 retries
+// on one deep dive.
+// ─────────────────────────────────────────────────────────────────────────
+
+const LAYER_3_CONCURRENCY = 3;
+const LAYER_3_MAX_EVIDENCE_ITEMS = 3;
+const LAYER_3_SIGNATURE_MAX_TOKENS = 3000;
+const LAYER_3_REPORT_LEVEL_MAX_TOKENS = 2000;
+const LAYER_3_MAX_429_RETRIES = 8;
+
+/** Layer 3 fields, also stripped from the generate-path-plan input (see omitLayer3Fields). */
+export const LAYER_3_FIELDS = ['signature_deep_dives', 'pairings', 'distinctive_pattern', 'pattern_to_notice'] as const;
+
+/**
+ * #154: copy of an identity report without the Layer 3 fields, for consumers
+ * that send the whole report to a prompt and shouldn't grow by Layer 3's
+ * size (generate-path-plan). Non-object input is returned unchanged.
+ */
+export function omitLayer3Fields<T>(report: T): T {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return report;
+  const copy = { ...(report as Record<string, unknown>) };
+  for (const field of LAYER_3_FIELDS) delete copy[field];
+  return copy as T;
+}
+
+type EvidenceUnit = {
+  quote_or_paraphrase?: unknown;
+  source_question?: unknown;
+  signal_types?: unknown;
+  emotional_weight?: unknown;
+  primary_signature_candidate?: unknown;
+  secondary_signature_candidate?: unknown;
+};
+
+/**
+ * Evidence units tagged to a signature through EITHER candidate field — the
+ * #92 handling approved for #154 (deliberately not the secondary-field-only
+ * check enforceSecondaryEvidenceFloor uses; that mismatch is #92's to fix).
+ */
+function taggedEvidenceUnits(evidenceUnits: unknown, name: string): EvidenceUnit[] {
+  if (!Array.isArray(evidenceUnits)) return [];
+  return evidenceUnits.filter(
+    (u): u is EvidenceUnit =>
+      !!u && typeof u === 'object' &&
+      ((u as EvidenceUnit).primary_signature_candidate === name || (u as EvidenceUnit).secondary_signature_candidate === name)
+  );
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every(isNonEmptyString);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * One Layer 3 LLM call: 429s back off and retry (honouring retry-after-ms /
+ * retry-after when OpenAI sends them) up to LAYER_3_MAX_429_RETRIES times;
+ * any other failure — API error, unparseable JSON, failed shape check — gets
+ * exactly one retry. Throws if the retry fails too. SDK-level retries are
+ * off so this is the only retry layer. Logs one usage line per successful
+ * call (incl. prompt-cache hits).
+ */
+async function runLayer3Call<T>(
+  label: string,
+  system: string,
+  user: string,
+  maxTokens: number,
+  validate: (parsed: unknown) => T | null,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const started = Date.now();
+      let result: Awaited<ReturnType<typeof getChatCompletionDetailed>> | undefined;
+      for (let rateLimitRetry = 0; ; rateLimitRetry++) {
+        try {
+          result = await getChatCompletionDetailed({
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: user },
+            ],
+            max_tokens: maxTokens,
+            temperature: 0,
+            maxRetries: 0,
+          });
+          break;
+        } catch (error) {
+          const status = (error as { status?: unknown })?.status;
+          if (status !== 429 || rateLimitRetry >= LAYER_3_MAX_429_RETRIES) throw error;
+          const headers = (error as { headers?: { get?: (name: string) => string | null } })?.headers;
+          const retryAfterMs = Number(headers?.get?.('retry-after-ms'));
+          const retryAfterS = Number(headers?.get?.('retry-after'));
+          const waitMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+            ? retryAfterMs + 250
+            : Number.isFinite(retryAfterS) && retryAfterS > 0
+              ? retryAfterS * 1000 + 250
+              : 1000 * 2 ** rateLimitRetry + Math.floor(Math.random() * 500);
+          console.warn(`#154 Layer 3 ${label}: 429 rate limit, retry ${rateLimitRetry + 1}/${LAYER_3_MAX_429_RETRIES} in ${waitMs}ms`);
+          await sleep(waitMs);
+        }
+      }
+      const ms = Date.now() - started;
+      console.log(
+        `#154 Layer 3 ${label}: ${ms}ms prompt=${result.usage.prompt_tokens} cached=${result.usage.cached_tokens} ` +
+        `completion=${result.usage.completion_tokens} finish=${result.finish_reason}`
+      );
+      const parsed = JSON.parse(result.content ?? '');
+      const valid = validate(parsed);
+      if (valid === null) throw new Error(`${label}: response failed shape check`);
+      return valid;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) console.warn(`#154 Layer 3 ${label}: attempt 1 failed, retrying once:`, error instanceof Error ? error.message : error);
+    }
+  }
+  throw lastError;
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight, preserving order. */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function isStringPair(v: unknown): v is [string, string] {
+  return Array.isArray(v) && v.length === 2 && isNonEmptyString(v[0]) && isNonEmptyString(v[1]);
+}
+
+function validateDeepDive(parsed: unknown): SignatureDeepDive | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const d = parsed as Record<string, unknown>;
+  const operating = d.operating as Record<string, unknown> | undefined;
+  if (
+    !isStringPair(d.what_this_means) ||
+    !Array.isArray(d.evidence) ||
+    !isStringArray(d.shows_up) ||
+    !isStringArray(d.serves_you) ||
+    !Array.isArray(d.works_with) ||
+    !operating || typeof operating !== 'object' ||
+    !isNonEmptyString(operating.at_work) ||
+    !isNonEmptyString(operating.thinking) ||
+    !isNonEmptyString(operating.with_people) ||
+    !isNonEmptyString(operating.deciding) ||
+    !isNonEmptyString(d.friction) ||
+    !isNonEmptyString(d.under_pressure)
+  ) return null;
+
+  return {
+    name: typeof d.name === 'string' ? d.name : '',
+    what_this_means: [d.what_this_means[0], d.what_this_means[1]],
+    evidence: d.evidence
+      .filter((e): e is EvidenceItem =>
+        !!e && typeof e === 'object' &&
+        isNonEmptyString((e as EvidenceItem).text) &&
+        typeof (e as EvidenceItem).source_question === 'number')
+      .map(e => ({ text: e.text, source_question: e.source_question })),
+    shows_up: d.shows_up,
+    serves_you: d.serves_you,
+    works_with: d.works_with
+      .filter((w): w is WorksWith =>
+        !!w && typeof w === 'object' &&
+        isNonEmptyString((w as WorksWith).partner) &&
+        isNonEmptyString((w as WorksWith).text) &&
+        isNonEmptyString((w as WorksWith).evidence) &&
+        typeof (w as WorksWith).source_question === 'number')
+      .map(w => ({ partner: w.partner, text: w.text, evidence: w.evidence, source_question: w.source_question })),
+    operating: {
+      at_work: operating.at_work,
+      thinking: operating.thinking,
+      with_people: operating.with_people,
+      deciding: operating.deciding,
+    },
+    friction: d.friction,
+    under_pressure: d.under_pressure,
+  };
+}
+
+type Layer3ReportLevel = {
+  pairings: PairingLine[];
+  distinctive_pattern: DistinctivePattern;
+  pattern_to_notice: PatternToNotice;
+};
+
+function validateReportLevel(parsed: unknown): Layer3ReportLevel | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const r = parsed as Record<string, unknown>;
+  const dp = r.distinctive_pattern as Record<string, unknown> | undefined;
+  const ptn = r.pattern_to_notice as Record<string, unknown> | undefined;
+  if (
+    !Array.isArray(r.pairings) ||
+    !dp || !isStringArray(dp.steps) ||
+    !isStringPair(dp.paragraphs) ||
+    !ptn || !isNonEmptyString(ptn.headline) || !isNonEmptyString(ptn.body) || !isNonEmptyString(ptn.takeaway)
+  ) return null;
+
+  return {
+    pairings: r.pairings
+      .filter((p): p is PairingLine =>
+        !!p && typeof p === 'object' &&
+        isNonEmptyString((p as PairingLine).a) &&
+        isNonEmptyString((p as PairingLine).b) &&
+        isNonEmptyString((p as PairingLine).line))
+      .map(p => ({ a: p.a, b: p.b, line: p.line })),
+    distinctive_pattern: { steps: dp.steps, paragraphs: [dp.paragraphs[0], dp.paragraphs[1]] },
+    pattern_to_notice: { headline: ptn.headline, body: ptn.body, takeaway: ptn.takeaway },
+  };
+}
+
+type Layer3Signature = {
+  name: string;
+  kind: 'primary' | 'secondary';
+  domain: unknown;
+  score: unknown;
+  core_statement: unknown;
+  main_report_text: unknown; // evidence_analysis (primary) or analysis (secondary)
+  tension: unknown;          // primary only
+};
+
+// Every field optional: each is omitted when the call(s) behind it fail.
+type Layer3Result = {
+  signature_deep_dives?: SignatureDeepDive[];
+  pairings?: PairingLine[];
+  distinctive_pattern?: DistinctivePattern;
+  pattern_to_notice?: PatternToNotice;
+};
+
+function layer3Signatures(report: Record<string, unknown>): Layer3Signature[] {
+  const primaries = Array.isArray(report.primary_constellation) ? report.primary_constellation : [];
+  const secondaries = Array.isArray(report.secondary_signature_analysis) ? report.secondary_signature_analysis : [];
+  return [
+    ...primaries.map((s: Record<string, unknown>) => ({
+      name: s?.name as string, kind: 'primary' as const, domain: s?.domain, score: s?.score,
+      core_statement: s?.core_statement, main_report_text: s?.evidence_analysis, tension: s?.tension,
+    })),
+    ...secondaries.map((s: Record<string, unknown>) => ({
+      name: s?.name as string, kind: 'secondary' as const, domain: s?.domain, score: s?.score,
+      core_statement: s?.core_statement, main_report_text: s?.analysis, tension: undefined,
+    })),
+  ].filter(s => isNonEmptyString(s.name));
+}
+
+/**
+ * A signature with exactly one tagged evidence unit gets the reduced deep
+ * dive (requested via evidence_mode, then enforced on the response).
+ */
+type EvidenceMode = 'standard' | 'reduced';
+
+const REDUCED_LIST_ITEMS = 2;
+const REDUCED_WORKS_WITH = 1;
+
+function evidenceModeFor(unitCount: number): EvidenceMode {
+  return unitCount === 1 ? 'reduced' : 'standard';
+}
+
+/**
+ * Generates the Layer 3 fields for an already-post-processed Layer 2 report.
+ * A single failed call never throws here: see the section comment above.
+ */
+async function generateLayer3(report: Record<string, unknown>, evidenceUnits: unknown): Promise<Layer3Result> {
+  const signatures = layer3Signatures(report);
+  const cover = report.cover as { identity_thesis?: unknown } | undefined;
+  const synthesis = (report.constellation_synthesis as { synthesis?: unknown } | undefined)?.synthesis;
+
+  const allEvidenceUnits = Array.isArray(evidenceUnits)
+    ? evidenceUnits.map((u: EvidenceUnit) => ({
+        source_question: u?.source_question,
+        quote_or_paraphrase: u?.quote_or_paraphrase,
+        primary_signature_candidate: u?.primary_signature_candidate,
+        secondary_signature_candidate: u?.secondary_signature_candidate,
+      }))
+    : [];
+  const signaturesInReport = signatures.map(s => ({ name: s.name, kind: s.kind, domain: s.domain, score: s.score, core_statement: s.core_statement }));
+
+  // Identical across every deep-dive call for this user and placed first in
+  // the user message, so it extends the cached system-prompt prefix. All
+  // evidence units are included so works_with can cite the partner's units.
+  const reportContext = JSON.stringify({
+    signatures_in_report: signaturesInReport,
+    identity_thesis: cover?.identity_thesis,
+    constellation_synthesis: synthesis,
+    how_you_operate: report.how_you_operate,
+    energisers: report.energisers,
+    friction_points: report.friction_points,
+    evidence_units: allEvidenceUnits,
+  });
+
+  // #92 handling: a signature with no tagged evidence gets no deep dive at
+  // all (enforced here, not left to the prompt), and evidence is capped at
+  // the number of units it does have.
+  const targets = signatures.map(s => ({ signature: s, units: taggedEvidenceUnits(evidenceUnits, s.name) }));
+  for (const t of targets) {
+    if (t.units.length === 0) {
+      console.warn(`#154 Layer 3: ${t.signature.name} has 0 tagged evidence units — no deep dive generated`);
+    } else if (t.units.length === 1) {
+      console.log(`#154 Layer 3: ${t.signature.name} has 1 tagged evidence unit — reduced deep dive requested`);
+    }
+  }
+  const withEvidence = targets.filter(t => t.units.length > 0);
+
+  const deepDiveResults = await mapWithConcurrency(withEvidence, LAYER_3_CONCURRENCY, async ({ signature, units }): Promise<SignatureDeepDive | null> => {
+    const maxEvidence = Math.min(LAYER_3_MAX_EVIDENCE_ITEMS, units.length);
+    const mode = evidenceModeFor(units.length);
+    const target = JSON.stringify({
+      target_signature: {
+        name: signature.name,
+        kind: signature.kind,
+        domain: signature.domain,
+        score: signature.score,
+        core_statement: signature.core_statement,
+        [signature.kind === 'primary' ? 'evidence_analysis' : 'analysis']: signature.main_report_text,
+        ...(signature.kind === 'primary' && { tension: signature.tension }),
+      },
+      tagged_evidence_units: units.map(u => ({
+        source_question: u.source_question,
+        quote_or_paraphrase: u.quote_or_paraphrase,
+        signal_types: u.signal_types,
+        emotional_weight: u.emotional_weight,
+      })),
+      tagged_unit_count: units.length,
+      evidence_mode: mode,
+      max_evidence_items: maxEvidence,
+    });
+    let dive: SignatureDeepDive;
+    try {
+      dive = await runLayer3Call(
+        `deep dive ${signature.name}`,
+        LAYER_3_SIGNATURE_PROMPT,
+        `REPORT CONTEXT:\n${reportContext}\n\nTARGET:\n${target}`,
+        LAYER_3_SIGNATURE_MAX_TOKENS,
+        validateDeepDive,
+      );
+    } catch (error) {
+      console.error(`#154 Layer 3: deep dive ${signature.name} failed after its retries — omitted, the rest of the report is kept:`, error instanceof Error ? error.message : error);
+      return null;
+    }
+    if (dive.name !== signature.name) {
+      console.warn(`#154 Layer 3: deep dive name "${dive.name}" overwritten with requested signature "${signature.name}"`);
+      dive.name = signature.name;
+    }
+    if (dive.evidence.length > maxEvidence) {
+      console.warn(`#154 Layer 3: ${signature.name} evidence trimmed from ${dive.evidence.length} to its cap of ${maxEvidence} (tagged units)`);
+      dive.evidence = dive.evidence.slice(0, maxEvidence);
+    }
+    // Thin evidence: the reduced sizes are enforced, not just requested.
+    if (mode === 'reduced') {
+      for (const key of ['shows_up', 'serves_you'] as const) {
+        if (dive[key].length > REDUCED_LIST_ITEMS) {
+          console.warn(`#154 Layer 3: ${signature.name}.${key} trimmed from ${dive[key].length} to ${REDUCED_LIST_ITEMS} (reduced mode)`);
+          dive[key] = dive[key].slice(0, REDUCED_LIST_ITEMS);
+        }
+      }
+      if (dive.works_with.length > REDUCED_WORKS_WITH) {
+        console.warn(`#154 Layer 3: ${signature.name}.works_with trimmed from ${dive.works_with.length} to ${REDUCED_WORKS_WITH} (reduced mode)`);
+        dive.works_with = dive.works_with.slice(0, REDUCED_WORKS_WITH);
+      }
+    }
+    return dive;
+  });
+  const deepDives = deepDiveResults.filter((d): d is SignatureDeepDive => d !== null);
+
+  const reportLevelContext = JSON.stringify({
+    signatures_in_report: signaturesInReport,
+    how_you_operate: report.how_you_operate,
+    energisers: report.energisers,
+    friction_points: report.friction_points,
+    evidence_units: allEvidenceUnits,
+  });
+  const alreadyOnPage = JSON.stringify({ identity_thesis: cover?.identity_thesis, constellation_synthesis: synthesis });
+  let reportLevel: Layer3ReportLevel | null = null;
+  try {
+    reportLevel = await runLayer3Call(
+      'report-level',
+      LAYER_3_REPORT_LEVEL_PROMPT,
+      `REPORT CONTEXT:\n${reportLevelContext}\n\nALREADY SHOWN ON THE PAGE (do not restate):\n${alreadyOnPage}\n\nSIGNATURE DEEP DIVES:\n${JSON.stringify(
+        deepDives.map(d => ({ name: d.name, what_this_means: d.what_this_means, works_with: d.works_with, friction: d.friction }))
+      )}`,
+      LAYER_3_REPORT_LEVEL_MAX_TOKENS,
+      validateReportLevel,
+    );
+  } catch (error) {
+    console.error('#154 Layer 3: report-level call failed after its retries — pairings, distinctive_pattern and pattern_to_notice omitted:', error instanceof Error ? error.message : error);
+  }
+
+  const result: Layer3Result = {};
+  if (deepDives.length > 0) result.signature_deep_dives = deepDives;
+  if (reportLevel) {
+    // Pairings are only ever drawn from works_with: with no works_with data
+    // there is nothing to build them from, so they are omitted, not invented.
+    if (deepDives.some(d => d.works_with.length > 0)) {
+      result.pairings = reportLevel.pairings;
+    } else {
+      console.warn('#154 Layer 3: no works_with data in any deep dive — pairings omitted');
+    }
+    result.distinctive_pattern = reportLevel.distinctive_pattern;
+    result.pattern_to_notice = reportLevel.pattern_to_notice;
+  }
+  return result;
+}
+
+// Targets from docs/briefs/154-step1-identity-report-content.md §1, as
+// revised in the 2026-10-04 review of verification 3.
+const WHAT_THIS_MEANS_PARAGRAPH_WORDS: Record<EvidenceMode, [number, number]> = { standard: [40, 70], reduced: [30, 50] };
+const LIST_ITEMS: Record<EvidenceMode, [number, number]> = { standard: [3, 4], reduced: [2, 2] };
+const WORKS_WITH_ENTRIES: Record<EvidenceMode, [number, number]> = { standard: [1, 2], reduced: [1, 1] };
+const EVIDENCE_TEXT_MAX_WORDS = 30;
+const OPERATING_MIN_WORDS = 12; // floor only; the prompt asks for a target of 16
+
+// Overlap with these two fields is still logged, but neither is shown on the
+// redesigned /identity, so these lines are informational, not tuning targets.
+const INFO_ONLY = '(info only: field not shown on /identity)';
+
+function sentenceCount(text: string): number {
+  return splitSentences(text).length;
+}
+
+function overlaps(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  return hasOverlappingPhrase(normalizeWords(a), normalizeWords(b), CONSTELLATION_SYNTHESIS_MIN_OVERLAP_WORDS);
+}
+
+function mentionsName(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+}
+
+// Evidence lines should state only what happened. This catches the common
+// failure shape: a trailing ", <interpretive -ing verb> …" clause tacked on.
+const TRAILING_INTERPRETIVE_CLAUSE =
+  /,\s*(?:which\s+\w+\s+)?(indicating|demonstrating|showing|showcasing|highlighting|requiring|seeking|reflecting|revealing|suggesting|signalling|signaling|illustrating|underscoring|emphasising|emphasizing|evidencing|proving|activating|energising|energizing)\b/i;
+
+function trailingInterpretiveClause(text: string): string | null {
+  const match = TRAILING_INTERPRETIVE_CLAUSE.exec(text);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function outside(value: number, [min, max]: [number, number]): boolean {
+  return value < min || value > max;
+}
+
+/**
+ * #154: log-only backstops for Layer 3, same convention as the log…
+ * functions above — flags for review, never rewrites or blocks. (The
+ * enforced rules — 0 units → no deep dive, evidence capped at tagged units,
+ * reduced sizes for 1-unit signatures — live in generateLayer3.)
+ */
+function logLayer3Gaps(result: Layer3Result, report: Record<string, unknown>, evidenceUnits: unknown): void {
+  const signatures = layer3Signatures(report);
+  const names = new Set(signatures.map(s => s.name));
+  const byName = new Map(signatures.map(s => [s.name, s]));
+  const thesis = (report.cover as { identity_thesis?: unknown } | undefined)?.identity_thesis;
+  const synthesis = (report.constellation_synthesis as { synthesis?: unknown } | undefined)?.synthesis;
+  const questionsFor = (name: string) => new Set(taggedEvidenceUnits(evidenceUnits, name).map(u => u.source_question));
+  const gaps: string[] = [];
+  const dives = result.signature_deep_dives ?? [];
+
+  for (const dive of dives) {
+    const sig = byName.get(dive.name);
+    const units = taggedEvidenceUnits(evidenceUnits, dive.name);
+    const mode = evidenceModeFor(units.length);
+    const ownQuestions = questionsFor(dive.name);
+
+    // Evidence: source discipline + counts.
+    for (const e of dive.evidence) {
+      if (!ownQuestions.has(e.source_question)) {
+        gaps.push(`${dive.name}.evidence: source_question ${e.source_question} is not among its tagged units' questions [${[...ownQuestions].join(', ')}]`);
+      }
+      const wc = countWords(e.text);
+      if (wc > EVIDENCE_TEXT_MAX_WORDS) gaps.push(`${dive.name}.evidence: item ${wc} words (max ${EVIDENCE_TEXT_MAX_WORDS})`);
+      const clause = trailingInterpretiveClause(e.text);
+      if (clause) gaps.push(`${dive.name}.evidence: trailing interpretive clause (", ${clause} …"): "${e.text}"`);
+    }
+    const evidenceCap = Math.min(LAYER_3_MAX_EVIDENCE_ITEMS, units.length);
+    if (dive.evidence.length < evidenceCap) gaps.push(`${dive.name}.evidence: ${dive.evidence.length} items (cap ${evidenceCap})`);
+
+    // what_this_means: per-paragraph size, and about the person, not the signature.
+    const paragraphTarget = WHAT_THIS_MEANS_PARAGRAPH_WORDS[mode];
+    dive.what_this_means.forEach((para, i) => {
+      const wc = countWords(para);
+      if (outside(wc, paragraphTarget)) gaps.push(`${dive.name}.what_this_means[${i}]: ${wc} words (target ${paragraphTarget[0]}-${paragraphTarget[1]}, ${mode})`);
+    });
+    if (dive.what_this_means.some(para => mentionsName(para, dive.name))) {
+      gaps.push(`${dive.name}.what_this_means: contains the signature's own name`);
+    }
+
+    // List sizes for this mode.
+    for (const key of ['shows_up', 'serves_you'] as const) {
+      if (outside(dive[key].length, LIST_ITEMS[mode])) gaps.push(`${dive.name}.${key}: ${dive[key].length} items (target ${LIST_ITEMS[mode].join('-')}, ${mode})`);
+    }
+    if (outside(dive.works_with.length, WORKS_WITH_ENTRIES[mode])) {
+      gaps.push(`${dive.name}.works_with: ${dive.works_with.length} entries (target ${WORKS_WITH_ENTRIES[mode].join('-')}, ${mode})`);
+    }
+    for (const [key, value] of Object.entries(dive.operating)) {
+      const wc = countWords(value);
+      if (wc < OPERATING_MIN_WORDS) gaps.push(`${dive.name}.operating.${key}: ${wc} words (floor ${OPERATING_MIN_WORDS})`);
+    }
+    const frictionSentences = sentenceCount(dive.friction);
+    if (frictionSentences < 2 || frictionSentences > 3) gaps.push(`${dive.name}.friction: ${frictionSentences} sentence(s) (target 2-3)`);
+    const pressureSentences = sentenceCount(dive.under_pressure);
+    if (pressureSentences < 1 || pressureSentences > 2) gaps.push(`${dive.name}.under_pressure: ${pressureSentences} sentence(s) (target 1-2)`);
+
+    // works_with partners and their evidence source.
+    for (const w of dive.works_with) {
+      if (w.partner === dive.name) gaps.push(`${dive.name}.works_with: partner is the signature itself`);
+      else if (!names.has(w.partner)) gaps.push(`${dive.name}.works_with: partner "${w.partner}" is not a signature in this report`);
+      const clause = trailingInterpretiveClause(w.evidence);
+      if (clause) gaps.push(`${dive.name}.works_with[${w.partner}].evidence: trailing interpretive clause (", ${clause} …"): "${w.evidence}"`);
+      const allowed = new Set([...ownQuestions, ...questionsFor(w.partner)]);
+      if (!allowed.has(w.source_question)) {
+        gaps.push(`${dive.name}.works_with[${w.partner}]: source_question ${w.source_question} is not among ${dive.name}'s or ${w.partner}'s tagged units' questions [${[...allowed].join(', ')}]`);
+      }
+    }
+
+    // Restatement overlap with main-report fields.
+    if (sig) {
+      const wtmText = dive.what_this_means.join(' ');
+      if (overlaps(wtmText, sig.core_statement)) gaps.push(`${dive.name}.what_this_means: overlaps core_statement`);
+      if (overlaps(wtmText, sig.main_report_text)) gaps.push(`${dive.name}.what_this_means: overlaps ${sig.kind === 'primary' ? 'evidence_analysis' : 'analysis'} ${INFO_ONLY}`);
+      if (overlaps(dive.friction, sig.tension)) gaps.push(`${dive.name}.friction: overlaps tension ${INFO_ONLY}`);
+    }
+  }
+
+  // Both directions of a pair must say different things.
+  const diveByName = new Map(dives.map(d => [d.name, d]));
+  for (const dive of dives) {
+    for (const w of dive.works_with) {
+      if (dive.name >= w.partner) continue; // each pair once
+      const reverse = diveByName.get(w.partner)?.works_with.find(r => r.partner === dive.name);
+      if (reverse && overlaps(w.text, reverse.text)) {
+        gaps.push(`works_with ${dive.name}↔${w.partner}: the two directions overlap`);
+      }
+    }
+  }
+
+  // Pairings must be backed by works_with.
+  if (result.pairings) {
+    const backedPairs = new Set(
+      dives.flatMap(d => d.works_with.map(w => [d.name, w.partner].sort().join('|')))
+    );
+    if (result.pairings.length < 2 || result.pairings.length > 3) gaps.push(`pairings: ${result.pairings.length} entries (target 2-3)`);
+    for (const p of result.pairings) {
+      if (!backedPairs.has([p.a, p.b].sort().join('|'))) gaps.push(`pairings: ${p.a}↔${p.b} not backed by any works_with entry`);
+    }
+  }
+
+  // Report-level counts, signature names, and restatement.
+  const dp = result.distinctive_pattern;
+  if (dp) {
+    const steps = dp.steps.length;
+    if (steps < 3 || steps > 5) gaps.push(`distinctive_pattern.steps: ${steps} (target 3-5)`);
+    const dpText = [...dp.steps, ...dp.paragraphs].join(' ');
+    const namedInDp = [...names].filter(name => mentionsName(dpText, name));
+    if (namedInDp.length > 0) gaps.push(`distinctive_pattern: names signature(s) ${namedInDp.join(', ')}`);
+    dp.paragraphs.forEach((para, i) => {
+      if (overlaps(para, synthesis)) gaps.push(`distinctive_pattern.paragraphs[${i}]: overlaps constellation_synthesis`);
+      if (overlaps(para, thesis)) gaps.push(`distinctive_pattern.paragraphs[${i}]: overlaps identity_thesis`);
+    });
+  }
+  const ptn = result.pattern_to_notice;
+  if (ptn) {
+    const bodySentences = sentenceCount(ptn.body);
+    if (bodySentences < 2 || bodySentences > 4) gaps.push(`pattern_to_notice.body: ${bodySentences} sentence(s) (target 2-4)`);
+    for (const key of ['headline', 'body', 'takeaway'] as const) {
+      const text = ptn[key];
+      if (overlaps(text, synthesis)) gaps.push(`pattern_to_notice.${key}: overlaps constellation_synthesis`);
+      if (overlaps(text, thesis)) gaps.push(`pattern_to_notice.${key}: overlaps identity_thesis`);
+    }
+  }
+
+  for (const gap of gaps) console.warn(`#154 Layer 3 backstop: ${gap}`);
+}
+
+/**
+ * Detection → Layer 2 → Layer 3, returning the finished report content.
+ * No DB access — generateIdentityReport persists the result. Throws only if
+ * Detection or Layer 2 fails; a Layer 3 failure is logged and the report is
+ * returned without the Layer 3 fields.
+ */
+export async function buildIdentityReport({
+  answers,
+  name,
+}: {
+  answers: DiscoveryAnswer[];
+  name: string;
+}): Promise<Record<string, unknown>> {
+  // Step A — Identity Analysis
+  const analysisContent = await getChatCompletion({
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: DETECTION_PROMPT },
+      { role: 'user', content: JSON.stringify(answers) },
+    ],
+    max_tokens: 4000,
+    temperature: 0,
+    seed: 42,
+  });
+
+  const analysis = JSON.parse(analysisContent ?? '{}');
+
+  // domain_profile is computed from real signature scores, not the LLM's
+  // own disconnected judgment of it (see docs/briefs/1-domain-profile-computed.md) —
+  // overwrite it here so Layer 2's "copy from detection JSON" instruction
+  // copies a grounded number.
+  analysis.domain_profile = computeDomainProfile(analysis.signatures ?? []);
+
+  // #110: primary_constellation/secondary_signatures are derived from the
+  // Detection Engine's own scored signatures[] list rather than trusted
+  // to Layer 1's own selection judgment — see categorizePrimarySecondary's
+  // doc comment. Same "overwrite before Layer 2 runs" pattern as
+  // domain_profile above.
+  const categorized = categorizePrimarySecondary(analysis.signatures ?? []);
+  analysis.primary_constellation = categorized.primary;
+  analysis.secondary_signatures = categorized.secondary;
+
+  // Step B — Report Generation
+  const reportContent = await getChatCompletion({
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: LAYER_2_PROMPT },
+      { role: 'user', content: `User name: ${name}\nAnalysis: ${JSON.stringify(analysis)}` },
+    ],
+    max_tokens: 8000,
+    temperature: 0,
+  });
+
+  const report = JSON.parse(reportContent ?? '{}');
+
+  // The detection prompt's "Rank by score" rule governs Top-5 *selection*,
+  // not output array order — so array order isn't reliably descending by
+  // score across all generations. Enforce it here instead of trusting the
+  // LLM. signature_profile_summary carries the identical name+score shape
+  // and the same risk (app/api/mentor/route.ts reads primary_signatures in
+  // array order into the mentor's context prompt), so it gets the same fix.
+  // Consistency sweep confirmed these are the only two consumers of array
+  // order anywhere in the app — path-plan.ts/path-options.ts prompts treat
+  // primary_constellation as an unordered set, not positional.
+  sortByScoreDescending(report.primary_constellation);
+  sortByScoreDescending(report.secondary_signature_analysis);
+  sortByScoreDescending(report.signature_profile_summary?.primary_signatures);
+  sortByScoreDescending(report.signature_profile_summary?.secondary_signatures);
+
+  // #110: log-only check for whether Layer 2 faithfully wrote up the
+  // code-computed categorization it was given — see
+  // logCategorizationComplianceGaps's doc comment.
+  logCategorizationComplianceGaps(report, categorized);
+
+  // Defense in depth: code owns domain_profile now, not the LLM — overwrite
+  // again in case Layer 2 didn't copy analysis.domain_profile faithfully.
+  report.domain_profile = analysis.domain_profile;
+
+  // Layer 2 doesn't reliably respect the zero-evidence fallback tier — see
+  // enforceSecondaryEvidenceFloor's doc comment. Runs after sorting since
+  // it only rewrites analysis text, not order.
+  enforceSecondaryEvidenceFloor(report.secondary_signature_analysis, analysis.evidence_units);
+
+  // #102: Layer 2 doesn't reliably keep constellation_synthesis from
+  // restating identity_thesis — see enforceConstellationSynthesisNonOverlap's
+  // doc comment. Runs after sorting/domain_profile since it only rewrites
+  // constellation_synthesis.synthesis, nothing positional.
+  enforceConstellationSynthesisNonOverlap(report.constellation_synthesis, report.cover?.identity_thesis);
+
+  // #112 Stage 1: log-only backstop for abstract capability phrasing the
+  // overlap check above can't catch (no literal overlap with
+  // identity_thesis) — see logConstellationSynthesisAbstractLanguage's
+  // doc comment. Runs after the overlap check so it inspects the
+  // already-cleaned synthesis, not pre-cleanup text.
+  logConstellationSynthesisAbstractLanguage(report.constellation_synthesis);
+
+  // #99: reframe_teaser's prompt-level word-count self-check isn't fully
+  // reliable — see logReframeTeaserWordCountGaps's doc comment. Log-only,
+  // doesn't rewrite or block anything.
+  logReframeTeaserWordCountGaps(report.reframe_teaser);
+
+  // #112 Stage 3: log-only check for reframe_teaser.recap near-verbatim
+  // overlap with identity_thesis/constellation_synthesis — see
+  // logReframeTeaserRecapOverlap's doc comment.
+  logReframeTeaserRecapOverlap(report.reframe_teaser, report.cover?.identity_thesis, report.constellation_synthesis);
+
+  // #112 Stage 2: log-only word-count floor checks for
+  // evidence_analysis/how_you_operate — see logStage2WordCountGaps's doc
+  // comment.
+  logStage2WordCountGaps(report);
+
+  // #154: log-only length check on the energisers/friction_points phrases.
+  logEnergiserFrictionLengthGaps(report);
+
+  // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
+  // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed
+  // cards, mentor longitudinal tracking) can see this after generation
+  // completes otherwise. Going-forward only, no backfill (see #62 brief).
+  report.raw_signature_analysis = {
+    signatures: analysis.signatures ?? [],
+    primary_constellation: analysis.primary_constellation ?? [],
+    secondary_signatures: analysis.secondary_signatures ?? [],
+    emerging_signatures: analysis.emerging_signatures ?? [],
+    suppressed_signatures: analysis.suppressed_signatures ?? [],
+  };
+
+  // #154: code owns schema_version for 1.4 reports (Layer 3 fields optional,
+  // identity_context / what_this_report_is / domain_profile_summary retired).
+  report.schema_version = '1.4';
+
+  // Step C — Layer 3 (#154). A failure here never loses the Layer 2 report:
+  // log it and return the report without the Layer 3 fields.
+  const layer3Started = Date.now();
+  try {
+    const layer3 = await generateLayer3(report, analysis.evidence_units);
+    logLayer3Gaps(layer3, report, analysis.evidence_units);
+    Object.assign(report, layer3);
+    console.log(
+      `#154 Layer 3: completed in ${Date.now() - layer3Started}ms (${layer3.signature_deep_dives?.length ?? 0} deep dives; ` +
+      `report-level fields: ${['pairings', 'distinctive_pattern', 'pattern_to_notice'].filter(k => k in layer3).join(', ') || 'none'})`
+    );
+  } catch (error) {
+    console.error(`#154 Layer 3 failed after ${Date.now() - layer3Started}ms — saving the report without Layer 3 fields:`, error);
+  }
+
+  return report;
+}
+
 export async function generateIdentityReport({
   artifactId,
   answers,
@@ -481,117 +1239,9 @@ export async function generateIdentityReport({
   const supabase = createServiceClient();
 
   try {
-    // Step A — Identity Analysis
-    const analysisContent = await getChatCompletion({
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: DETECTION_PROMPT },
-        { role: 'user', content: JSON.stringify(answers) },
-      ],
-      max_tokens: 4000,
-      temperature: 0,
-      seed: 42,
-    });
+    const report = await buildIdentityReport({ answers, name });
 
-    const analysis = JSON.parse(analysisContent ?? '{}');
-
-    // domain_profile is computed from real signature scores, not the LLM's
-    // own disconnected judgment of it (see docs/briefs/1-domain-profile-computed.md) —
-    // overwrite it here so Layer 2's "copy from detection JSON" instruction
-    // copies a grounded number.
-    analysis.domain_profile = computeDomainProfile(analysis.signatures ?? []);
-
-    // #110: primary_constellation/secondary_signatures are derived from the
-    // Detection Engine's own scored signatures[] list rather than trusted
-    // to Layer 1's own selection judgment — see categorizePrimarySecondary's
-    // doc comment. Same "overwrite before Layer 2 runs" pattern as
-    // domain_profile above.
-    const categorized = categorizePrimarySecondary(analysis.signatures ?? []);
-    analysis.primary_constellation = categorized.primary;
-    analysis.secondary_signatures = categorized.secondary;
-
-    // Step B — Report Generation
-    const reportContent = await getChatCompletion({
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: LAYER_2_PROMPT },
-        { role: 'user', content: `User name: ${name}\nAnalysis: ${JSON.stringify(analysis)}` },
-      ],
-      max_tokens: 8000,
-      temperature: 0,
-    });
-
-    const report = JSON.parse(reportContent ?? '{}');
-
-    // The detection prompt's "Rank by score" rule governs Top-5 *selection*,
-    // not output array order — so array order isn't reliably descending by
-    // score across all generations. Enforce it here instead of trusting the
-    // LLM. signature_profile_summary carries the identical name+score shape
-    // and the same risk (app/api/mentor/route.ts reads primary_signatures in
-    // array order into the mentor's context prompt), so it gets the same fix.
-    // Consistency sweep confirmed these are the only two consumers of array
-    // order anywhere in the app — path-plan.ts/path-options.ts prompts treat
-    // primary_constellation as an unordered set, not positional.
-    sortByScoreDescending(report.primary_constellation);
-    sortByScoreDescending(report.secondary_signature_analysis);
-    sortByScoreDescending(report.signature_profile_summary?.primary_signatures);
-    sortByScoreDescending(report.signature_profile_summary?.secondary_signatures);
-
-    // #110: log-only check for whether Layer 2 faithfully wrote up the
-    // code-computed categorization it was given — see
-    // logCategorizationComplianceGaps's doc comment.
-    logCategorizationComplianceGaps(report, categorized);
-
-    // Defense in depth: code owns domain_profile now, not the LLM — overwrite
-    // again in case Layer 2 didn't copy analysis.domain_profile faithfully.
-    report.domain_profile = analysis.domain_profile;
-
-    // Layer 2 doesn't reliably respect the zero-evidence fallback tier — see
-    // enforceSecondaryEvidenceFloor's doc comment. Runs after sorting since
-    // it only rewrites analysis text, not order.
-    enforceSecondaryEvidenceFloor(report.secondary_signature_analysis, analysis.evidence_units);
-
-    // #102: Layer 2 doesn't reliably keep constellation_synthesis from
-    // restating identity_thesis — see enforceConstellationSynthesisNonOverlap's
-    // doc comment. Runs after sorting/domain_profile since it only rewrites
-    // constellation_synthesis.synthesis, nothing positional.
-    enforceConstellationSynthesisNonOverlap(report.constellation_synthesis, report.cover?.identity_thesis);
-
-    // #112 Stage 1: log-only backstop for abstract capability phrasing the
-    // overlap check above can't catch (no literal overlap with
-    // identity_thesis) — see logConstellationSynthesisAbstractLanguage's
-    // doc comment. Runs after the overlap check so it inspects the
-    // already-cleaned synthesis, not pre-cleanup text.
-    logConstellationSynthesisAbstractLanguage(report.constellation_synthesis);
-
-    // #99: reframe_teaser's prompt-level word-count self-check isn't fully
-    // reliable — see logReframeTeaserWordCountGaps's doc comment. Log-only,
-    // doesn't rewrite or block anything.
-    logReframeTeaserWordCountGaps(report.reframe_teaser);
-
-    // #112 Stage 3: log-only check for reframe_teaser.recap near-verbatim
-    // overlap with identity_thesis/constellation_synthesis — see
-    // logReframeTeaserRecapOverlap's doc comment.
-    logReframeTeaserRecapOverlap(report.reframe_teaser, report.cover?.identity_thesis, report.constellation_synthesis);
-
-    // #112 Stage 2: log-only word-count floor + domain-name-mention checks
-    // for evidence_analysis/how_you_operate/domain_profile_summary — see
-    // logStage2WordCountAndDomainGaps's doc comment.
-    logStage2WordCountAndDomainGaps(report);
-
-    // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
-    // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed
-    // cards, mentor longitudinal tracking) can see this after generation
-    // completes otherwise. Going-forward only, no backfill (see #62 brief).
-    report.raw_signature_analysis = {
-      signatures: analysis.signatures ?? [],
-      primary_constellation: analysis.primary_constellation ?? [],
-      secondary_signatures: analysis.secondary_signatures ?? [],
-      emerging_signatures: analysis.emerging_signatures ?? [],
-      suppressed_signatures: analysis.suppressed_signatures ?? [],
-    };
-
-    // Step C — Update artifact to ready
+    // Update artifact to ready
     await supabase
       .from('artifacts')
       .update({ status: 'ready', content: report })
