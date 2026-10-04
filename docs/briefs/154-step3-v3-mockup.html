@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Identity Report, Claude's version</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#F7F6F3}
+a{color:#A0044F}a:hover{color:#510085}
+.v3-top{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px}
+.v3-sig5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.v3-sig{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.v3-row{display:grid;grid-template-columns:44px minmax(150px,220px) minmax(0,1fr) 56px 44px;align-items:center;gap:16px}
+.v3-detail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.v3-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.v3-body{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:28px;padding:0 4px}
+.v3-ops{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.v3-fr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.v3-nav{display:flex;align-items:center;gap:6px}
+.v3-menu{display:none}
+@media (max-width:1000px){
+.v3-top{grid-template-columns:minmax(0,1fr)}
+.v3-sig5{grid-template-columns:repeat(3,minmax(0,1fr))}
+.v3-detail{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.v3-body{grid-template-columns:minmax(0,1fr)}
+.v3-ops{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@media (max-width:700px){
+.v3-nav{display:none}
+.v3-menu{display:flex}
+.v3-sig5,.v3-two,.v3-detail,.v3-ops,.v3-fr{grid-template-columns:minmax(0,1fr)}
+.v3-sig{flex-direction:row;align-items:center;gap:12px}
+.v3-row{grid-template-columns:40px minmax(0,1fr) 44px;gap:12px}
+.v3-row-bar{grid-column:1 / -1;order:5}
+.v3-row-score{display:none}
+}
+</style>
+</helmet>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: #1E1E1E; background: #F7F6F3; min-height: 100vh">
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+<defs>
+<linearGradient id="zg" x1="24" y1="4" x2="56" y2="84" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stop-color="#FE5618"></stop>
+<stop offset="50%" stop-color="#C60567"></stop>
+<stop offset="100%" stop-color="#510085"></stop>
+</linearGradient>
+</defs>
+</svg>
+
+<header style="background: linear-gradient(160deg, #FE5618 0%, #FE5618 12%, #C60567 28%, #510085 52%, #510085 100%); color: #FFFFFF">
+<div style="max-width: 1160px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; align-items: baseline; gap: 14px">
+<span style="font-size: 24px; font-weight: 800; letter-spacing: 0.04em">ZYRRO</span>
+<span style="font-size: 13px; color: rgba(255,255,255,0.85)">Know Yourself. Create What's Next.</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px">
+<nav class="v3-nav" aria-label="Main">
+<sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+<a href="#" style="{{n.style}}">{{n.label}}</a>
+</sc-for>
+</nav>
+<button type="button" class="v3-menu" aria-label="Menu" style="width: 44px; height: 44px; border: 0; background: transparent; color: #FFFFFF; align-items: center; justify-content: center; cursor: pointer">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16 M4 12h16 M4 17h16"></path></svg>
+</button>
+<a href="#" aria-label="Account" style="width: 40px; height: 40px; border-radius: 999px; background: #3d0063; border: 1.5px solid rgba(255,255,255,0.5); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; text-decoration: none; margin-left: 6px">JB</a>
+</div>
+</div>
+</header>
+
+<main style="max-width: 1160px; margin: 0 auto; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 16px">
+
+<div class="v3-top">
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 32px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">Your Identity at a Glance</p>
+<h1 style="margin: 0; font-size: 40px; line-height: 1.08; font-weight: 800">The Illuminating Originator</h1>
+<p style="margin: 0; font-size: 13px; color: #6E6E6E">Prepared for Jeff Bullas</p>
+<p style="margin: 6px 0 0; font-size: 21px; line-height: 1.4; font-weight: 600">You make complex ideas clear, see new possibilities early, and turn them into something others can use.</p>
+<p style="margin: 0; font-size: 16px; line-height: 1.6; color: #3A3A3A">Across your life and work, a recurring pattern stands out: you bring clarity to complexity and turn possibility into practical direction. You combine curiosity, creativity and structure. You are often at your best when you can explore something new, understand it, shape it and communicate it clearly enough for other people to use.</p>
+</section>
+
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">Your Domain Profile</p>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #6E6E6E">How strongly each of the five identity domains shows up in your answers, compared with each other.</p>
+<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 4px">
+<sc-for list="{{domains}}" as="d" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+<span style="font-size: 15px; font-weight: 600">{{d.name}}</span>
+<span style="font-size: 12px; color: #6E6E6E">{{d.sigs}}</span>
+</div>
+<div style="height: 8px; background: #EFEDE8; border-radius: 999px; overflow: hidden"><div style="{{d.bar}}"></div></div>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">Your Primary Signatures</p>
+<div class="v3-sig5">
+<sc-for list="{{primary}}" as="s" hint-placeholder-count="5">
+<div class="v3-sig" style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 18px 16px">
+<span style="position: relative; width: 44px; height: 48px; flex-shrink: 0">
+<svg width="44" height="48" viewBox="0 0 80 88" aria-hidden="true"><path d="M40 4 L72 16 L72 48 Q72 72 40 84 Q8 72 8 48 L8 16 Z" fill="url(#zg)"></path></svg>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; left: 12px; top: 12px"><path d="{{s.icon}}"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="font-size: 17px; font-weight: 700">{{s.name}}</span>
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6E6E">{{s.domain}}</span>
+<span style="font-size: 14px; line-height: 1.4; color: #3A3A3A; margin-top: 4px">{{s.short}}</span>
+</span>
+<span style="{{s.pill}}">{{s.band}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section style="background: #FFF1EA; border: 1.5px solid rgba(254,86,24,0.45); border-radius: 14px; padding: 20px 24px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap">
+<div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 4px">
+<p style="margin: 0; font-size: 18px; font-weight: 700">Your identity points somewhere.</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4A4A4A">Path turns these signatures into possible directions, shaped by what you want and what you won't accept. One-time payment.</p>
+</div>
+<a href="#" style="background: #FE5618; color: #FFFFFF; border: 2px solid rgba(255,255,255,0.4); border-radius: 999px; padding: 13px 26px; font-size: 16px; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 24px rgba(254,86,24,0.28)">Find your path
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14 M13 18l6 -6 M13 6l6 6"></path></svg></a>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">Your Signatures in Depth</p>
+<p style="margin: 0; font-size: 14px; color: #6E6E6E">Score out of 25: how often and how strongly each pattern appears in your answers.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1.5px solid #FE5618; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 14px 18px 22px; display: flex; flex-direction: column; gap: 18px">
+<div class="v3-row">
+<span style="position: relative; width: 40px; height: 44px">
+<svg width="40" height="44" viewBox="0 0 80 88" aria-hidden="true"><path d="M40 4 L72 16 L72 48 Q72 72 40 84 Q8 72 8 48 L8 16 Z" fill="url(#zg)"></path></svg>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; left: 11px; top: 11px"><path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7 M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3 M9.7 17l4.6 0"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 18px; font-weight: 700">Illuminator</span>
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6E6E">Connecting</span>
+</span>
+<div class="v3-row-bar" style="height: 10px; background: #EFEDE8; border-radius: 999px; overflow: hidden"><div style="height: 100%; width: 80%; border-radius: 999px; background: linear-gradient(90deg, #FE5618, #C60567 55%, #510085)"></div></div>
+<span class="v3-row-score" style="font-size: 15px; font-weight: 700; text-align: right">20/25</span>
+<button type="button" aria-expanded="true" aria-label="Collapse Illuminator" style="width: 44px; height: 44px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E1E1E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6 -6l6 6"></path></svg>
+</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 0">
+<p style="margin: 0; font-size: 24px; line-height: 1.3; font-weight: 800">Brings clarity to complexity.</p>
+<p style="margin: 0; font-size: 17px; line-height: 1.6; color: #3A3A3A; max-width: 860px">You naturally make complicated ideas easier for others to understand. People come away from time with you knowing what matters and what to do next.</p>
+</div>
+
+<div class="v3-body">
+<div style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #6E6E6E">What this means</p>
+<p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3A3A3A">Illuminators don't just understand things; they need other people to understand them too. You notice the gap between what someone knows and what they need to know, and you feel pulled to close it.</p>
+<p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3A3A3A">This is less about being a good communicator and more about how you think. You understand something fully only once you can explain it simply. Explaining is how you learn, and teaching is how you find out what you believe.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #6E6E6E">Evidence from your story</p>
+<sc-for list="{{evidence}}" as="ev" hint-placeholder-count="3">
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<span style="width: 3px; align-self: stretch; min-height: 22px; border-radius: 2px; background: linear-gradient(180deg, #FE5618, #C60567 55%, #510085); flex-shrink: 0"></span>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #1E1E1E">{{ev}}</p>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="background: #FAF9F7; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-size: 14px; font-weight: 700">How this shows up in your life</p>
+<sc-for list="{{showsUp}}" as="x" hint-placeholder-count="4">
+<div style="display: flex; gap: 10px; font-size: 14px; line-height: 1.45; color: #3A3A3A"><span style="font-weight: 700; color: #1E1E1E; flex-shrink: 0">·</span><span>{{x}}</span></div>
+</sc-for>
+</div>
+<div style="background: #FAF9F7; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-size: 14px; font-weight: 700">Where this serves you</p>
+<sc-for list="{{serves}}" as="x" hint-placeholder-count="4">
+<div style="display: flex; gap: 10px; font-size: 14px; line-height: 1.45; color: #3A3A3A"><span style="font-weight: 700; color: #1E1E1E; flex-shrink: 0">·</span><span>{{x}}</span></div>
+</sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 2px">
+<span style="font-size: 13px; color: #6E6E6E">Works closely with</span>
+<span style="font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.15)">Originator</span>
+<span style="font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.15)">Pioneer</span>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #6E6E6E">How it shapes the way you operate</p>
+<div class="v3-ops">
+<sc-for list="{{ops}}" as="o" hint-placeholder-count="4">
+<div style="border: 0.5px solid rgba(0,0,0,0.10); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 6px">
+<p style="margin: 0; font-size: 14px; font-weight: 700">{{o.label}}</p>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3A3A">{{o.body}}</p>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div class="v3-fr">
+<div style="background: #FFF6F1; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-size: 14px; font-weight: 700">Potential friction</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3A3A3A">You may lose energy when clarity is elusive, or when the people around you resist understanding. Environments that reward ambiguity or politics over plain truth will wear you down faster than hard work will.</p>
+</div>
+<div style="background: #FFF6F1; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-size: 14px; font-weight: 700">Under pressure</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3A3A3A">You may keep refining the explanation when the moment calls for a decision. The question to ask yourself: is this clear enough to act on?</p>
+</div>
+</div>
+</div>
+
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+<div class="v3-row" style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 10px 18px">
+<span style="position: relative; width: 40px; height: 44px">
+<svg width="40" height="44" viewBox="0 0 80 88" aria-hidden="true"><path d="M40 4 L72 16 L72 48 Q72 72 40 84 Q8 72 8 48 L8 16 Z" fill="{{r.fill}}"></path></svg>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; left: 11px; top: 11px"><path d="{{r.icon}}"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="{{r.nameStyle}}">{{r.name}}</span>
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6E6E">{{r.domain}}</span>
+</span>
+<div class="v3-row-bar" style="height: 10px; background: #EFEDE8; border-radius: 999px; overflow: hidden"><div style="{{r.bar}}"></div></div>
+<span class="v3-row-score" style="{{r.scoreStyle}}">{{r.score}}/25</span>
+<button type="button" aria-expanded="false" aria-label="{{r.toggle}}" style="width: 44px; height: 44px; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6l6 -6"></path></svg>
+</button>
+</div>
+</sc-for>
+</section>
+
+<div class="v3-two" style="margin-top: 8px">
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">How Your Signatures Work Together</p>
+<sc-for list="{{combos}}" as="c" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px; padding-top: 12px; border-top: 0.5px solid rgba(0,0,0,0.07)">
+<p style="margin: 0; font-size: 15px; font-weight: 700">{{c.title}}</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: #3A3A3A">{{c.body}}</p>
+</div>
+</sc-for>
+</section>
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">Your Distinctive Pattern</p>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{steps}}" as="p" hint-placeholder-count="4">
+<span style="display: flex; align-items: center; gap: 8px">
+<span style="font-size: 15px; font-weight: 700; padding: 8px 14px; border-radius: 999px; background: #FAF9F7; border: 0.5px solid rgba(0,0,0,0.10)">{{p.label}}</span>
+<sc-if value="{{p.arrow}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C60567" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14 M13 18l6 -6 M13 6l6 6"></path></svg>
+</sc-if>
+</span>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3A3A3A">You are at your best when you can explore something new, understand what matters, give it structure and communicate it clearly enough for other people to act on it.</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3A3A3A">This combination helps explain why you are repeatedly drawn toward emerging ideas, reinvention, writing, teaching, entrepreneurship and helping others see possibilities they may not yet see themselves.</p>
+</section>
+</div>
+
+<div class="v3-two">
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 24px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">What Gives You Energy</p>
+<sc-for list="{{energy}}" as="e" hint-placeholder-count="7">
+<div style="display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 1.4">
+<span style="font-weight: 700; color: #1E1E1E; width: 14px; flex-shrink: 0">+</span>
+<span>{{e}}</span>
+</div>
+</sc-for>
+</section>
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 24px; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">What Drains You</p>
+<sc-for list="{{drains}}" as="e" hint-placeholder-count="7">
+<div style="display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 1.4">
+<span style="font-weight: 700; color: #6E6E6E; width: 14px; flex-shrink: 0">–</span>
+<span>{{e}}</span>
+</div>
+</sc-for>
+</section>
+</div>
+
+<section style="padding: 0 4px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #4A4A4A">These two lists are where Path starts: you'll choose what a good direction must have and must avoid.</p>
+<a href="#" style="font-size: 15px; font-weight: 700; color: #A0044F; text-decoration: none; display: flex; align-items: center; gap: 6px; min-height: 44px">See how Path works
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A0044F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14 M13 18l6 -6 M13 6l6 6"></path></svg></a>
+</section>
+
+<section style="background: #FFFFFF; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 28px 32px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: #C60567">The Pattern to Notice</p>
+<p style="margin: 0; font-size: 22px; line-height: 1.35; font-weight: 700; max-width: 760px">Your greatest strength may also contain your greatest tension.</p>
+<p style="margin: 0; font-size: 16px; line-height: 1.6; color: #3A3A3A; max-width: 760px">Your instinct is to explore, understand and create structure. That can produce extraordinary clarity. But when taken too far, the search for a better framework can sometimes delay the moment when an idea needs to meet the real world.</p>
+<p style="margin: 0; font-size: 16px; line-height: 1.6; font-weight: 600; max-width: 760px">For you, progress often appears when clarity becomes action.</p>
+</section>
+
+<section style="background: linear-gradient(135deg, #FE5618, #C60567 50%, #510085); color: #FFFFFF; border-radius: 18px; padding: 36px 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-top: 8px">
+<div style="flex: 1 1 480px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 30px; line-height: 1.2; font-weight: 800">Your identity points somewhere. Find your path.</h2>
+<p style="margin: 0; font-size: 16px; line-height: 1.55; color: rgba(255,255,255,0.92)">Tell Zyrro what you want and what you won't accept. It builds four possible paths from your signatures, refines them with you, and turns the one you choose into a full report.</p>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<a href="#" style="background: #FFFFFF; color: #A0044F; border-radius: 999px; padding: 15px 30px; font-size: 16px; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 8px">Find your path
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A0044F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14 M13 18l6 -6 M13 6l6 6"></path></svg></a>
+<span style="font-size: 13px; color: rgba(255,255,255,0.88)">Adventurer · one-time payment of [PRICE]</span>
+</div>
+</section>
+
+</main>
+
+<footer style="border-top: 0.5px solid rgba(0,0,0,0.07); background: #FFFFFF">
+<div style="max-width: 1160px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<p style="margin: 0; font-size: 14px; line-height: 1.55; color: #6E6E6E; max-width: 760px">This report is a reflective interpretation of recurring patterns in your answers. It is designed to help you recognise how you naturally think, create and operate, not to place you inside a fixed personality type.</p>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+<div style="display: flex; align-items: baseline; gap: 12px">
+<span style="font-size: 20px; font-weight: 800; letter-spacing: 0.04em; color: #510085">ZYRRO</span>
+<span style="font-size: 13px; color: #6E6E6E">Know Yourself. Create What's Next.</span>
+</div>
+<div style="display: flex; gap: 20px; font-size: 13px">
+<a href="#" style="color: #6E6E6E; text-decoration: none">Privacy</a>
+<a href="#" style="color: #6E6E6E; text-decoration: none">Terms</a>
+<a href="#" style="color: #6E6E6E; text-decoration: none">Help</a>
+</div>
+</div>
+</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":3900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var I = {
+      bulb: 'M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7 M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3 M9.7 17l4.6 0',
+      sparkles: 'M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z M16 6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z M9 18a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z',
+      building: 'M3 21l18 0 M5 21v-14l8 -4v18 M19 21v-10l-6 -4 M9 9l0 .01 M9 12l0 .01 M9 15l0 .01 M9 18l0 .01',
+      eye: 'M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0 M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6',
+      compass: 'M8 16l2 -6l6 -2l-2 6l-6 2 M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 3l0 2 M12 19l0 2 M3 12l2 0 M19 12l2 0',
+      circles: 'M9.5 9.5m-6.5 0a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0 M14.5 14.5m-6.5 0a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0',
+      anchor: 'M12 9v12m-8 -8a8 8 0 0 0 16 0m1 0h-2m-14 0h-2 M12 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0',
+      bolt: 'M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11'
+    };
+    var navBase = 'font-size: 14px; text-decoration: none; padding: 10px 12px; border-radius: 999px; ';
+    var nav = [
+      { label: 'Dashboard', style: navBase + 'color: rgba(255,255,255,0.45)' },
+      { label: 'Identity', style: navBase + 'color: #FFFFFF; font-weight: 700; background: rgba(255,255,255,0.16)' },
+      { label: 'Path', style: navBase + 'color: rgba(255,255,255,0.9)' },
+      { label: 'Plan', style: navBase + 'color: rgba(255,255,255,0.45)' },
+      { label: 'Mentor', style: navBase + 'color: rgba(255,255,255,0.45)' }
+    ];
+    var pillBase = 'font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; ';
+    var P = {
+      Dominant: pillBase + 'color: #B83A0B; background: #FFE9E0',
+      Strong: pillBase + 'color: #1E1E1E; border: 1px solid rgba(0,0,0,0.25)',
+      Moderate: pillBase + 'color: #6E6E6E; border: 1px solid rgba(0,0,0,0.12)'
+    };
+    var primary = [
+      { name: 'Illuminator', domain: 'Connecting', short: 'Brings clarity to complexity.', band: 'Dominant', score: 20, icon: I.bulb },
+      { name: 'Originator', domain: 'Visioning', short: "Creates what doesn't exist yet.", band: 'Strong', score: 16, icon: I.sparkles },
+      { name: 'Architect', domain: 'Visioning', short: 'Gives ideas structure.', band: 'Strong', score: 14, icon: I.building },
+      { name: 'Truth Seeker', domain: 'Sensing', short: 'Looks beneath appearances for what is true.', band: 'Moderate', score: 10, icon: I.eye },
+      { name: 'Pioneer', domain: 'Driving', short: 'Explores new territory and possibility.', band: 'Moderate', score: 9, icon: I.compass }
+    ].map(function (s) { s.pill = P[s.band]; return s; });
+    var secondary = [
+      { name: 'Synthesizer', domain: 'Visioning', score: 7, icon: I.circles },
+      { name: 'Meaning Maker', domain: 'Sensing', score: 6, icon: I.anchor },
+      { name: 'Catalyst', domain: 'Connecting', score: 5, icon: I.bolt }
+    ];
+    var rows = primary.slice(1).map(function (s) {
+      return {
+        name: s.name, domain: s.domain, score: s.score, icon: s.icon, toggle: 'Expand ' + s.name,
+        fill: 'url(#zg)',
+        nameStyle: 'font-size: 18px; font-weight: 700; color: #1E1E1E',
+        scoreStyle: 'font-size: 15px; font-weight: 700; text-align: right; color: #1E1E1E',
+        bar: 'height: 100%; width: ' + (s.score * 4) + '%; border-radius: 999px; background: linear-gradient(90deg, #FE5618, #C60567 55%, #510085)'
+      };
+    }).concat(secondary.map(function (s) {
+      return {
+        name: s.name, domain: s.domain, score: s.score, icon: s.icon, toggle: 'Expand ' + s.name,
+        fill: '#A9A6AE',
+        nameStyle: 'font-size: 18px; font-weight: 700; color: #4A4A4A',
+        scoreStyle: 'font-size: 15px; font-weight: 700; text-align: right; color: #6E6E6E',
+        bar: 'height: 100%; width: ' + (s.score * 4) + '%; border-radius: 999px; background: #A9A6AE'
+      };
+    }));
+    var domains = [
+      { name: 'Visioning', w: 86, sigs: 'Originator, Architect' },
+      { name: 'Connecting', w: 78, sigs: 'Illuminator' },
+      { name: 'Driving', w: 71, sigs: 'Pioneer' },
+      { name: 'Sensing', w: 64, sigs: 'Truth Seeker' },
+      { name: 'Thinking', w: 62, sigs: '' }
+    ].map(function (d) {
+      d.bar = 'height: 100%; width: ' + d.w + '%; border-radius: 999px; background: linear-gradient(90deg, #FE5618, #C60567 55%, #510085)';
+      return d;
+    });
+    return {
+      nav: nav,
+      evidence: [
+        'You have published consistently for more than fifteen years, turning what you learn into material others can use.',
+        'When you describe your best work, it is the moment someone else "got it", not the moment you did.',
+        'You moved into teaching and interviewing as your business grew, rather than away from them.'
+      ],
+      showsUp: ['Writing and publishing', 'Teaching and speaking', 'Interviewing and asking the clarifying question', 'Helping others find direction'],
+      serves: ['Roles where explaining is the work', 'Leading people through change', 'Advising and mentoring', 'Building audiences around ideas'],
+      ops: [
+        { label: 'At work', body: 'You do your best work when the goal is understanding, not just output.' },
+        { label: 'Thinking', body: 'You think by explaining: writing or talking is how ideas take shape.' },
+        { label: 'With people', body: 'You connect through ideas first, and earn trust by making things simpler.' },
+        { label: 'Deciding', body: "You decide once the picture is clear enough to explain to someone else." }
+      ],
+      primary: primary,
+      rows: rows,
+      domains: domains,
+      steps: [
+        { label: 'Explore', arrow: true },
+        { label: 'Understand', arrow: true },
+        { label: 'Structure', arrow: true },
+        { label: 'Communicate', arrow: false }
+      ],
+      combos: [
+        { title: 'Illuminator + Originator', body: 'You create new ideas and make them understandable to others.' },
+        { title: 'Originator + Architect', body: "You don't just imagine possibilities. You give them structure." },
+        { title: 'Pioneer + Illuminator', body: "You explore new territory and help others see what's possible." }
+      ],
+      energy: ['Curiosity and new ideas', 'Writing, teaching and explaining', 'Creating frameworks or systems', 'Autonomy and freedom to experiment', 'Helping others see possibilities', 'Exploring emerging ideas and opportunities', 'Meaningful work with visible momentum'],
+      drains: ['Repetition and bureaucracy', 'Slow decisions and lack of progress', 'Small thinking or shallow conversation', 'Over-structuring instead of acting', 'Environments resistant to change', 'Too much administration', 'Work with little autonomy or purpose']
+    };
+  }
+}
+</script>
+</body>
+</html>
