@@ -1,11 +1,11 @@
 // #154 step 3: every static string on the /identity report, in one place, so
-// step 2 (final copy) edits only this file. Placeholder wording until then;
-// see docs/briefs/154-step3-identity-layout.md "Copy". Copy rules (planning
+// step 2 (final copy) edits only this file; see
+// docs/briefs/identity-report-redesign.md. Copy rules (planning
 // brief decision 12): no "four paths are ready", no 7-day plan, no mentoring
 // claims, sell value and benefits rather than the steps of the Path flow.
 // The generating / gated / error screens keep their existing strings in
 // app/identity/page.tsx (unchanged by step 3).
-import { SIGNATURES } from '@/lib/signatures';
+import type { SignatureName } from '@/lib/signatures';
 
 export const IDENTITY_REPORT_COPY = {
   hero: {
@@ -21,7 +21,7 @@ export const IDENTITY_REPORT_COPY = {
   },
   heroCta: {
     heading: 'Your identity points somewhere.',
-    body: 'Path turns these signatures into possible directions, shaped by what you want and what you won’t accept.',
+    body: 'Discover the direction your signatures point to: one that uses your strengths, fits what you want, and avoids what drains you.',
     button: 'Find your path',
     price: 'One-time payment of $49',
   },
@@ -71,7 +71,9 @@ export const IDENTITY_REPORT_COPY = {
   },
   bottomCta: {
     heading: 'Your identity points somewhere. Find your path.',
-    body: '[STEP 2 COPY: value and benefits of Path]',
+    body:
+      'Turn self-knowledge into a clear direction. Path shows you where your patterns naturally lead and why that ' +
+      'direction suits you, so your next move is a choice, not a guess.',
     button: 'Find your path',
     price: 'One-time payment of $49',
   },
@@ -83,13 +85,40 @@ export const IDENTITY_REPORT_COPY = {
 } as const;
 
 /**
- * Placeholder signature headline / short definition until step 2 writes the
- * 25 final headlines: the signature's `description` from lib/signatures.ts,
- * sentence-cased with a full stop ("creates clarity in others" →
- * "Creates clarity in others.").
+ * #154 step 2: the headline for each signature, shown as the hero card's short
+ * definition and the expanded card's headline. Typed against SignatureName so
+ * a missing signature fails tsc. Kept apart from lib/signatures.ts on purpose:
+ * its descriptions feed the Detection prompt.
  */
+export const SIGNATURE_HEADLINES: Record<SignatureName, string> = {
+  Visionary: 'Sees the future before it arrives.',
+  Architect: 'Gives ideas structure.',
+  Originator: 'Creates what doesn’t exist yet.',
+  Alchemist: 'Turns setbacks into something of value.',
+  Synthesizer: 'Combines ideas into something new.',
+  'Pattern Seeker': 'Sees the patterns others miss.',
+  'Depth Diver': 'Goes deep until it’s truly understood.',
+  Contextualiser: 'Sees the whole picture.',
+  Contrarian: 'Tests what everyone else assumes.',
+  Futurist: 'Thinks in long trajectories.',
+  Catalyst: 'Sets other people in motion.',
+  Resonator: 'Reads the emotional room.',
+  Amplifier: 'Helps others grow into their potential.',
+  Bridge: 'Connects different worlds.',
+  Illuminator: 'Brings clarity to complexity.',
+  Activator: 'Moves quickly from idea to action.',
+  Pioneer: 'Explores new territory and possibility.',
+  Builder: 'Builds things that last.',
+  Optimizer: 'Makes good systems better.',
+  Finisher: 'Sees things through to the end.',
+  'Meaning Maker': 'Needs the work to matter.',
+  'Truth Seeker': 'Looks beneath appearances for what is true.',
+  Empath: 'Feels what others feel.',
+  Intuitive: 'Trusts instinct before proof.',
+  Guardian: 'Protects what matters most.',
+};
+
+/** Headline for a signature name read from a report; empty for an unknown name. */
 export function signatureHeadline(name: string): string {
-  const description = SIGNATURES.find(s => s.name === name)?.description ?? '';
-  if (!description) return '';
-  return description.charAt(0).toUpperCase() + description.slice(1) + '.';
+  return (SIGNATURE_HEADLINES as Record<string, string>)[name] ?? '';
 }

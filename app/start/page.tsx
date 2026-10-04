@@ -424,7 +424,7 @@ export default function StartPage() {
         <div className="scroll-area scroll-area--intro">
           <p className="eyebrow">IDENTITY SIGNATURE REPORT</p>
 
-          <h1>Find out exactly how you&rsquo;re wired, and why it matters.</h1>
+          <h1>Discover the patterns behind how you think, work and decide.</h1>
 
           <p>
             Answer 13 questions about your life and work. Zyrro detects the patterns and generates
