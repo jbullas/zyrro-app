@@ -79,8 +79,6 @@ export const IDENTITY_REPORT_COPY = {
     disclaimer:
       'This report is a reflective interpretation of recurring patterns in your answers. It is designed to help you ' +
       'recognise how you naturally think, create and operate, not to place you inside a fixed personality type.',
-    brand: 'Zyrro',
-    tagline: 'Know Yourself. Create What’s Next.',
   },
 } as const;
 

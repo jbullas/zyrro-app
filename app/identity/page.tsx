@@ -95,6 +95,12 @@ function paragraphs(value: unknown): string[] {
   return [];
 }
 
+// Distinctive Pattern steps sometimes arrive lowercase ("explore"); show them
+// sentence-cased on the chips.
+function capitalise(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 function rowId(name: string): string {
   return `deep-dive-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
@@ -377,7 +383,7 @@ export default function IdentityPage() {
       <div className="chips-wrap items-center">
         {distinctive_pattern!.steps.map((step, i) => (
           <span key={`${step}-${i}`} className="inline-flex items-center gap-8">
-            <span className="chip-tag">{step}</span>
+            <span className="chip-tag">{capitalise(step)}</span>
             {i < distinctive_pattern!.steps.length - 1 && (
               <IconArrowRight size={18} stroke={2.2} color="var(--color-grad-2)" aria-hidden="true" />
             )}
@@ -572,10 +578,6 @@ export default function IdentityPage() {
         {/* ── Footer (no links until Privacy/Terms/Help pages exist — #157) ── */}
         <footer className="report-footer">
           <p className="documentation">{COPY.footer.disclaimer}</p>
-          <div className="flex items-baseline gap-12">
-            <strong>{COPY.footer.brand}</strong>
-            <span className="cover-context-line">{COPY.footer.tagline}</span>
-          </div>
         </footer>
 
       </div>{/* end .scroll */}
@@ -607,25 +609,25 @@ function DeepDive({
       <div className="grid-split">
         <div className="flex flex-col gap-20">
           <div className="flex flex-col gap-8">
-            <p className="card-sub-label">{COPY.deepDive.whatThisMeans}</p>
+            <p className="eyebrow">{COPY.deepDive.whatThisMeans}</p>
             {paragraphs(dive.what_this_means).map((para, i) => <p key={i}>{para}</p>)}
           </div>
           {dive.evidence.length > 0 && (
             <div className="flex flex-col gap-12">
-              <p className="card-sub-label">{COPY.deepDive.evidence}</p>
+              <p className="eyebrow">{COPY.deepDive.evidence}</p>
               {dive.evidence.map((e, i) => <p key={i} className="evidence-item">{e.text}</p>)}
             </div>
           )}
         </div>
         <div className="flex flex-col gap-12">
           <div className="panel flex flex-col gap-8">
-            <p className="card-sub-label">{COPY.deepDive.showsUp}</p>
+            <p className="eyebrow">{COPY.deepDive.showsUp}</p>
             <ul className="bullet-list">
               {dive.shows_up.map(item => <li key={item} className="bullet-item"><span className="bullet-dot" />{item}</li>)}
             </ul>
           </div>
           <div className="panel flex flex-col gap-8">
-            <p className="card-sub-label">{COPY.deepDive.servesYou}</p>
+            <p className="eyebrow">{COPY.deepDive.servesYou}</p>
             <ul className="bullet-list">
               {dive.serves_you.map(item => <li key={item} className="bullet-item"><span className="bullet-dot" />{item}</li>)}
             </ul>
@@ -635,7 +637,7 @@ function DeepDive({
 
       {dive.works_with.length > 0 && (
         <div className="flex flex-col gap-12">
-          <p className="card-sub-label">{COPY.deepDive.worksWith}</p>
+          <p className="eyebrow">{COPY.deepDive.worksWith}</p>
           <div className="grid-2">
             {dive.works_with.map(w => (
               <div key={w.partner} className="panel flex flex-col gap-8">
@@ -652,7 +654,7 @@ function DeepDive({
       )}
 
       <div className="flex flex-col gap-12">
-        <p className="card-sub-label">{COPY.deepDive.operating}</p>
+        <p className="eyebrow">{COPY.deepDive.operating}</p>
         <div className="grid-4">
           {(Object.keys(labels) as (keyof typeof labels)[]).map(key => (
             <div key={key} className="panel flex flex-col gap-8">
@@ -665,11 +667,11 @@ function DeepDive({
 
       <div className="grid-2">
         <div className="panel panel--warm flex flex-col gap-8">
-          <p className="card-sub-label">{COPY.deepDive.friction}</p>
+          <p className="eyebrow">{COPY.deepDive.friction}</p>
           <p>{dive.friction}</p>
         </div>
         <div className="panel panel--warm flex flex-col gap-8">
-          <p className="card-sub-label">{COPY.deepDive.underPressure}</p>
+          <p className="eyebrow">{COPY.deepDive.underPressure}</p>
           <p>{dive.under_pressure}</p>
         </div>
       </div>

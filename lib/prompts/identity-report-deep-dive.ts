@@ -170,7 +170,7 @@ Pairings describe how two specific signatures interact. Do not describe the pers
 ### distinctive_pattern
 The overall sequence of what this person does, from first move to finished result.
 - steps: 3–5 single words or very short verb phrases naming the stages of that sequence, in order. Each step is something the person does.
-- paragraphs: exactly 2. The first explains how the sequence plays out in this person, step by step, as concrete behaviour grounded in their evidence. The second explains why this sequence draws them towards certain kinds of work and situations. Descriptive, never advice.
+- paragraphs: exactly 2, each minimum 35 words, target 50. The first explains how the sequence plays out in this person, step by step, as concrete behaviour grounded in their evidence. The second explains why this sequence draws them towards certain kinds of work and situations. Descriptive, never advice. Before finalising, count the words in each paragraph; rewrite any paragraph under 35 words, and cut any that runs far past the target.
 Write about what the person does, never about signatures: do not name any signature, and do not use the word "signature", anywhere in steps or paragraphs.
 identity_thesis and constellation_synthesis are already shown on the page: do not restate, paraphrase or reuse their phrases. Must not restate any single pairing line; this is the whole sequence, not a pair.
 

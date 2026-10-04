@@ -965,6 +965,8 @@ const LIST_ITEMS: Record<EvidenceMode, [number, number]> = { standard: [3, 4], r
 const WORKS_WITH_ENTRIES: Record<EvidenceMode, [number, number]> = { standard: [1, 2], reduced: [1, 1] };
 const EVIDENCE_TEXT_MAX_WORDS = 30;
 const OPERATING_MIN_WORDS = 12; // floor only; the prompt asks for a target of 16
+// Prompt asks for minimum 35, target 50 per paragraph; flag under 35 or over 70.
+const DISTINCTIVE_PATTERN_PARAGRAPH_WORDS: [number, number] = [35, 70];
 
 // Overlap with these two fields is still logged, but neither is shown on the
 // redesigned /identity, so these lines are informational, not tuning targets.
@@ -1112,6 +1114,10 @@ function logLayer3Gaps(result: Layer3Result, report: Record<string, unknown>, ev
     const namedInDp = [...names].filter(name => mentionsName(dpText, name));
     if (namedInDp.length > 0) gaps.push(`distinctive_pattern: names signature(s) ${namedInDp.join(', ')}`);
     dp.paragraphs.forEach((para, i) => {
+      const wc = countWords(para);
+      if (outside(wc, DISTINCTIVE_PATTERN_PARAGRAPH_WORDS)) {
+        gaps.push(`distinctive_pattern.paragraphs[${i}]: ${wc} words (target ${DISTINCTIVE_PATTERN_PARAGRAPH_WORDS[0]}-${DISTINCTIVE_PATTERN_PARAGRAPH_WORDS[1]})`);
+      }
       if (overlaps(para, synthesis)) gaps.push(`distinctive_pattern.paragraphs[${i}]: overlaps constellation_synthesis`);
       if (overlaps(para, thesis)) gaps.push(`distinctive_pattern.paragraphs[${i}]: overlaps identity_thesis`);
     });
