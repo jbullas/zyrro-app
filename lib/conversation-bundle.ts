@@ -59,6 +59,7 @@ export async function resolveConversationBundle(
       { role: 'user', content: JSON.stringify(messages ?? []) },
     ],
     temperature: 0.3,
+    retry: { budgetMs: 20_000, label: 'conversation bundle' },
   });
 
   const summary = content?.trim() ?? '';

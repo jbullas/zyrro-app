@@ -93,6 +93,7 @@ export async function resolveMetaBundle(userId: string): Promise<MetaBundle | nu
       { role: 'user', content: JSON.stringify(summaries) },
     ],
     temperature: 0.3,
+    retry: { label: 'meta bundle' },
   });
 
   const synthesized = content?.trim() ?? '';

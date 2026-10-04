@@ -3,6 +3,9 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { resolveConversationBundle } from '@/lib/conversation-bundle';
 
+// #155: one bundle call (retry budget 20s, see lib/conversation-bundle.ts).
+export const maxDuration = 60;
+
 function createServiceClient() {
   return createSupabaseAdmin(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -1,3 +1,4 @@
+import { withPipelineDeadline } from '@/lib/llm';
 import { NextRequest, NextResponse, after } from 'next/server';
 
 // Keep in sync with GENERATION_BUDGET_MS in lib/generation-status.ts (240 s = 240_000 ms).
@@ -220,7 +221,7 @@ export async function GET(_req: NextRequest) {
     // run it twice, same contract as path_direction_session/
     // path_checkpoint_session's own creation-race handling.
     if (created) {
-      after(() => runInitialGeneration(session.id, context, session.content));
+      after(() => withPipelineDeadline(() => runInitialGeneration(session.id, context, session.content)));
       return NextResponse.json({ session_id: session.id, status: session.status, content: session.content });
     }
 
@@ -235,7 +236,7 @@ export async function GET(_req: NextRequest) {
     if (session.status === 'failed') {
       const claimed = await claimGeneration(supabase, session.id);
       if (claimed) {
-        after(() => runInitialGeneration(session.id, context, claimed.content));
+        after(() => withPipelineDeadline(() => runInitialGeneration(session.id, context, claimed.content)));
         return NextResponse.json({ session_id: session.id, status: claimed.status, content: claimed.content });
       }
       // Lost the claim race — another concurrent request already claimed it
@@ -355,7 +356,7 @@ export async function POST(req: NextRequest) {
 
   const context = buildGenerationContext(identityReport, directionContent);
   const steerText = body.text;
-  after(() => runRefineGeneration(session.id, context, claimed.content.candidates, steerText, claimed.content));
+  after(() => withPipelineDeadline(() => runRefineGeneration(session.id, context, claimed.content.candidates, steerText, claimed.content)));
 
   return NextResponse.json({ session_id: session.id, status: claimed.status, content: claimed.content });
 }

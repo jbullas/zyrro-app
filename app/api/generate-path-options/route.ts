@@ -1,3 +1,4 @@
+import { withPipelineDeadline } from '@/lib/llm';
 import { NextRequest, NextResponse, after } from 'next/server';
 
 // Keep in sync with GENERATION_BUDGET_MS in lib/generation-status.ts (240 s = 240_000 ms).
@@ -136,7 +137,7 @@ export async function POST(_req: NextRequest) {
     if (stage5NotYetRun && existingSession.status === 'awaiting_checkpoint') {
       const claimed = await claimGeneration(supabase, existingSession.id);
       if (claimed) {
-        after(() => runStage5Kickoff(existingSession.id, user.id, claimed.content));
+        after(() => withPipelineDeadline(() => runStage5Kickoff(existingSession.id, user.id, claimed.content)));
         return NextResponse.json({ session_id: existingSession.id, current_stage: 5, status: 'generating' });
       }
       // Lost the claim race — another concurrent request is already running
@@ -168,7 +169,7 @@ export async function POST(_req: NextRequest) {
   // Lost the create race (concurrent double-click) — someone else's request
   // already owns this session and will run Stage 1/2. Don't run it twice.
   if (created) {
-    after(() => runStage1AndStage2(session.id, user.id, identityArtifact.content));
+    after(() => withPipelineDeadline(() => runStage1AndStage2(session.id, user.id, identityArtifact.content)));
   }
 
   return NextResponse.json({ session_id: session.id, current_stage: session.current_stage, status: session.status });

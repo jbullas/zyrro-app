@@ -1,3 +1,4 @@
+import { withPipelineDeadline } from '@/lib/llm';
 import { NextRequest, NextResponse, after } from 'next/server';
 
 // Keep in sync with GENERATION_BUDGET_MS in lib/generation-status.ts (240 s = 240_000 ms).
@@ -281,7 +282,7 @@ export async function GET(_req: NextRequest) {
   }
 
   if (created) {
-    after(() => runGeneration(session.id, context, chosenCandidateId, preparedFor));
+    after(() => withPipelineDeadline(() => runGeneration(session.id, context, chosenCandidateId, preparedFor)));
     return NextResponse.json({ id: session.id, status: session.status, content: session.content });
   }
 
@@ -300,7 +301,7 @@ export async function GET(_req: NextRequest) {
       .maybeSingle();
 
     if (claimed) {
-      after(() => runGeneration(session.id, context, chosenCandidateId, preparedFor));
+      after(() => withPipelineDeadline(() => runGeneration(session.id, context, chosenCandidateId, preparedFor)));
       return NextResponse.json({ id: session.id, status: (claimed as PathReportRowRaw).status, content: (claimed as PathReportRowRaw).content });
     }
     // Lost the claim race — another concurrent request already claimed it

@@ -5,6 +5,9 @@ import { hasPaidEntitlement } from '@/lib/entitlements';
 import { getChatCompletion } from '@/lib/llm';
 import { PROJECT_NAME_PROMPT } from '@/lib/prompts/project-name';
 import { getCurrentArtifact } from '@/lib/artifacts';
+
+// #155: one call with a 20s retry budget.
+export const maxDuration = 60;
 import type { PathReportContent } from '@/lib/generate-path-report';
 
 interface ProjectNameOption {
@@ -83,6 +86,7 @@ export async function POST(_req: NextRequest) {
       ],
       max_tokens: 1000,
       temperature: 0.7,
+      retry: { budgetMs: 20_000, label: 'project name' },
     });
 
     const parsed = JSON.parse(content ?? '{}');

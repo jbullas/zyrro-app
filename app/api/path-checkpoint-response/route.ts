@@ -1,3 +1,4 @@
+import { withPipelineDeadline } from '@/lib/llm';
 import { NextRequest, NextResponse, after } from 'next/server';
 
 export const maxDuration = 240;
@@ -215,7 +216,7 @@ async function proceedFromCheckpoint(
   if (stage === 2) {
     const advanced = await advanceToStage(supabase, session.id, 3);
     const stage2 = stageOutputs.stage2 as Stage2Output;
-    after(() => runStage3And4(session.id, session.user_id, advanced.content.stage_outputs, context, stage2));
+    after(() => withPipelineDeadline(() => runStage3And4(session.id, session.user_id, advanced.content.stage_outputs, context, stage2)));
     return NextResponse.json({ session_id: session.id, current_stage: 3, status: 'generating' });
   }
 
@@ -225,7 +226,7 @@ async function proceedFromCheckpoint(
     // has no checkpoint after it (final delivery) — runStage6 owns settling
     // status via completeCheckpointSession, nothing else after this handoff.
     const advanced = await advanceToStage(supabase, session.id, 6);
-    after(() => runStage6(session.id, session.user_id, advanced.content.stage_outputs, context));
+    after(() => withPipelineDeadline(() => runStage6(session.id, session.user_id, advanced.content.stage_outputs, context)));
     return NextResponse.json({ session_id: session.id, current_stage: 6, status: 'generating' });
   }
 
@@ -354,12 +355,12 @@ export async function POST(req: NextRequest) {
       await logExchange(supabase, session.id, user.id, stage, 'redo', { text: body.text ?? null });
 
       if (stage === 2) {
-        after(() => runStage2Redo(session.id, user.id, stageOutputs, context, body.text ?? ''));
+        after(() => withPipelineDeadline(() => runStage2Redo(session.id, user.id, stageOutputs, context, body.text ?? '')));
       } else if (stage === 4) {
         const stage3 = stageOutputs.stage3 as Stage3Output;
-        after(() => runStage4Redo(session.id, user.id, stageOutputs, context, stage3.surviving, body.text ?? ''));
+        after(() => withPipelineDeadline(() => runStage4Redo(session.id, user.id, stageOutputs, context, stage3.surviving, body.text ?? '')));
       } else {
-        after(() => runStage5Redo(session.id, user.id, stageOutputs, context, chosenCandidateId, body.text ?? ''));
+        after(() => withPipelineDeadline(() => runStage5Redo(session.id, user.id, stageOutputs, context, chosenCandidateId, body.text ?? '')));
       }
 
       return NextResponse.json({ session_id: session.id, current_stage: stage, status: 'generating' });

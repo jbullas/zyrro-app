@@ -1,5 +1,5 @@
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
-import { getChatCompletion, getChatCompletionDetailed } from '@/lib/llm';
+import { getChatCompletion, getChatCompletionDetailed, isRateLimitError, withPipelineDeadline } from '@/lib/llm';
 import { DETECTION_PROMPT } from '@/lib/prompts/identity-analysis';
 import { LAYER_2_PROMPT } from '@/lib/prompts/identity-report';
 import { LAYER_3_SIGNATURE_PROMPT, LAYER_3_REPORT_LEVEL_PROMPT } from '@/lib/prompts/identity-report-deep-dive';
@@ -562,16 +562,16 @@ function logCategorizationComplianceGaps(
 // after its retries is omitted (that signature renders like the 0-unit
 // case), and a failed report-level call omits only pairings /
 // distinctive_pattern / pattern_to_notice. Layer 2's report is never lost
-// (see buildIdentityReport). Concurrency 3 and 8 rate-limit retries come from
-// the 2026-10-04 verification, where 4-way concurrency used up all 5 retries
-// on one deep dive.
+// (see buildIdentityReport). Concurrency 3 comes from the 2026-10-04
+// verification, where 4-way concurrency used up all 5 retries on one deep
+// dive. Rate-limit retries now live in lib/llm.ts (#155: 8 retries by
+// default, bounded by the pipeline deadline).
 // ─────────────────────────────────────────────────────────────────────────
 
 const LAYER_3_CONCURRENCY = 3;
 const LAYER_3_MAX_EVIDENCE_ITEMS = 3;
 const LAYER_3_SIGNATURE_MAX_TOKENS = 3000;
 const LAYER_3_REPORT_LEVEL_MAX_TOKENS = 2000;
-const LAYER_3_MAX_429_RETRIES = 8;
 
 /** Layer 3 fields, also stripped from the generate-path-plan input (see omitLayer3Fields). */
 export const LAYER_3_FIELDS = ['signature_deep_dives', 'pairings', 'distinctive_pattern', 'pattern_to_notice'] as const;
@@ -619,17 +619,14 @@ function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every(isNonEmptyString);
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, ms));
-}
-
 /**
- * One Layer 3 LLM call: 429s back off and retry (honouring retry-after-ms /
- * retry-after when OpenAI sends them) up to LAYER_3_MAX_429_RETRIES times;
- * any other failure — API error, unparseable JSON, failed shape check — gets
- * exactly one retry. Throws if the retry fails too. SDK-level retries are
- * off so this is the only retry layer. Logs one usage line per successful
- * call (incl. prompt-cache hits).
+ * One Layer 3 LLM call. 429s and transient API errors are retried inside
+ * lib/llm.ts (#155: the single retry layer, bounded by the pipeline deadline
+ * buildIdentityReport sets). Any other failure — unparseable JSON, failed
+ * shape check, a non-retryable API error — gets exactly one more attempt; a
+ * rate limit that lib/llm.ts already gave up on does not. Throws if the
+ * retry fails too. Logs one usage line per successful call (incl.
+ * prompt-cache hits).
  */
 async function runLayer3Call<T>(
   label: string,
@@ -642,35 +639,16 @@ async function runLayer3Call<T>(
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const started = Date.now();
-      let result: Awaited<ReturnType<typeof getChatCompletionDetailed>> | undefined;
-      for (let rateLimitRetry = 0; ; rateLimitRetry++) {
-        try {
-          result = await getChatCompletionDetailed({
-            response_format: { type: 'json_object' },
-            messages: [
-              { role: 'system', content: system },
-              { role: 'user', content: user },
-            ],
-            max_tokens: maxTokens,
-            temperature: 0,
-            maxRetries: 0,
-          });
-          break;
-        } catch (error) {
-          const status = (error as { status?: unknown })?.status;
-          if (status !== 429 || rateLimitRetry >= LAYER_3_MAX_429_RETRIES) throw error;
-          const headers = (error as { headers?: { get?: (name: string) => string | null } })?.headers;
-          const retryAfterMs = Number(headers?.get?.('retry-after-ms'));
-          const retryAfterS = Number(headers?.get?.('retry-after'));
-          const waitMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
-            ? retryAfterMs + 250
-            : Number.isFinite(retryAfterS) && retryAfterS > 0
-              ? retryAfterS * 1000 + 250
-              : 1000 * 2 ** rateLimitRetry + Math.floor(Math.random() * 500);
-          console.warn(`#154 Layer 3 ${label}: 429 rate limit, retry ${rateLimitRetry + 1}/${LAYER_3_MAX_429_RETRIES} in ${waitMs}ms`);
-          await sleep(waitMs);
-        }
-      }
+      const result = await getChatCompletionDetailed({
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0,
+        retry: { label: `#154 Layer 3 ${label}` },
+      });
       const ms = Date.now() - started;
       console.log(
         `#154 Layer 3 ${label}: ${ms}ms prompt=${result.usage.prompt_tokens} cached=${result.usage.cached_tokens} ` +
@@ -682,6 +660,7 @@ async function runLayer3Call<T>(
       return valid;
     } catch (error) {
       lastError = error;
+      if (isRateLimitError(error)) throw error;
       if (attempt === 1) console.warn(`#154 Layer 3 ${label}: attempt 1 failed, retrying once:`, error instanceof Error ? error.message : error);
     }
   }
@@ -1271,7 +1250,16 @@ export function stripDefinitionsForLayer2<T extends { signatures?: unknown }>(an
  * Detection or Layer 2 fails; a Layer 3 failure is logged and the report is
  * returned without the Layer 3 fields.
  */
-export async function buildIdentityReport({
+export async function buildIdentityReport(args: {
+  answers: DiscoveryAnswer[];
+  name: string;
+}): Promise<Record<string, unknown>> {
+  // #155: every OpenAI call in the pipeline (Detection, Layer 2, Layer 3)
+  // shares one deadline, start + 220s, inside the routes' 240s maxDuration.
+  return withPipelineDeadline(() => buildIdentityReportWithinDeadline(args));
+}
+
+async function buildIdentityReportWithinDeadline({
   answers,
   name,
 }: {
@@ -1288,6 +1276,7 @@ export async function buildIdentityReport({
     max_tokens: 4000,
     temperature: 0,
     seed: 42,
+    retry: { label: 'identity Detection' },
   });
 
   const analysis = JSON.parse(analysisContent ?? '{}');
@@ -1318,6 +1307,7 @@ export async function buildIdentityReport({
     ],
     max_tokens: 8000,
     temperature: 0,
+    retry: { label: 'identity Layer 2' },
   });
 
   const report = JSON.parse(reportContent ?? '{}');

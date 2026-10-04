@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { createClient as createSessionClient } from "@/utils/supabase/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { hasEntitlement } from "@/lib/entitlements";
-import { getChatCompletion } from "@/lib/llm";
+import { getChatCompletion, isRateLimitError, MENTOR_RETRY } from "@/lib/llm";
 import type {
   IdentitySignatureReportArtifactContent,
   PathOptionsArtifactContent,
   PathPlanArtifactContent,
 } from "@/lib/artifact-schemas";
 import { getCurrentArtifact } from "@/lib/artifacts";
+
+// #155: a live chat reply. No max_tokens on purpose, so a long reply needs
+// headroom beyond 30s; retries are capped separately (MENTOR_RETRY).
+export const maxDuration = 60;
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -166,6 +170,7 @@ async function runChat(
   const content = await getChatCompletion({
     messages: [{ role: "system", content: systemPrompt }, ...messages],
     temperature: 0.7,
+    retry: MENTOR_RETRY,
   });
   return content ?? "No response.";
 }
@@ -203,6 +208,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ reply });
   } catch (error) {
     console.error("Mentor API error:", error);
+    // #155: still rate-limited after MENTOR_RETRY's short budget.
+    if (isRateLimitError(error)) {
+      return NextResponse.json({ error: "Mentor is busy, try again in a moment" }, { status: 503 });
+    }
     return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }
 }
