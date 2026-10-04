@@ -3,7 +3,7 @@ import { getChatCompletion, getChatCompletionDetailed } from '@/lib/llm';
 import { DETECTION_PROMPT } from '@/lib/prompts/identity-analysis';
 import { LAYER_2_PROMPT } from '@/lib/prompts/identity-report';
 import { LAYER_3_SIGNATURE_PROMPT, LAYER_3_REPORT_LEVEL_PROMPT } from '@/lib/prompts/identity-report-deep-dive';
-import { DOMAINS } from '@/lib/signatures';
+import { DOMAINS, SIGNATURES } from '@/lib/signatures';
 import type {
   DomainProfile,
   SignatureDeepDive,
@@ -437,6 +437,57 @@ const ENERGISER_FRICTION_MAX_WORDS = 6;
  * validates selections against them, so they are never rewritten here.
  * Exported so verification scripts can run it against Layer 2 output alone.
  */
+const CORE_STATEMENT_MIN_WORDS = 8;
+
+// Light normalisation so a definition restated with "You" + base verb forms
+// still matches ("creates lasting systems" vs "You create lasting systems"),
+// and British/American -ise/-ize spellings compare equal.
+function definitionWords(text: string): string[] {
+  return normalizeWords(text).map(w => w.replace(/iz/g, 'is').replace(/([^s])s$/, '$1'));
+}
+
+/**
+ * #154: core_statement must say how the pattern shows up in this person, not
+ * restate the signature's definition (Layer 2 had been copying Detection's
+ * signatures[].definition, a 2-4 word label, straight into it). Log-only:
+ * flags any core_statement under 8 words, and any that contains its
+ * signature's definition as a run of words. Checked against both Detection's
+ * definition (what Layer 2 actually saw) and lib/signatures.ts' description.
+ * Exported so verification scripts can run it against Layer 2 output alone.
+ */
+export function logCoreStatementGaps(
+  report: { primary_constellation?: unknown; secondary_signature_analysis?: unknown },
+  detectionSignatures: unknown,
+): void {
+  const detected = new Map<string, string>(
+    (Array.isArray(detectionSignatures) ? detectionSignatures : [])
+      .filter((s): s is { name: string; definition: string } => typeof s?.name === 'string' && typeof s?.definition === 'string')
+      .map(s => [s.name, s.definition]),
+  );
+  for (const key of ['primary_constellation', 'secondary_signature_analysis'] as const) {
+    const entries = report[key];
+    if (!Array.isArray(entries)) continue;
+    entries.forEach((entry: { name?: unknown; core_statement?: unknown }, i) => {
+      if (typeof entry?.name !== 'string') return;
+      const statement = typeof entry.core_statement === 'string' ? entry.core_statement : '';
+      const wc = countWords(statement);
+      if (wc < CORE_STATEMENT_MIN_WORDS) {
+        console.warn(`#154 ${key}[${i}] ${entry.name}.core_statement: ${wc} words (min ${CORE_STATEMENT_MIN_WORDS}): "${statement}"`);
+      }
+      const definitions = [detected.get(entry.name), SIGNATURES.find(s => s.name === entry.name)?.description]
+        .filter((d): d is string => typeof d === 'string' && d.trim() !== '');
+      const statementWords = definitionWords(statement);
+      const restated = definitions.find(d => {
+        const defWords = definitionWords(d);
+        return defWords.length > 0 && hasOverlappingPhrase(statementWords, defWords, Math.min(4, defWords.length));
+      });
+      if (restated) {
+        console.warn(`#154 ${key}[${i}] ${entry.name}.core_statement: restates its definition ("${restated}"): "${statement}"`);
+      }
+    });
+  }
+}
+
 export function logEnergiserFrictionLengthGaps(report: { energisers?: unknown; friction_points?: unknown }): void {
   for (const key of ['energisers', 'friction_points'] as const) {
     const items = report[key];
@@ -1080,6 +1131,27 @@ function logLayer3Gaps(result: Layer3Result, report: Record<string, unknown>, ev
 }
 
 /**
+ * #154: Layer 2 kept copying Detection's signatures[].definition — a 2-4
+ * word label taken from lib/signatures.ts — straight into core_statement,
+ * even with an explicit prompt rule against it (2026-10-04 A/B: backstop
+ * flags fell from 19/23 to 3/23 once it was removed). This returns a copy of the
+ * analysis with that field removed, for the Layer 2 input only. Detection
+ * itself, the stored raw_signature_analysis and Layer 3's inputs keep the
+ * full analysis. Exported so verification scripts build the same input.
+ */
+export function stripDefinitionsForLayer2<T extends { signatures?: unknown }>(analysis: T): T {
+  if (!Array.isArray(analysis?.signatures)) return analysis;
+  return {
+    ...analysis,
+    signatures: analysis.signatures.map((s: unknown) => {
+      if (!s || typeof s !== 'object') return s;
+      const { definition: _definition, ...rest } = s as Record<string, unknown>;
+      return rest;
+    }),
+  };
+}
+
+/**
  * Detection → Layer 2 → Layer 3, returning the finished report content.
  * No DB access — generateIdentityReport persists the result. Throws only if
  * Detection or Layer 2 fails; a Layer 3 failure is logged and the report is
@@ -1121,12 +1193,14 @@ export async function buildIdentityReport({
   analysis.primary_constellation = categorized.primary;
   analysis.secondary_signatures = categorized.secondary;
 
-  // Step B — Report Generation
+  // Step B — Report Generation. Layer 2 gets the analysis without
+  // signatures[].definition (#154, see stripDefinitionsForLayer2); the full
+  // analysis is still what raw_signature_analysis stores and Layer 3 reads.
   const reportContent = await getChatCompletion({
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: LAYER_2_PROMPT },
-      { role: 'user', content: `User name: ${name}\nAnalysis: ${JSON.stringify(analysis)}` },
+      { role: 'user', content: `User name: ${name}\nAnalysis: ${JSON.stringify(stripDefinitionsForLayer2(analysis))}` },
     ],
     max_tokens: 8000,
     temperature: 0,
@@ -1192,6 +1266,9 @@ export async function buildIdentityReport({
 
   // #154: log-only length check on the energisers/friction_points phrases.
   logEnergiserFrictionLengthGaps(report);
+
+  // #154: log-only check that core_statement isn't the signature's definition.
+  logCoreStatementGaps(report, analysis.signatures);
 
   // #62: persist Layer 1's full Detection Engine output alongside Layer 2's
   // report — nothing downstream (Reframe/#43, #100's Emerging/Suppressed

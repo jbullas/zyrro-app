@@ -286,7 +286,7 @@ score: integer 1–25
 frequency: integer 1–5 — copy exactly from detection JSON, do not recalculate.
 intensity: integer 1–5 — copy exactly from detection JSON, do not recalculate.
 confidence: "Low" | "Mid" | "High" — copy exactly from detection JSON, do not recalculate.
-core_statement: 8–20 words. Define the signature operationally.
+core_statement: one sentence, minimum 8 words, target 12. State how this pattern shows up in this person specifically, grounded in their own evidence_units: what they actually do, in what kind of situation. It must not be a generic description of what the signature does in general: if the sentence would be equally true of anyone with this signature, it is generic and is rejected. Before finalising, count the words; rewrite any core_statement under 8 words or that would be true of anyone with this signature.
 evidence_analysis: write a full paragraph, several sentences, proportionate to how much real evidence exists for this signature — not a single-sentence summary.
   Must follow Pattern → Evidence → Meaning in this order.
   Pattern: what the signature fundamentally does, stated operationally.
@@ -324,7 +324,7 @@ signature_number: "06", and "07"/"08" only if that many entries exist
 name: official signature name
 domain: official domain
 score: integer 1–25
-core_statement: 8–20 words
+core_statement: one sentence, minimum 8 words, target 12. Same rule as primary_constellation's core_statement: how this pattern shows up in this person specifically, grounded in their own evidence for this signature, never a generic description of what the signature does in general (true of anyone with this signature). Before finalising, count the words; rewrite any core_statement under 8 words or that would be true of anyone with this signature.
 analysis: compressed, comparative format — this is not a smaller version of evidence_analysis.
 
   Source discipline: only cite evidence from evidence_units where secondary_signature_candidate
