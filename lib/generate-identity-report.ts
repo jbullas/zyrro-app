@@ -972,7 +972,7 @@ async function generateLayer3(report: Record<string, unknown>, evidenceUnits: un
   return result;
 }
 
-// Targets from #154 step 1 (docs/briefs/identity-report-redesign.md), as
+// Targets from #154 (see docs/changelogs/2026-10-04.md), as
 // revised in the 2026-10-04 review of verification 3.
 const WHAT_THIS_MEANS_PARAGRAPH_WORDS: Record<EvidenceMode, [number, number]> = { standard: [40, 70], reduced: [30, 50] };
 const LIST_ITEMS: Record<EvidenceMode, [number, number]> = { standard: [3, 4], reduced: [2, 2] };

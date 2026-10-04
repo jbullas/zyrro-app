@@ -1,6 +1,6 @@
 // #154 step 3: every static string on the /identity report, in one place, so
-// step 2 (final copy) edits only this file; see
-// docs/briefs/identity-report-redesign.md. Copy rules (planning
+// step 2 (final copy) edits only this file; see #154 (see
+// docs/changelogs/2026-10-04.md). Copy rules (planning
 // brief decision 12): no "four paths are ready", no 7-day plan, no mentoring
 // claims, sell value and benefits rather than the steps of the Path flow.
 // The generating / gated / error screens keep their existing strings in
