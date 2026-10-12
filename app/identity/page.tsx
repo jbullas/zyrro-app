@@ -64,18 +64,11 @@ type SignatureRowData = {
   secondary: boolean;
 };
 
+// #160: three bands only (Weak retired). Scores are frequency × intensity, 1-25.
 function getScoreBand(score: number): string {
   if (score >= 20) return 'Dominant';
-  if (score >= 14) return 'Strong';
-  if (score >= 8)  return 'Moderate';
-  return 'Weak';
-}
-
-// Hero signature cards show Dominant / Strong / Moderate only (#154): a score
-// that would be "Weak" shows Moderate. Applied here, not inside getScoreBand.
-function heroBand(score: number): string {
-  const band = getScoreBand(score);
-  return band === 'Weak' ? 'Moderate' : band;
+  if (score >= 10) return 'Strong';
+  return 'Moderate';
 }
 
 function bandClass(band: string): string {
@@ -432,7 +425,7 @@ export default function IdentityPage() {
           <p className="eyebrow">{COPY.primarySignatures.eyebrow}</p>
           <div className="grid-5">
             {primary_constellation.map(sig => {
-              const band = heroBand(sig.score);
+              const band = getScoreBand(sig.score);
               return (
                 <div key={sig.name} className="card sig-card">
                   <IdentityBadge primarySignatureName={sig.name} size="md" />

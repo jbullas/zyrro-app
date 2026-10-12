@@ -161,9 +161,8 @@ Each card:
 
 Score bands:
 - Dominant: 20-25
-- Strong: 14-19
-- Moderate: 8-13
-- Weak: 1-7
+- Strong: 10-19
+- Moderate: 1-9
 
 Confidence: Low / Mid / High
 
