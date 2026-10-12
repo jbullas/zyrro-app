@@ -10,8 +10,10 @@ import LinkButton from '@/components/LinkButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import IdentityBadge from '@/components/IdentityBadge';
+import IdentityHero from '@/components/IdentityHero';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import { toIdentityHero } from '@/lib/identity-hero';
 import { IDENTITY_REPORT_COPY as COPY, signatureHeadline } from '@/lib/identity-report-copy';
 import type {
   SignatureDeepDive,
@@ -63,21 +65,6 @@ type SignatureRowData = {
   coreStatement: string;
   secondary: boolean;
 };
-
-// #160: three bands only (Weak retired). Scores are frequency × intensity, 1-25.
-function getScoreBand(score: number): string {
-  if (score >= 20) return 'Dominant';
-  if (score >= 10) return 'Strong';
-  return 'Moderate';
-}
-
-function bandClass(band: string): string {
-  switch (band.toLowerCase()) {
-    case 'dominant': return 'band-dominant';
-    case 'strong':   return 'band-strong';
-    default:         return 'band-moderate';
-  }
-}
 
 // what_this_means is a [string, string] on current reports, but reports from
 // between the step 1 iterations stored a single string: render that as one
@@ -311,12 +298,9 @@ export default function IdentityPage() {
   if (!report) return null;
 
   const {
-    cover,
     primary_constellation,
-    constellation_synthesis,
     energisers,
     friction_points,
-    domain_profile,
     pairings,
     distinctive_pattern,
     pattern_to_notice,
@@ -329,7 +313,6 @@ export default function IdentityPage() {
     ...primary_constellation.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: false })),
     ...secondaries.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: true })),
   ];
-  const domains = Object.entries(domain_profile ?? {}).sort((a, b) => b[1] - a[1]);
   const hasPairings = Array.isArray(pairings) && pairings.length > 0;
   const hasPattern = !!distinctive_pattern;
   const ctaDisabled = checkoutLoading || entitled === null;
@@ -391,55 +374,7 @@ export default function IdentityPage() {
     <div className="flow-container flow-container--wide">
       <div className="scroll gap-16">
 
-        {/* ── Hero row: identity card + domain profile ─────────────── */}
-        <div className="grid-split">
-          <div className="card flex flex-col gap-12">
-            <p className="eyebrow">{COPY.hero.eyebrow}</p>
-            <h1 className="hero-title">{cover.named_identity}</h1>
-            <p className="cover-context-line">{COPY.hero.preparedFor(cover.prepared_for)}</p>
-            <p className="identity-thesis">{cover.identity_thesis}</p>
-            <p>{constellation_synthesis.synthesis}</p>
-          </div>
-
-          <div className="card flex flex-col gap-12">
-            <p className="eyebrow">{COPY.domains.eyebrow}</p>
-            <p className="documentation">{COPY.domains.explanation}</p>
-            <div className="flex flex-col gap-12">
-              {domains.map(([domain, value]) => (
-                <div key={domain} className="flex flex-col gap-8">
-                  <div className="row-between">
-                    <span className="sig-name">{domain}</span>
-                    <span className="sig-score-label">{value}</span>
-                  </div>
-                  <div className="sig-bar-track sig-bar-track--lg">
-                    <div className="sig-bar-fill" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Primary signature cards ─────────────────────────────── */}
-        <div className="flex flex-col gap-12">
-          <p className="eyebrow">{COPY.primarySignatures.eyebrow}</p>
-          <div className="grid-5">
-            {primary_constellation.map(sig => {
-              const band = getScoreBand(sig.score);
-              return (
-                <div key={sig.name} className="card sig-card">
-                  <IdentityBadge primarySignatureName={sig.name} size="md" />
-                  <div className="flex flex-col gap-8">
-                    <h3>{sig.name}</h3>
-                    <p className="card-sub-label">{sig.domain}</p>
-                    <p>{signatureHeadline(sig.name)}</p>
-                  </div>
-                  <span className={`score-band-pill ${bandClass(band)}`}>{band}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <IdentityHero hero={toIdentityHero(report)} />
 
         {/* ── Hero Path CTA ───────────────────────────────────────── */}
         <div className="cta-card">

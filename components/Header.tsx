@@ -51,9 +51,13 @@ export default function Header({ showLogin = true }: HeaderProps) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // #7: the public share page /s/[slug] shows the logo only: no nav, no
+  // login icon, no avatar (a visitor may be signed in as someone else).
+  const logoOnly = pathname.startsWith('/s/');
+
   // Visibility rules carried over from BottomNav: hidden on the homepage, and
   // on /start until auth is checked and the user is logged in.
-  const showNav = pathname !== '/' && !(pathname === '/start' && (loading || !user));
+  const showNav = !logoOnly && pathname !== '/' && !(pathname === '/start' && (loading || !user));
 
   // Close the mobile menu on Escape (focus back to the menu button) and on a
   // click/tap outside it.
@@ -138,7 +142,7 @@ export default function Header({ showLogin = true }: HeaderProps) {
               </button>
             </>
           )}
-          {userInitials ? (
+          {logoOnly ? null : userInitials ? (
             <a href="/account" aria-label="My account" className="nav-avatar">
               {userInitials}
             </a>

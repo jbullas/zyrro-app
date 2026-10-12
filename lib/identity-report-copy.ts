@@ -83,6 +83,31 @@ export const IDENTITY_REPORT_COPY = {
       'This report is a reflective interpretation of recurring patterns in your answers. It is designed to help you ' +
       'recognise how you naturally think, create and operate, not to place you inside a fixed personality type.',
   },
+  // #7: the owner's Share button and panel on /identity.
+  share: {
+    button: 'Share',
+    buttonShared: 'Shared',
+    eyebrow: 'Share your identity',
+    body: 'Anyone with this link sees the top of your report: your Named Identity, Domain Profile and Primary Signatures. Nothing else.',
+    loading: 'Creating your link…',
+    error: 'We couldn’t create your link. Please try again.',
+    copy: 'Copy',
+    copied: 'Copied',
+    linkedin: 'LinkedIn',
+    x: 'X',
+    facebook: 'Facebook',
+    nativeShare: 'Share',
+    stop: 'Stop sharing',
+    close: 'Close',
+  },
+  // #7: the public share page /s/[slug], in place of the hero Path CTA.
+  prospectCta: {
+    heading: 'What’s your signature?',
+    body: 'Answer 13 questions and get your free Identity report.',
+    button: 'Discover your signature',
+  },
+  // #7: og:description for /s/[slug].
+  shareDescription: 'Discover your own signature: answer 13 questions and get your free Identity report.',
 } as const;
 
 /**
