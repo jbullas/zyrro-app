@@ -2247,7 +2247,11 @@ p {
 }
 /* #7: the Share panel is the confirm dialog (.dialog-overlay / .dialog-card)
    on desktop and a bottom sheet under 700px, the header's breakpoint. Kept at
-   the end of the file so it wins cascade ties with the dialog rules above. */
+   the end of the file so it wins cascade ties with the dialog rules above.
+   .dialog-card--share widens it from 360px so the three platform buttons fit
+   in one row of equal columns. */
+.dialog-card--share { max-width: 440px; }
+
 @media (max-width: 700px) {
   .dialog-overlay--sheet { align-items: flex-end; padding: 0; }
   .dialog-overlay--sheet .dialog-card {

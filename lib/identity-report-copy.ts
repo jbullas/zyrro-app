@@ -88,17 +88,17 @@ export const IDENTITY_REPORT_COPY = {
     button: 'Share',
     buttonShared: 'Shared',
     eyebrow: 'Share your identity',
-    body: 'Anyone with this link sees the top of your report: your Named Identity, Domain Profile and Primary Signatures. Nothing else.',
+    body: 'Anyone with the link sees your Named Identity, Domain Profile and Primary Signatures. Nothing else.',
     loading: 'Creating your link…',
     error: 'We couldn’t create your link. Please try again.',
-    copy: 'Copy',
+    copy: 'Copy link',   // copy icon button label (screen readers)
     copied: 'Copied',
     linkedin: 'LinkedIn',
     x: 'X',
     facebook: 'Facebook',
     nativeShare: 'Share',
     stop: 'Stop sharing',
-    close: 'Close',
+    close: 'Close',      // X icon button label (screen readers)
   },
   // #7: the public share page /s/[slug], in place of the hero Path CTA.
   prospectCta: {

@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  IconBrandFacebook, IconBrandLinkedin, IconBrandX, IconCheck, IconCopy, IconShare, IconX,
+} from '@tabler/icons-react';
 import { IDENTITY_REPORT_COPY as COPY } from '@/lib/identity-report-copy';
 
 const SHARE = COPY.share;
@@ -76,9 +79,9 @@ export default function SharePanel({
 
   const encoded = url ? encodeURIComponent(url) : '';
   const platforms = [
-    { label: SHARE.linkedin, href: `https://www.linkedin.com/sharing/share-offsite/?url=${encoded}` },
-    { label: SHARE.x, href: `https://x.com/intent/post?url=${encoded}` },
-    { label: SHARE.facebook, href: `https://www.facebook.com/sharer/sharer.php?u=${encoded}` },
+    { label: SHARE.linkedin, Icon: IconBrandLinkedin, href: `https://www.linkedin.com/sharing/share-offsite/?url=${encoded}` },
+    { label: SHARE.x, Icon: IconBrandX, href: `https://x.com/intent/post?url=${encoded}` },
+    { label: SHARE.facebook, Icon: IconBrandFacebook, href: `https://www.facebook.com/sharer/sharer.php?u=${encoded}` },
   ];
 
   return (
@@ -89,11 +92,11 @@ export default function SharePanel({
       aria-label={SHARE.eyebrow}
       onClick={onClose}
     >
-      <div className="dialog-card" onClick={e => e.stopPropagation()}>
+      <div className="dialog-card dialog-card--share" onClick={e => e.stopPropagation()}>
         <div className="row-between">
           <p className="eyebrow">{SHARE.eyebrow}</p>
-          <button ref={closeRef} type="button" className="btn-link btn-link-inline" onClick={onClose}>
-            {SHARE.close}
+          <button ref={closeRef} type="button" className="icon-btn -my-[12px] -mr-[12px]" aria-label={SHARE.close} onClick={onClose}>
+            <IconX size={20} stroke={2} aria-hidden="true" />
           </button>
         </div>
         <p>{SHARE.body}</p>
@@ -108,33 +111,57 @@ export default function SharePanel({
 
         {url && (
           <>
-            <div className="flex items-center gap-8">
-              <input className="input-field" type="text" readOnly value={url} aria-label="Share link" onFocus={e => e.target.select()} />
-              <button type="button" className="btn-secondary btn-secondary-compact" onClick={handleCopy}>
-                {copied ? SHARE.copied : SHARE.copy}
+            {/* The link is the panel's main element: its own line, extra space around it. */}
+            <div className="panel flex items-center gap-8 my-[8px]">
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0 truncate font-semibold text-[var(--color-grad-2)]"
+              >
+                {url}
+              </a>
+              <button
+                type="button"
+                className="icon-btn -my-[12px] -mr-[8px]"
+                aria-label={copied ? SHARE.copied : SHARE.copy}
+                onClick={handleCopy}
+              >
+                {copied
+                  ? <IconCheck size={20} stroke={2} aria-hidden="true" />
+                  : <IconCopy size={20} stroke={2} aria-hidden="true" />}
               </button>
             </div>
-            <div className="flex flex-wrap gap-8">
-              {platforms.map(p => (
-                <a
-                  key={p.label}
-                  href={p.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-secondary btn-secondary-compact"
-                >
-                  {p.label}
-                </a>
-              ))}
-              {canNativeShare && (
-                <button type="button" className="btn-secondary btn-secondary-compact" onClick={handleNativeShare}>
+
+            {/* Native share sheet: phones only (under 700px), above the platforms. */}
+            {canNativeShare && (
+              <div className="hidden max-[700px]:block">
+                <button type="button" className="btn-secondary btn-secondary-compact w-full justify-center" onClick={handleNativeShare}>
+                  <IconShare size={18} stroke={2} aria-hidden="true" />
                   {SHARE.nativeShare}
                 </button>
-              )}
+              </div>
+            )}
+
+            {/* Three equal columns; stacked full width under 700px. */}
+            <div className="grid grid-cols-3 max-[700px]:grid-cols-1 gap-8">
+              {platforms.map(({ label, Icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary btn-secondary-compact w-full justify-center"
+                >
+                  <Icon size={18} stroke={2} aria-hidden="true" />
+                  {label}
+                </a>
+              ))}
             </div>
+
             <button
               type="button"
-              className={`btn-link${stopping ? ' btn-disabled' : ''}`}
+              className={`documentation self-center underline cursor-pointer${stopping ? ' btn-disabled' : ''}`}
               onClick={handleStop}
               disabled={stopping}
             >
