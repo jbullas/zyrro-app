@@ -8,7 +8,10 @@ import { loadSharedHero } from '@/lib/share-link';
 // bars (same order and values as the page) and "zyrro.ai". Colours are the
 // globals.css tokens. Inter (OFL, assets/fonts) is used here only; the app
 // itself keeps its system font stack. Every div sets display: flex, which
-// Satori (ImageResponse's renderer) requires for multi-child elements.
+// Satori (ImageResponse's renderer) requires for multi-child elements. In
+// each bar row the label and value columns don't shrink, and the track has
+// flexBasis 0, so its width never depends on its fill: every track starts
+// and ends at the same x.
 
 export const alt = 'Zyrro Identity';
 export const size = { width: 1200, height: 630 };
@@ -45,11 +48,11 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: 40 }}>
             {domains.map(([domain, value]) => (
               <div key={domain} style={{ display: 'flex', alignItems: 'center', height: 30, marginBottom: 18 }}>
-                <div style={{ display: 'flex', width: 210, fontSize: 26, fontWeight: 800, color: TEXT_PRIMARY }}>{domain}</div>
-                <div style={{ display: 'flex', flexGrow: 1, height: 14, borderRadius: 999, background: 'rgba(0,0,0,0.07)' }}>
+                <div style={{ display: 'flex', width: 210, flexShrink: 0, fontSize: 26, fontWeight: 800, color: TEXT_PRIMARY }}>{domain}</div>
+                <div style={{ display: 'flex', flexGrow: 1, flexBasis: 0, height: 14, borderRadius: 999, background: 'rgba(0,0,0,0.07)' }}>
                   <div style={{ display: 'flex', width: `${Math.max(0, Math.min(100, value))}%`, height: '100%', borderRadius: 999, backgroundImage: GRADIENT }} />
                 </div>
-                <div style={{ display: 'flex', width: 70, justifyContent: 'flex-end', fontSize: 26, fontWeight: 800, color: TEXT_PRIMARY }}>{value}</div>
+                <div style={{ display: 'flex', width: 70, flexShrink: 0, justifyContent: 'flex-end', fontSize: 26, fontWeight: 800, color: TEXT_PRIMARY }}>{value}</div>
               </div>
             ))}
           </div>
