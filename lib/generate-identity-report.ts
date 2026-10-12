@@ -67,6 +67,39 @@ export function computeDomainProfile(signatures: unknown): DomainProfile {
   return profile;
 }
 
+const CANONICAL_DOMAIN = new Map<string, string>(SIGNATURES.map(s => [s.name, s.domain]));
+
+export type DomainCorrection = { name: string; from: unknown; to: string };
+
+/**
+ * #94: each signature's domain is fixed in lib/signatures.ts, but the LLM's
+ * per-signature `domain` isn't checked against it. Every wrong domain found in
+ * stored reports was in Layer 2's secondary_signature_analysis (miscopied from
+ * a correct Detection domain), so this runs both on Detection's signatures[]
+ * (before computeDomainProfile) and on Layer 2's primary_constellation /
+ * secondary_signature_analysis. Overwrites in place and logs each correction.
+ * A name not in SIGNATURES (e.g. "Undefined") is left unchanged and logged.
+ */
+export function enforceCanonicalDomains(list: unknown, label: string): DomainCorrection[] {
+  const corrections: DomainCorrection[] = [];
+  if (!Array.isArray(list)) return corrections;
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue;
+    const s = entry as { name?: unknown; domain?: unknown };
+    const canonical = typeof s.name === 'string' ? CANONICAL_DOMAIN.get(s.name) : undefined;
+    if (canonical === undefined) {
+      console.warn(`#94 ${label}: unknown signature name ${JSON.stringify(s.name)} — domain ${JSON.stringify(s.domain)} left unchanged`);
+      continue;
+    }
+    if (s.domain !== canonical) {
+      console.warn(`#94 ${label}: ${s.name} domain ${JSON.stringify(s.domain)} -> ${canonical}`);
+      corrections.push({ name: s.name as string, from: s.domain, to: canonical });
+      s.domain = canonical;
+    }
+  }
+  return corrections;
+}
+
 /**
  * Derives Primary/Secondary categorization from the Detection Engine's own
  * scored `signatures[]` list, replacing Layer 1's own `primary_constellation`/
@@ -1281,6 +1314,10 @@ async function buildIdentityReportWithinDeadline({
 
   const analysis = JSON.parse(analysisContent ?? '{}');
 
+  // #94: code owns each signature's domain — overwrite before domain_profile
+  // and categorisation read it, and before Layer 2 copies it.
+  enforceCanonicalDomains(analysis.signatures, 'Detection signatures');
+
   // domain_profile is computed from real signature scores, not the LLM's
   // own disconnected judgment of it (see docs/changelogs/2026-07-14.md) —
   // overwrite it here so Layer 2's "copy from detection JSON" instruction
@@ -1338,6 +1375,11 @@ async function buildIdentityReportWithinDeadline({
   // Defense in depth: code owns domain_profile now, not the LLM — overwrite
   // again in case Layer 2 didn't copy analysis.domain_profile faithfully.
   report.domain_profile = analysis.domain_profile;
+
+  // #94: Layer 2 doesn't reliably copy each signature's domain from its input
+  // (every wrong domain in stored reports came from here) — backstop it.
+  enforceCanonicalDomains(report.primary_constellation, 'Layer 2 primary_constellation');
+  enforceCanonicalDomains(report.secondary_signature_analysis, 'Layer 2 secondary_signature_analysis');
 
   // Layer 2 doesn't reliably respect the zero-evidence fallback tier — see
   // enforceSecondaryEvidenceFloor's doc comment. Runs after sorting since
