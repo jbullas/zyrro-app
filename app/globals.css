@@ -910,7 +910,7 @@ p {
 }
 
 /* ── Section divider consolidation — see
-   docs/briefs/123-section-divider-consolidation-brief.md. Replaces the old
+   docs/changelogs/2026-08-25.md. Replaces the old
    three-mechanism system (.report-sections' unconditional top border,
    .report-section + .report-section adjacency, .report-footer's own
    separate border) with one class: each .section owns a bottom divider,
@@ -1404,7 +1404,7 @@ p {
 }
 
 /* ── ReframeCtaBlock — see
-   docs/briefs/reframe-cta-markup-simplification-brief.md. Scoped rules
+   docs/changelogs/2026-08-25.md. Scoped rules
    instead of borrowing the .limits- family / .cta-block (LimitsBlock's
    own classes) — this component owns its own styling now. .card.cta is a compound
    two-class selector so it overrides base .card regardless of source

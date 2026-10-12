@@ -19,7 +19,7 @@ import {
 // is no background generation here: GET bootstraps/resumes the session
 // synchronously, and POST persists exactly one of the three sequential
 // inputs per call, each on its own request (must-haves, then must-avoids,
-// then ideal-life) — see docs/briefs/134-path-redesign-direction-options-your-path.md §3.
+// then ideal-life) — see docs/changelogs/2026-09-02.md.
 
 function createServiceClient() {
   return createSupabaseAdmin(

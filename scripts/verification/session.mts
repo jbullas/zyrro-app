@@ -1,6 +1,6 @@
 /**
  * Bootstrap and teardown for synthetic test users used in live verification
- * passes. See docs/briefs/49-run-project-skill.md and CC's local memory
+ * passes. See docs/changelogs/2026-07-14.md and CC's local memory
  * entry `reference_local_test_auth_bootstrap` for the manual version of
  * this pattern this module replaces.
  *

@@ -2,7 +2,7 @@
  * #129 Stage B verification — runs the real (non-placeholder) reasoning
  * pipeline (Stages 1-4 + Checkpoints 1-2) end to end via the real HTTP
  * routes, against 3 real personas' real discovery_answers. Real OpenAI
- * calls throughout. See docs/briefs/129-stage-b-reasoning-pipeline-brief.md
+ * calls throughout. See docs/changelogs/2026-08-26.md
  * for the required scenarios and verification checks this covers.
  *
  * Run: npx tsx --env-file=.env.local scripts/verify-129-stage-b.mts

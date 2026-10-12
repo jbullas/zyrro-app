@@ -34,7 +34,7 @@ import {
 // session.id — the client's polling hook needs it to target
 // useCheckpointSessionStatus-style polling, the same way the old
 // path_checkpoint_session flow's session_id was returned for that reason.
-// See docs/briefs/134-path-redesign-direction-options-your-path.md §4.
+// See docs/changelogs/2026-09-10.md.
 
 function createServiceClient() {
   return createSupabaseAdmin(

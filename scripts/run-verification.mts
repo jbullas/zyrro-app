@@ -2,7 +2,7 @@
  * Entry point for live verification passes (ticket #49). Bootstraps a
  * synthetic test user, opens an authenticated Playwright driver, hands both
  * to a callback, and tears the user down afterward — even if the callback
- * throws. See docs/briefs/49-run-project-skill.md and AGENTS.md for when to
+ * throws. See docs/changelogs/2026-07-14.md and AGENTS.md for when to
  * reach for this.
  *
  * Typical usage — import into an ad hoc verification script for the session:

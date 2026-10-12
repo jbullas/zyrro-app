@@ -9,7 +9,7 @@ const SIGNATURE_LIST = DOMAINS.map(domain => {
 /**
  * #119 Stage 5: standalone Call 1 (Read & Write) of the new blank-slate
  * observe-then-name pipeline, per
- * docs/briefs/119-stage5-newpipeline-call1-test.md. NOT wired into
+ * docs/changelogs/2026-08-19.md. NOT wired into
  * generateIdentityReport, any API route, or any artifact type.
  *
  * Departs deliberately from the live DETECTION_PROMPT/LAYER_2_PROMPT
@@ -23,7 +23,7 @@ const SIGNATURE_LIST = DOMAINS.map(domain => {
  * Prompt text below is copied verbatim from the Stage 5 brief's fenced
  * prompt block, with only the signature list interpolated in place of
  * the bracketed placeholder, plus two additions per
- * docs/briefs/119-stage6-call1-voice-repetition-fix.md: a second-person
+ * docs/changelogs/2026-08-19.md: a second-person
  * voice instruction (Stage 5's real output mixed "you" and "they" across
  * personas, since the prompt never specified a voice) and a
  * vary-the-phrasing instruction (Stage 5's real output leaned on the same

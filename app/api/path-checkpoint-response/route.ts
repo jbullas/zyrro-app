@@ -32,7 +32,7 @@ import {
 // #129 Stage B — the API surface for responding to Checkpoint 1 (stage 2)
 // and Checkpoint 2 (stage 4). Real routing/UX is Stage D; this exists so
 // Stage B's reasoning pipeline is testable end to end. See
-// docs/briefs/129-stage-b-reasoning-pipeline-brief.md.
+// docs/changelogs/2026-08-26.md.
 
 // Design doc §6: 2 redos max per checkpoint. On exceeding it, auto-proceed
 // with the last-generated version rather than looping indefinitely, logging

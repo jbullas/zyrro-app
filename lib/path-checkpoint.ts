@@ -4,9 +4,7 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 // #129 Stage A — checkpoint infrastructure (placeholder content only; real
 // reasoning prompts are Stage B/C). Extended, not replaced, by Stage B (see
 // recordChosenCandidate below) — the state machine itself is unchanged. See
-// docs/changelogs/2026-08-26.md,
-// docs/briefs/129-stage-a-checkpoint-infrastructure-brief.md, and
-// docs/briefs/129-stage-b-reasoning-pipeline-brief.md.
+// docs/changelogs/2026-08-26.md.
 //
 // path_checkpoint_session is a `type = 'path_checkpoint_session'` row on the
 // shared artifacts table, but unlike every other artifact type it is

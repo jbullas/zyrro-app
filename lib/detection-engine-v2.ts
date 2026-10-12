@@ -7,7 +7,7 @@ const DOMAIN_STRUCTURE = DOMAINS.map(domain => {
 
 /**
  * #118 Stage 1: standalone Detection Engine v2 prompt, evaluated in
- * isolation per docs/briefs/118-stage0-stage1-evidence-audit-and-detection-engine-v2.md.
+ * isolation per docs/changelogs/2026-08-11.md.
  * NOT wired into generateIdentityReport or any API route — the live pipeline
  * still uses lib/prompts/identity-analysis.ts's DETECTION_PROMPT unchanged.
  *

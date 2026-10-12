@@ -23,7 +23,7 @@ import type { ProjectNamingState } from '@/lib/use-project-naming';
 // dropped from the start, they belonged to the old Stage 5/6 schema and
 // have no equivalent here (see this session's own scoping pass).
 //
-// #139 — full content-design rebuild (docs/briefs/139-path-report-redesign.md).
+// #139 — full content-design rebuild (docs/changelogs/2026-09-13.md).
 // thesis/what_it_is/honest_cost/master_strategy are gone; summary/
 // what_this_could_be/life_it_leads_toward/strategic_decisions replace them.
 // honest_cost's own section is removed entirely (confirmed cut, not an
@@ -43,7 +43,7 @@ import type { ProjectNamingState } from '@/lib/use-project-naming';
 // verbatim, just fed different props (decision/why_it_matters/live_options
 // instead of name/description/sequencing_rationale).
 //
-// #144 (docs/briefs/144-path-report-live-review-fixes.md, post-#139 live
+// #144 (docs/changelogs/2026-09-13.md, post-#139 live
 // review): live_options was originally rendered via ChipRow — "only pills
 // are pretty but useless" — replaced with a real schema change
 // (LiveOption { option; context }, lib/generate-path-report.ts) and a

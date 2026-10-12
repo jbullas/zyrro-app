@@ -2,7 +2,7 @@
  * Standalone verification for #129 Stage A (checkpoint infrastructure).
  * Not wired into any user-facing route. Exercises the placeholder-content
  * state machine end to end against the real dev Supabase instance — no
- * OpenAI calls, no UI. See docs/briefs/129-stage-a-checkpoint-infrastructure-brief.md
+ * OpenAI calls, no UI. See docs/changelogs/2026-08-26.md
  * for the 5 required scenarios this covers.
  *
  * Run: npx tsx --env-file=.env.local scripts/verify-129-stage-a.mts

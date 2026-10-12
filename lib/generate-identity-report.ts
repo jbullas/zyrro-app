@@ -42,7 +42,7 @@ const DOMAIN_FLOOR = 10;
 /**
  * Computes domain_profile deterministically from the Detection Engine's real
  * signature scores, replacing the LLM's own disconnected domain_profile
- * judgment (see docs/briefs/1-domain-profile-computed.md). Real signature
+ * judgment (see docs/changelogs/2026-07-14.md). Real signature
  * scores are always integers 1-25 (frequency and intensity are both 1-5) per
  * the detection prompt's schema, but that schema isn't runtime-enforced on
  * the LLM's JSON output, so non-array input, non-finite scores, and
@@ -70,7 +70,7 @@ export function computeDomainProfile(signatures: unknown): DomainProfile {
 /**
  * Derives Primary/Secondary categorization from the Detection Engine's own
  * scored `signatures[]` list, replacing Layer 1's own `primary_constellation`/
- * `secondary_signatures` name-array judgment (see docs/briefs/110-detection-categorization-brief.md).
+ * `secondary_signatures` name-array judgment (see docs/changelogs/2026-08-10.md).
  * Score itself (frequency × intensity) is reliable; only Layer 1's selection
  * of who counts as Primary vs. Secondary from that score is not — this
  * derives the selection deterministically from score instead. Secondary cap
@@ -96,7 +96,7 @@ export function categorizePrimarySecondary(signatures: unknown): {
 
 /**
  * Sorts an array of { score } objects by score descending, in place. Used for
- * every score-ranked list the LLM emits (see docs/briefs/33-primary-signature-ordering.md)
+ * every score-ranked list the LLM emits (see docs/changelogs/2026-07-14.md)
  * since prompt "rank by score" instructions govern *selection*, not
  * guaranteed output array order. No-ops on non-array input rather than
  * throwing, since these come from unvalidated LLM JSON. Missing/non-numeric
@@ -115,7 +115,7 @@ export function sortByScoreDescending(items: unknown): void {
 
 /**
  * Layer 2's prompt-level rule (0-1 tagged evidence_units → short fallback
- * instead of a full narrative, see docs/briefs/82-secondary-compressed-format-brief.md)
+ * instead of a full narrative, see docs/changelogs/2026-07-30.md)
  * doesn't hold reliably — confirmed via real-user live verification: it wrote
  * a confident, fabricated narrative for a secondary signature Detection
  * Engine tagged zero evidence_units to (inventing "reflections on time and
@@ -1282,7 +1282,7 @@ async function buildIdentityReportWithinDeadline({
   const analysis = JSON.parse(analysisContent ?? '{}');
 
   // domain_profile is computed from real signature scores, not the LLM's
-  // own disconnected judgment of it (see docs/briefs/1-domain-profile-computed.md) —
+  // own disconnected judgment of it (see docs/changelogs/2026-07-14.md) —
   // overwrite it here so Layer 2's "copy from detection JSON" instruction
   // copies a grounded number.
   analysis.domain_profile = computeDomainProfile(analysis.signatures ?? []);

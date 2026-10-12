@@ -7,7 +7,7 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 // place (one row per user) rather than append-only, but with a flat
 // curation record for content instead of a stage-keyed blob, since there's
 // no LLM stage output to key by. See
-// docs/briefs/134-path-redesign-direction-options-your-path.md §3/§7 and the
+// docs/changelogs/2026-09-02.md and the
 // migration file (20260902000000_path_direction_session.sql) for the schema
 // rationale.
 

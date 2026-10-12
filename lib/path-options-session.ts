@@ -6,7 +6,7 @@ import { withDbRetry } from '@/lib/with-db-retry';
 // mirroring lib/path-checkpoint.ts's shape (not lib/path-direction.ts's —
 // see that file's own header for why: this type has a real background-
 // generation state, path_direction_session doesn't). See
-// docs/briefs/134-path-redesign-direction-options-your-path.md §4/§7 and
+// docs/changelogs/2026-09-10.md and
 // the migration file (20260910000000_path_options_session.sql) for the
 // schema rationale.
 //

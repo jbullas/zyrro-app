@@ -8,7 +8,7 @@ const DOMAIN_STRUCTURE = DOMAINS.map(domain => {
 
 /**
  * #118 Stage 1b: standalone Detection Engine v3, evaluated in isolation per
- * docs/briefs/118-stage1b-signature-first-detection-engine-v3.md. NOT wired
+ * docs/changelogs/2026-08-11.md. NOT wired
  * into generateIdentityReport or any API route — the live pipeline is
  * unchanged. lib/detection-engine-v2.ts (Stage 1) also stays as-is,
  * untouched, per Stage 1's own Definition of Done.

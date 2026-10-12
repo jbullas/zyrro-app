@@ -3,7 +3,7 @@ import { SIGNATURES } from '@/lib/signatures';
 
 /**
  * #118 Stage 2: standalone Call 2 (Analysis) pilot, per
- * docs/briefs/118-stage1d-stage2-matteo-rerun-and-call2-pilot.md. NOT wired
+ * docs/changelogs/2026-08-11.md. NOT wired
  * into generateIdentityReport or any API route. Tests whether feeding this
  * call a code-computed top-5/top-3 categorization plus only the
  * Strong/Normal-rated evidence entries from a v3/v4 Detection Engine result

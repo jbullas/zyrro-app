@@ -53,7 +53,7 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // requestReportDraft exactly as before, unaware that each "attempt" is now
 // two real calls under the hood, not one.
 //
-// #139 — full content-design rebuild (docs/briefs/139-path-report-redesign.md).
+// #139 — full content-design rebuild (docs/changelogs/2026-09-13.md).
 // Confirmed cut: `honest_cost` — its job (naming a real trade-off) is
 // absorbed into life_it_leads_toward's friction-as-trade-off beat, not
 // replaced by anything else. `thesis` is also removed from this module's
@@ -79,8 +79,8 @@ import { findMustAvoidViolations, type MustAvoidViolation } from '@/lib/generate
 // boundary — no future-scale/reputation speculation, that's What This
 // Could Be's job) and logResearchClaimsInStrategicDecisions (no confident
 // claims about a real market/competitor/industry — nothing here has been
-// looked up). One more added for #144 (docs/briefs/144-path-report-live-
-// review-fixes.md): logEmDashesInReport, an exact-match backstop for the
+// looked up). One more added for #144 (docs/changelogs/2026-09-13.md):
+// logEmDashesInReport, an exact-match backstop for the
 // prompt's own new "no em dashes, anywhere" rule. One more added when #144
 // reopened (see must_avoids handling below): logHedgeWordsInReport, an
 // exact-match backstop for hedged must-avoid exclusion claims.

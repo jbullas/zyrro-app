@@ -10,9 +10,7 @@
  * #139 rewrote this file's schema throughout — thesis/what_it_is/
  * honest_cost/master_strategy are gone; summary/what_this_could_be/
  * why_it_fits(now 2 paragraphs)/life_it_leads_toward/strategic_decisions
- * replace them. See docs/briefs/139-path-report-redesign.md (already
- * deleted by the time this comment is read, per the session-end brief-
- * deletion protocol — this file's own git history is the record).
+ * replace them. See docs/changelogs/2026-09-13.md.
  *
  * Run: npx tsx --env-file=.env.local scripts/test-134-slice3-report-checks.mts
  */

@@ -3,7 +3,7 @@
  * (develop chosen path) + Checkpoint 3 + Stage 6 (final report) pipeline
  * end to end via the real HTTP routes, reusing the 3 real sessions Stage B
  * left parked at current_stage: 5 (Leona, Katalin, Matteo_Varga). Real
- * OpenAI calls throughout. See docs/briefs/129-stage-c-develop-path-brief.md
+ * OpenAI calls throughout. See docs/changelogs/2026-08-26.md
  * for the required scenarios and verification checks this covers.
  *
  * Run: npx tsx --env-file=.env.local scripts/verify-129-stage-c.mts

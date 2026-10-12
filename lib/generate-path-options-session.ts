@@ -11,7 +11,7 @@ import type { PathOptionsCandidate, FitConfidence } from '@/lib/path-options-ses
 // enforceSecondaryEvidenceFloor/enforceConstellationSynthesisNonOverlap
 // (lib/generate-identity-report.ts) — constraint-stacking in prompts alone
 // has previously proven unreliable (confirmed across #99/#112/#120). See
-// docs/briefs/134-path-redesign-direction-options-your-path.md §4.
+// docs/changelogs/2026-09-10.md.
 //
 // #138 rewrote the generation context shape (confidence-filtered signatures
 // + how_you_operate, replacing the old always-top-2 primary_constellation),

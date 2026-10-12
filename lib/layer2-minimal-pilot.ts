@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 
 /**
  * #119 Stage 0: standalone Layer 2 prompt A/B pilot, per
- * docs/briefs/119-stage0-minimal-layer2-prompt-ab-test.md. NOT wired into
+ * docs/changelogs/2026-08-18.md. NOT wired into
  * generateIdentityReport or any API route. Tests whether the current live
  * LAYER_2_PROMPT's (lib/prompts/identity-report.ts) large accumulated rule
  * stack is load-bearing, by running an identical Detection Engine output
@@ -119,7 +119,7 @@ Now generate the full Identity Signature Report from the provided signature anal
 
 /**
  * #119 Stage 1: standalone Variant C ("partially-minimal"), per
- * docs/briefs/119-stage1-variant-c-partial-minimal-layer2.md. NOT wired
+ * docs/changelogs/2026-08-18.md. NOT wired
  * into generateIdentityReport or any API route.
  *
  * This is the live LAYER_2_PROMPT (lib/prompts/identity-report.ts) with
@@ -770,7 +770,7 @@ Now generate the full Layer 2 Identity Signature Report from the provided signat
 
 /**
  * #120: standalone Variant C′ ("C prime"), per
- * docs/briefs/120-variant-c-prime-how-you-operate-floor.md. NOT wired into
+ * docs/changelogs/2026-08-20.md. NOT wired into
  * generateIdentityReport or any API route.
  *
  * Ships Variant C (`VARIANT_C_LAYER2_PROMPT` above) — the fabrication fix
@@ -1413,7 +1413,7 @@ Now generate the full Layer 2 Identity Signature Report from the provided signat
 
 /**
  * #119 Stage 4: standalone Variant F, per
- * docs/briefs/119-stage4-variant-f-how-you-operate-retry.md. NOT wired into
+ * docs/changelogs/2026-08-18.md. NOT wired into
  * generateIdentityReport or any API route.
  *
  * Second attempt at fixing how_you_operate's length regression (Stage 1),
@@ -2044,7 +2044,7 @@ Now generate the full Layer 2 Identity Signature Report from the provided signat
 
 /**
  * #119 Stage 3: standalone Variant E, per
- * docs/briefs/119-stage3-variant-e-length-diagnostic.md. NOT wired into
+ * docs/changelogs/2026-08-18.md. NOT wired into
  * generateIdentityReport or any API route.
  *
  * Diagnostic control for Stage 2's open question: did Variant D's
@@ -2674,7 +2674,7 @@ Now generate the full Layer 2 Identity Signature Report from the provided signat
 
 /**
  * #119 Stage 2: standalone Variant D, per
- * docs/briefs/119-stage2-variant-d-how-you-operate-fix.md. NOT wired into
+ * docs/changelogs/2026-08-18.md. NOT wired into
  * generateIdentityReport or any API route.
  *
  * Variant C (Stage 1) with exactly one further change: how_you_operate's

@@ -11,7 +11,7 @@ type ReframeCtaBlockProps = {
 /**
  * The single reframe-teaser CTA composition, rendered identically on both
  * /identity (just-finished-reading) and /path (arrived cold via nav) — see
- * docs/briefs/reframe-teaser-redesign-brief.md. A shared component rather
+ * docs/changelogs/2026-08-25.md. A shared component rather
  * than copy-pasted JSX guarantees the two pages stay byte-for-byte
  * identical by construction, not by convention.
  */

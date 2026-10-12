@@ -18,7 +18,7 @@ import {
 // #129 Stage B — real reasoning for Stages 1-4 of the checkpoint-guided
 // path-selection redesign, built on top of Stage A's lib/path-checkpoint.ts
 // state machine (not replacing it). See
-// docs/briefs/129-stage-b-reasoning-pipeline-brief.md.
+// docs/changelogs/2026-08-26.md.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = SupabaseClient<any, any, any>;

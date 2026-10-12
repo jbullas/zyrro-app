@@ -7,7 +7,7 @@
 // phrases the existing phrase-match hard check scans for). Per this
 // session's confirmed decision: no negative-word list here either — the
 // whole point is judging substance, not maintaining a vocabulary of ways to
-// violate a constraint. See docs/briefs/138-options-life-path-rewrite.md §5.
+// violate a constraint. See docs/changelogs/2026-09-12.md.
 //
 // #138 §6 extended this call's OUTPUT ONLY to also produce fit_score/
 // fit_confidence per draft, for the option-card redesign's display-only
