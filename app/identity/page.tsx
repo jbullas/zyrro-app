@@ -427,40 +427,52 @@ export default function IdentityPage() {
             const open = !!dive && openRows.has(row.name);
             const scored = row.score >= 1;
             const id = rowId(row.name);
-            return (
-              <div key={row.name} className={`card flex flex-col gap-20${open ? ' card--active' : ''}`}>
-                <div className="sig-depth-row">
-                  <IdentityBadge primarySignatureName={row.name} size="sm" muted={row.secondary} />
-                  <div className="flex flex-col gap-4">
-                    <h3>{row.name}</h3>
-                    <p className="card-sub-label">{row.domain}</p>
-                  </div>
-                  <div className="sig-bar-track sig-bar-track--lg">
-                    {scored && (
-                      <div
-                        className={row.secondary ? 'sig-bar-fill-muted' : 'sig-bar-fill'}
-                        style={{ width: `${Math.min(100, (row.score / 25) * 100)}%` }}
-                      />
-                    )}
-                  </div>
-                  <span className={row.secondary ? 'sig-score-label-muted' : 'sig-score-label'}>
-                    {scored ? COPY.depth.scoreOutOf(row.score) : COPY.depth.noScore}
-                  </span>
-                  {dive ? (
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-expanded={open}
-                      aria-controls={id}
-                      aria-label={open ? COPY.depth.collapse(row.name) : COPY.depth.expand(row.name)}
-                      onClick={() => toggleRow(row.name)}
-                    >
-                      {open ? <IconChevronUp size={20} stroke={2} /> : <IconChevronDown size={20} stroke={2} />}
-                    </button>
-                  ) : (
-                    <span aria-hidden="true" />
+            const rowContent = (
+              <>
+                <IdentityBadge primarySignatureName={row.name} size="sm" muted={row.secondary} />
+                <div className="flex flex-col gap-1">
+                  <h3>{row.name}</h3>
+                  <p className="card-sub-label">{row.domain}</p>
+                </div>
+                <div className="sig-bar-track sig-bar-track--lg">
+                  {scored && (
+                    <div
+                      className={row.secondary ? 'sig-bar-fill-muted' : 'sig-bar-fill'}
+                      style={{ width: `${Math.min(100, (row.score / 25) * 100)}%` }}
+                    />
                   )}
                 </div>
+                <span className={row.secondary ? 'sig-score-label-muted' : 'sig-score-label'}>
+                  {scored ? COPY.depth.scoreOutOf(row.score) : COPY.depth.noScore}
+                </span>
+              </>
+            );
+            return (
+              <div key={row.name} className={`card flex flex-col gap-20${open ? ' card--active' : ''}`}>
+                {dive ? (
+                  // The whole row is the toggle. The padding is cancelled by equal
+                  // negative margins, so the content box (and the bars) don't move;
+                  // it only gives the hover tint some room.
+                  <button
+                    type="button"
+                    className="sig-depth-row w-[calc(100%+16px)] -mx-[8px] -my-[6px] px-[8px] py-[6px] rounded-[var(--radius-md)] text-left cursor-pointer hover:bg-[var(--color-bg)]"
+                    aria-expanded={open}
+                    aria-controls={id}
+                    aria-label={open ? COPY.depth.collapse(row.name) : COPY.depth.expand(row.name)}
+                    onClick={() => toggleRow(row.name)}
+                  >
+                    {rowContent}
+                    <span data-row-toggle-label className="inline-flex items-center justify-end gap-1 text-[13px] font-semibold text-[var(--color-grad-2)]">
+                      {open ? COPY.depth.close : COPY.depth.explore}
+                      {open ? <IconChevronUp size={16} stroke={2.2} aria-hidden="true" /> : <IconChevronDown size={16} stroke={2.2} aria-hidden="true" />}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="sig-depth-row">
+                    {rowContent}
+                    <span aria-hidden="true" />
+                  </div>
+                )}
                 {dive && open && (
                   <DeepDive
                     id={id}

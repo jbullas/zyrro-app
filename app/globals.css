@@ -2105,7 +2105,7 @@ p {
 /* Signature row: badge | name + domain | bar | score | toggle. */
 .sig-depth-row {
   display: grid;
-  grid-template-columns: 44px minmax(150px, 220px) minmax(0, 1fr) 56px 44px;
+  grid-template-columns: 44px minmax(150px, 220px) minmax(0, 1fr) 56px 80px; /* last: Explore/Close label */
   align-items: center;
   gap: 16px;
 }
@@ -2238,7 +2238,7 @@ p {
   .grid-2, .grid-4, .grid-5 { grid-template-columns: minmax(0, 1fr); }
   .hero-title { font-size: 30px; }
   .sig-card { flex-direction: row; align-items: center; gap: 12px; }
-  .sig-depth-row { grid-template-columns: 40px minmax(0, 1fr) 44px; gap: 12px; }
+  .sig-depth-row { grid-template-columns: 40px minmax(0, 1fr) 80px; gap: 12px; }
   .sig-depth-row > .sig-bar-track { grid-column: 1 / -1; order: 5; }
   .sig-depth-row > .sig-score-label,
   .sig-depth-row > .sig-score-label-muted { display: none; }

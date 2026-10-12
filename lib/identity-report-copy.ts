@@ -30,8 +30,10 @@ export const IDENTITY_REPORT_COPY = {
     scoreExplanation: 'Score out of 25: how often and how strongly each pattern appears in your answers.',
     scoreOutOf: (score: number) => `${score}/25`,
     noScore: '–',
-    expand: (name: string) => `Expand ${name}`,
-    collapse: (name: string) => `Collapse ${name}`,
+    explore: 'Explore', // row toggle label, collapsed
+    close: 'Close',     // row toggle label, expanded
+    expand: (name: string) => `Explore ${name}`,  // row button aria-label, contains the visible label
+    collapse: (name: string) => `Close ${name}`,
   },
   deepDive: {
     whatThisMeans: 'What this means',
