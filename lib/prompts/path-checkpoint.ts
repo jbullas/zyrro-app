@@ -1,6 +1,6 @@
 // #129 Stage B — the real reasoning behind Stages 2-4 of the
-// checkpoint-guided path-selection redesign (docs/briefs/129-checkpoint-guided-path-selection-design.md
-// §3). Supersedes PATH_OPTIONS_PROMPT's single-call select-and-write role —
+// checkpoint-guided path-selection redesign (see docs/changelogs/2026-08-26.md).
+// Supersedes PATH_OPTIONS_PROMPT's single-call select-and-write role —
 // that file (lib/prompts/path-options.ts) is left in place, not deleted, per
 // the Stage B brief, since Stage C may still reuse its "why it fits"/cost
 // prose conventions.
