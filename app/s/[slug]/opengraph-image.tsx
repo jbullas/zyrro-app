@@ -2,9 +2,11 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
 import { notFound } from 'next/navigation';
+import opentype from 'opentype.js';
+import { fitTitle } from '@/lib/og-title';
 import { loadSharedHero } from '@/lib/share-link';
 
-// #7: social preview for /s/[slug]: the Named Identity, the domain profile
+// #7: social preview for /s/[slug]: the Named Identity (one line), the domain profile
 // bars (same order and values as the page), the primary signature names as
 // pills (same order as the page's cards) and "zyrro.ai". Colours are the
 // globals.css tokens. Inter (OFL, assets/fonts) is used here only; the app
@@ -25,6 +27,11 @@ const PINK = '#C60567';           // --color-grad-2 (eyebrow, pill text)
 const PINK_TINT = 'rgba(198,5,103,0.1)'; // .band-dominant pill background
 const GRADIENT = 'linear-gradient(90deg, #FE5618, #C60567 50%, #510085)'; // --gradient-cta, horizontal
 
+// Title: one line (lib/og-title.ts). "zyrro.ai" sits on the eyebrow's line, not
+// the title's, so the title gets the full content width (x 80-1120), less a
+// little slack for Satori's own rounding.
+const TITLE_MAX_WIDTH = 1040 - 8;
+
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const hero = await loadSharedHero(slug);
@@ -34,6 +41,8 @@ export default async function Image({ params }: { params: Promise<{ slug: string
     readFile(join(process.cwd(), 'assets/fonts/Inter-Regular.ttf')),
     readFile(join(process.cwd(), 'assets/fonts/Inter-ExtraBold.ttf')),
   ]);
+  const titleFont = opentype.parse(extraBold.buffer.slice(extraBold.byteOffset, extraBold.byteOffset + extraBold.byteLength));
+  const title = fitTitle(titleFont, hero.named_identity, TITLE_MAX_WIDTH);
   const domains = Object.entries(hero.domain_profile).sort((a, b) => b[1] - a[1]);
 
   return new ImageResponse(
@@ -44,8 +53,8 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           <div style={{ display: 'flex', fontSize: 22, fontWeight: 800, letterSpacing: 3, color: PINK, textTransform: 'uppercase' }}>
             Identity Signature
           </div>
-          <div style={{ display: 'flex', fontSize: 68, fontWeight: 800, lineHeight: 1.08, color: TEXT_PRIMARY, marginTop: 12 }}>
-            {hero.named_identity}
+          <div style={{ display: 'flex', fontSize: title.fontSize, fontWeight: 800, lineHeight: 1.08, whiteSpace: 'nowrap', color: TEXT_PRIMARY, marginTop: 12 }}>
+            {title.text}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: 40 }}>
             {domains.map(([domain, value]) => (
