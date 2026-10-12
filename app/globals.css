@@ -2260,3 +2260,7 @@ p {
     padding-bottom: calc(24px + env(safe-area-inset-bottom));
   }
 }
+
+/* #7: the /s/* header CTA is .btn-cta; its margin-top (for in-page CTAs)
+   would push it off-centre in the header row. */
+.nav-bar .btn-cta { margin-top: 0; }
