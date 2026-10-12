@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconArrowRight, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
+import { IconArrowRight, IconChevronDown, IconChevronUp, IconShare } from '@tabler/icons-react';
 import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
 import PrimaryButton from '@/components/PrimaryButton';
@@ -11,6 +11,7 @@ import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import IdentityBadge from '@/components/IdentityBadge';
 import IdentityHero from '@/components/IdentityHero';
+import SharePanel from '@/components/SharePanel';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 import { toIdentityHero } from '@/lib/identity-hero';
@@ -97,6 +98,24 @@ export default function IdentityPage() {
 
   const genPhase   = useGenerationStatus(artifactId);
   const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
+
+  // #7: the owner's public share link (null = not shared) and its panel.
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const closeShare = useCallback(() => setShareOpen(false), []);
+
+  // Once the report is ready, find out whether a link already exists, so the
+  // button reads "Shared" on load.
+  const reportReady = !!report;
+  useEffect(() => {
+    if (!reportReady) return;
+    let cancelled = false;
+    fetch('/api/share-link')
+      .then(res => (res.ok ? res.json() : null))
+      .then((data: { url: string | null } | null) => { if (!cancelled && data) setShareLink(data.url); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [reportReady]);
 
   const { user: authUser, loading: authLoading } = useAuthUser();
 
@@ -374,7 +393,18 @@ export default function IdentityPage() {
     <div className="flow-container flow-container--wide">
       <div className="scroll gap-16">
 
-        <IdentityHero hero={toIdentityHero(report)} />
+        <IdentityHero
+          hero={toIdentityHero(report)}
+          action={
+            <button type="button" className="btn-link btn-link-inline" onClick={() => setShareOpen(true)}>
+              <span className="inline-flex items-center gap-8">
+                <IconShare size={16} stroke={2} aria-hidden="true" />
+                {shareLink ? COPY.share.buttonShared : COPY.share.button}
+              </span>
+            </button>
+          }
+        />
+        {shareOpen && <SharePanel onClose={closeShare} onLinkChange={setShareLink} />}
 
         {/* ── Hero Path CTA ───────────────────────────────────────── */}
         <div className="cta-card">

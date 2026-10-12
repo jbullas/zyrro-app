@@ -2245,3 +2245,14 @@ p {
   .section-cta--report { padding: 28px 22px; }
   .section-cta--report h2 { font-size: 24px; }
 }
+/* #7: the Share panel is the confirm dialog (.dialog-overlay / .dialog-card)
+   on desktop and a bottom sheet under 700px, the header's breakpoint. Kept at
+   the end of the file so it wins cascade ties with the dialog rules above. */
+@media (max-width: 700px) {
+  .dialog-overlay--sheet { align-items: flex-end; padding: 0; }
+  .dialog-overlay--sheet .dialog-card {
+    max-width: none;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+}
