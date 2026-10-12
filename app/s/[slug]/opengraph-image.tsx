@@ -5,7 +5,8 @@ import { notFound } from 'next/navigation';
 import { loadSharedHero } from '@/lib/share-link';
 
 // #7: social preview for /s/[slug]: the Named Identity, the domain profile
-// bars (same order and values as the page) and "zyrro.ai". Colours are the
+// bars (same order and values as the page), the primary signature names as
+// pills (same order as the page's cards) and "zyrro.ai". Colours are the
 // globals.css tokens. Inter (OFL, assets/fonts) is used here only; the app
 // itself keeps its system font stack. Every div sets display: flex, which
 // Satori (ImageResponse's renderer) requires for multi-child elements. In
@@ -20,7 +21,8 @@ export const contentType = 'image/png';
 const TEXT_PRIMARY = '#1E1E1E';   // --color-text-primary
 const TEXT_SECONDARY = '#6E6E6E'; // --color-text-secondary
 const BG = '#F7F6F3';             // --color-bg
-const PINK = '#C60567';           // --color-grad-2 (eyebrow)
+const PINK = '#C60567';           // --color-grad-2 (eyebrow, pill text)
+const PINK_TINT = 'rgba(198,5,103,0.1)'; // .band-dominant pill background
 const GRADIENT = 'linear-gradient(90deg, #FE5618, #C60567 50%, #510085)'; // --gradient-cta, horizontal
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
@@ -56,8 +58,18 @@ export default async function Image({ params }: { params: Promise<{ slug: string
               </div>
             ))}
           </div>
+          {/* Primary signature names, same order as the page's cards. */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            {hero.primary.map(sig => (
+              <div key={sig.name} style={{ display: 'flex', flexShrink: 0, padding: '7px 16px', borderRadius: 999, background: PINK_TINT, color: PINK, fontSize: 22, fontWeight: 800 }}>
+                {sig.name}
+              </div>
+            ))}
+          </div>
         </div>
-        <div style={{ display: 'flex', position: 'absolute', right: 80, bottom: 40, fontSize: 26, fontWeight: 400, color: TEXT_SECONDARY }}>
+        {/* Top-right, level with the eyebrow: a long (two-line) Named Identity
+            pushes the bars and pills down, and bottom-right collided with them. */}
+        <div style={{ display: 'flex', position: 'absolute', right: 80, top: 59, fontSize: 26, fontWeight: 400, color: TEXT_SECONDARY }}>
           zyrro.ai
         </div>
       </div>
