@@ -191,7 +191,8 @@ export interface IdentitySignatureReportArtifactContent {
   domain_profile_summary?: string;
   // #113: free-tier /identity teaser, generated alongside the rest of Layer
   // 2 (replaces the separate identity_reframe call that used to fire from
-  // /identity). Optional — undefined on every report generated before this
+  // /identity; see docs/changelogs/2026-08-09.md, and docs/changelogs/2026-10-12.md
+  // for its removal). Optional — undefined on every report generated before this
   // shipped, same no-backfill precedent as domain_profile_summary above.
   reframe_teaser?: ReframeTeaser;
   derived_from_signature_analysis: boolean;
@@ -263,18 +264,6 @@ export interface PatternToNotice {
   headline: string;
   body: string;                 // 2-4 sentences
   takeaway: string;
-}
-
-// Identity Reframe (artifact type: "identity_reframe")
-//
-// #98: the free-tier pitch content, previously generated inside
-// path_options. Deliberately just these four fields — the this/therefore
-// hook and any renamed sections are #99's concern.
-export interface IdentityReframeArtifactContent {
-  recap: string;
-  meaning: string;
-  reframe: string;
-  why: string;
 }
 
 // Path Options (artifact type: "path_options")

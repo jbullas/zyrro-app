@@ -3,9 +3,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 
-// Must match maxDuration on the six generation routes (app/auth/callback,
+// Must match maxDuration on the five generation routes (app/auth/callback,
 // app/api/retry-generation, app/api/generate-path-options, app/api/select-path,
-// app/api/complete-discovery, app/api/generate-identity-reframe).
+// app/api/complete-discovery). The sixth, generate-identity-reframe, was
+// removed in #126 (see docs/changelogs/2026-10-12.md).
 // Invariant: SPINNER_LATE_COPY_MS < SPINNER_TIMEOUT_MS < GENERATION_BUDGET_MS
 // (75 s < 120 s < 240 s). Adjust any one value while keeping this ordering.
 export const GENERATION_BUDGET_MS = 240_000;

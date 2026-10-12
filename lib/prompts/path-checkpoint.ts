@@ -1,9 +1,7 @@
 // #129 Stage B — the real reasoning behind Stages 2-4 of the
 // checkpoint-guided path-selection redesign (see docs/changelogs/2026-08-26.md).
-// Supersedes PATH_OPTIONS_PROMPT's single-call select-and-write role —
-// that file (lib/prompts/path-options.ts) is left in place, not deleted, per
-// the Stage B brief, since Stage C may still reuse its "why it fits"/cost
-// prose conventions.
+// Supersedes PATH_OPTIONS_PROMPT's single-call select-and-write role
+// (that prompt was removed in #126; see docs/changelogs/2026-10-12.md).
 //
 // #129 Stage C adds Stages 5-6 (below) — developing the chosen candidate and
 // writing the final merged report+plan. Supersedes PATH_PLAN_PROMPT's "7 day

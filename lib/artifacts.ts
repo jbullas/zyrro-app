@@ -3,7 +3,6 @@ import { withDbRetry } from '@/lib/with-db-retry';
 
 export type ArtifactType =
   | 'identity_report'
-  | 'identity_reframe'
   | 'path_options'
   | 'path_plan'
   | 'path_checkpoint_session'
