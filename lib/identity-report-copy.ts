@@ -105,6 +105,7 @@ export const IDENTITY_REPORT_COPY = {
     heading: 'What’s your signature?',
     body: 'Answer 13 questions and get your free Identity report.',
     button: 'Discover your signature',
+    headerButton: 'Get your free report', // header CTA on /s/* (components/Header.tsx)
   },
   // #7: og:description for /s/[slug].
   shareDescription: 'Discover your own signature: answer 13 questions and get your free Identity report.',

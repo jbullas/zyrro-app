@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { useAuthUser } from '@/lib/use-auth-user';
 import { IconLogin, IconMenu2, IconX } from '@tabler/icons-react';
+import { IDENTITY_REPORT_COPY } from '@/lib/identity-report-copy';
 
 type HeaderProps = {
   showLogin?: boolean;
@@ -51,13 +52,14 @@ export default function Header({ showLogin = true }: HeaderProps) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // #7: the public share page /s/[slug] shows the logo only: no nav, no
-  // login icon, no avatar (a visitor may be signed in as someone else).
-  const logoOnly = pathname.startsWith('/s/');
+  // #7: the public share page /s/[slug] shows the logo and a "Get your free
+  // report" CTA only: no nav, no login icon, no avatar (a visitor may be
+  // signed in as someone else).
+  const publicPage = pathname.startsWith('/s/');
 
   // Visibility rules carried over from BottomNav: hidden on the homepage, and
   // on /start until auth is checked and the user is logged in.
-  const showNav = !logoOnly && pathname !== '/' && !(pathname === '/start' && (loading || !user));
+  const showNav = !publicPage && pathname !== '/' && !(pathname === '/start' && (loading || !user));
 
   // Close the mobile menu on Escape (focus back to the menu button) and on a
   // click/tap outside it.
@@ -142,7 +144,11 @@ export default function Header({ showLogin = true }: HeaderProps) {
               </button>
             </>
           )}
-          {logoOnly ? null : userInitials ? (
+          {publicPage ? (
+            <a href="/start" className="btn-cta btn-cta--light">
+              {IDENTITY_REPORT_COPY.prospectCta.headerButton}
+            </a>
+          ) : userInitials ? (
             <a href="/account" aria-label="My account" className="nav-avatar">
               {userInitials}
             </a>
