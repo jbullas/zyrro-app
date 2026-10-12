@@ -145,7 +145,7 @@ export default function Header({ showLogin = true }: HeaderProps) {
             </>
           )}
           {publicPage ? (
-            <a href="/start" className="btn-cta btn-cta--light">
+            <a href="/start" className="btn-cta">
               {IDENTITY_REPORT_COPY.prospectCta.headerButton}
             </a>
           ) : userInitials ? (
