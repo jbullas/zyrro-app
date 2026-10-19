@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
+import { PATH_ENABLED } from '@/lib/feature-flags';
 import { IconPencil } from '@tabler/icons-react';
 import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
@@ -145,13 +146,25 @@ export default function AccountPage() {
       if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') {
         setIsPaid(true);
       } else {
-        const { data: entitlement } = await supabase
-          .from('entitlements')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product', 'onetime_payment')
-          .eq('status', 'active')
-          .maybeSingle();
+        // #162: with Path off, "paid" means holding the full Identity report,
+        // which the $49 entitlement also grants. Two products can both match,
+        // so limit(1) before maybeSingle().
+        const { data: entitlement } = PATH_ENABLED
+          ? await supabase
+              .from('entitlements')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('product', 'onetime_payment')
+              .eq('status', 'active')
+              .maybeSingle()
+          : await supabase
+              .from('entitlements')
+              .select('id')
+              .eq('user_id', user.id)
+              .in('product', ['identity_unlock', 'onetime_payment'])
+              .eq('status', 'active')
+              .limit(1)
+              .maybeSingle();
         setIsPaid(!!entitlement);
       }
 
@@ -263,7 +276,12 @@ export default function AccountPage() {
           {/* Plan */}
           <div style={ROW}>
             <span style={LABEL}>Plan</span>
-            {isPaid ? (
+            {/* #162: with Path off, no Upgrade (it sells Path). */}
+            {!PATH_ENABLED ? (
+              <span style={{ fontSize: '16px' }}>
+                {isPaid ? 'Full Identity report' : 'Free plan'}
+              </span>
+            ) : isPaid ? (
               <span style={{ fontSize: '16px' }}>
                 <strong>Unlocked</strong> — Paths, Plan, Mentor
               </span>

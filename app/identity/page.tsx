@@ -15,6 +15,7 @@ import SharePanel from '@/components/SharePanel';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
 import { toIdentityHero } from '@/lib/identity-hero';
+import { PATH_ENABLED } from '@/lib/feature-flags';
 import { IDENTITY_REPORT_COPY as COPY, signatureHeadline } from '@/lib/identity-report-copy';
 import type {
   SignatureDeepDive,
@@ -406,15 +407,17 @@ export default function IdentityPage() {
         />
         {shareOpen && <SharePanel onClose={closeShare} onLinkChange={setShareLink} />}
 
-        {/* ── Hero Path CTA ───────────────────────────────────────── */}
-        <div className="cta-card">
-          <div className="flex flex-col gap-8">
-            <h3>{COPY.heroCta.heading}</h3>
-            <p>{COPY.heroCta.body}</p>
-            <p className="cover-context-line">{COPY.heroCta.price}</p>
+        {/* ── Hero Path CTA (#162: hidden with Path off) ──────────── */}
+        {PATH_ENABLED && (
+          <div className="cta-card">
+            <div className="flex flex-col gap-8">
+              <h3>{COPY.heroCta.heading}</h3>
+              <p>{COPY.heroCta.body}</p>
+              <p className="cover-context-line">{COPY.heroCta.price}</p>
+            </div>
+            {findPathButton(COPY.heroCta.button)}
           </div>
-          {findPathButton(COPY.heroCta.button)}
-        </div>
+        )}
 
         {/* ── Signatures in depth: one row per signature ──────────── */}
         <div className="flex flex-col gap-12">
@@ -512,16 +515,18 @@ export default function IdentityPage() {
           </div>
         </div>
 
-        {/* ── Path invitation ─────────────────────────────────────── */}
-        <div className="row-between flex-wrap gap-16">
-          <p>{COPY.pathInvitation.body}</p>
-          <LinkButton href="/path" inline>
-            <span className="inline-flex items-center gap-8">
-              {COPY.pathInvitation.link}
-              <IconArrowRight size={16} stroke={2.2} aria-hidden="true" />
-            </span>
-          </LinkButton>
-        </div>
+        {/* ── Path invitation (#162: hidden with Path off) ────────── */}
+        {PATH_ENABLED && (
+          <div className="row-between flex-wrap gap-16">
+            <p>{COPY.pathInvitation.body}</p>
+            <LinkButton href="/path" inline>
+              <span className="inline-flex items-center gap-8">
+                {COPY.pathInvitation.link}
+                <IconArrowRight size={16} stroke={2.2} aria-hidden="true" />
+              </span>
+            </LinkButton>
+          </div>
+        )}
 
         {/* ── The Pattern to Notice ───────────────────────────────── */}
         {pattern_to_notice && (
@@ -533,17 +538,19 @@ export default function IdentityPage() {
           </div>
         )}
 
-        {/* ── Bottom CTA strip ────────────────────────────────────── */}
-        <div className="section-cta section-cta--report">
-          <div className="flex flex-col gap-8">
-            <h2>{COPY.bottomCta.heading}</h2>
-            <p>{COPY.bottomCta.body}</p>
+        {/* ── Bottom CTA strip (#162: hidden with Path off) ───────── */}
+        {PATH_ENABLED && (
+          <div className="section-cta section-cta--report">
+            <div className="flex flex-col gap-8">
+              <h2>{COPY.bottomCta.heading}</h2>
+              <p>{COPY.bottomCta.body}</p>
+            </div>
+            <div>
+              {findPathButton(COPY.bottomCta.button, true)}
+              <p>{COPY.bottomCta.price}</p>
+            </div>
           </div>
-          <div>
-            {findPathButton(COPY.bottomCta.button, true)}
-            <p>{COPY.bottomCta.price}</p>
-          </div>
-        </div>
+        )}
 
         {/* ── Footer (no links until Privacy/Terms/Help pages exist — #157) ── */}
         <footer className="report-footer">

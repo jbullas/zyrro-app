@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
 import { hasPaidEntitlement } from '@/lib/entitlements';
+import { PATH_ENABLED } from '@/lib/feature-flags';
 import Link from 'next/link';
 
 export default async function Home() {
@@ -9,7 +10,7 @@ export default async function Home() {
 
   if (data?.user) {
     const entitled = await hasPaidEntitlement(data.user.id);
-    redirect(entitled ? '/path' : '/identity');
+    redirect(entitled && PATH_ENABLED ? '/path' : '/identity');
   }
 
   return (

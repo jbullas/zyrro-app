@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js';
 import { useAuthUser } from '@/lib/use-auth-user';
 import { IconLogin, IconMenu2, IconX } from '@tabler/icons-react';
 import { IDENTITY_REPORT_COPY } from '@/lib/identity-report-copy';
+import { PATH_ENABLED } from '@/lib/feature-flags';
 
 type HeaderProps = {
   showLogin?: boolean;
@@ -19,7 +20,7 @@ const NAV_ITEMS = [
   { label: 'Path',      href: '/path',      muted: false },
   { label: 'Plan',      href: '/plan',      muted: true },
   { label: 'Mentor',    href: '/mentor',    muted: true },
-];
+].filter(item => PATH_ENABLED || item.href === '/identity'); // #162: Path off leaves only Identity
 
 const TAGLINE = 'Know Yourself. Create What’s Next.';
 
