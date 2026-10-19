@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconArrowRight, IconChevronDown, IconChevronUp, IconShare } from '@tabler/icons-react';
+import { IconArrowRight, IconCheck, IconChevronDown, IconChevronUp, IconLock, IconShare } from '@tabler/icons-react';
 import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
 import PrimaryButton from '@/components/PrimaryButton';
@@ -12,8 +12,7 @@ import GeneratingState from '@/components/GeneratingState';
 import IdentityBadge from '@/components/IdentityBadge';
 import IdentityHero from '@/components/IdentityHero';
 import SharePanel from '@/components/SharePanel';
-import { useGenerationStatus } from '@/lib/generation-status';
-import { getCurrentArtifact } from '@/lib/artifacts';
+import { useIdentityReport } from '@/lib/use-identity-report';
 import { toIdentityHero } from '@/lib/identity-hero';
 import { PATH_ENABLED } from '@/lib/feature-flags';
 import { IDENTITY_REPORT_COPY as COPY, signatureHeadline } from '@/lib/identity-report-copy';
@@ -24,7 +23,9 @@ import type {
   PatternToNotice,
 } from '@/lib/artifact-schemas';
 
-type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-artifact';
+// 'has-questionnaire': answers exist, so the report is read through
+// app/api/identity-report (#162), which decides what this user may see.
+type PageState = 'loading' | 'anonymous' | 'no-questionnaire' | 'has-questionnaire';
 
 interface PrimarySignatureEntry {
   name: string;
@@ -90,15 +91,18 @@ function rowId(name: string): string {
 export default function IdentityPage() {
   const router = useRouter();
   const [pageState, setPageState]   = useState<PageState>('loading');
-  const [artifactId, setArtifactId] = useState<string | null>(null);
   const [userId, setUserId]         = useState<string | null>(null);
   // Same entitlement read as app/path/page.tsx: null until checked.
   const [entitled, setEntitled]     = useState<boolean | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [unlockLoading, setUnlockLoading]     = useState(false);
   const [openRows, setOpenRows]     = useState<Set<string>>(new Set());
 
-  const genPhase   = useGenerationStatus(artifactId);
-  const report     = genPhase.phase === 'ready' ? genPhase.content as IdentityReport : null;
+  const { report: genPhase, retry } = useIdentityReport(pageState === 'has-questionnaire');
+  const ready  = genPhase.phase === 'ready' ? genPhase : null;
+  // locked: the route sent only the free projection (#162 paywall).
+  const locked = ready?.locked ? ready.content : null;
+  const report = ready && !ready.locked ? ready.content as IdentityReport : null;
 
   // #7: the owner's public share link (null = not shared) and its panel.
   const [shareLink, setShareLink] = useState<string | null>(null);
@@ -107,7 +111,7 @@ export default function IdentityPage() {
 
   // Once the report is ready, find out whether a link already exists, so the
   // button reads "Shared" on load.
-  const reportReady = !!report;
+  const reportReady = !!ready;
   useEffect(() => {
     if (!reportReady) return;
     let cancelled = false;
@@ -120,27 +124,18 @@ export default function IdentityPage() {
 
   const { user: authUser, loading: authLoading } = useAuthUser();
 
-  // Main load — finds the artifact ID and hands polling to useGenerationStatus
+  // A failed report read sends the user to /login, as the direct read did;
+  // no report row at all is the no-questionnaire state.
+  useEffect(() => {
+    if (genPhase.phase === 'error') router.push('/login');
+  }, [genPhase.phase, router]);
+
+  // Main load: checks auth and the questionnaire, then hands the report read
+  // and polling to useIdentityReport.
   useEffect(() => {
     if (authLoading) return;
     const supabase = createClient();
     let cancelled  = false;
-
-    async function loadArtifact(uid: string) {
-      const { data, error } = await getCurrentArtifact<{ id: string }>(
-        supabase,
-        uid,
-        'identity_report',
-        { select: 'id' },
-      );
-
-      if (cancelled) return;
-      if (error) { router.push('/login'); return; }
-      if (!data) { setPageState('no-questionnaire'); return; }
-
-      setArtifactId(data.id as string);
-      setPageState('has-artifact');
-    }
 
     function readAnswersCount(uid: string) {
       return supabase
@@ -191,7 +186,7 @@ export default function IdentityPage() {
         return;
       }
 
-      await loadArtifact(user.id);
+      setPageState('has-questionnaire');
       await loadEntitlement(user.id);
     }
 
@@ -215,8 +210,8 @@ export default function IdentityPage() {
     );
   }
 
-  // ── State 2: No questionnaire ──────────────────────────────────────
-  if (pageState === 'no-questionnaire') {
+  // ── State 2: No questionnaire (or answers but no report row) ───────
+  if (pageState === 'no-questionnaire' || genPhase.phase === 'none') {
     return (
       <MessageState
         eyebrow="IDENTITY SIGNATURE REPORT"
@@ -228,19 +223,22 @@ export default function IdentityPage() {
     );
   }
 
-  async function handleRetry() {
-    setArtifactId(null);
-    const supabase = createClient();
-    await fetch('/api/retry-generation', { method: 'POST' });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await getCurrentArtifact<{ id: string }>(
-      supabase,
-      user.id,
-      'identity_report',
-      { select: 'id' },
-    );
-    if (data) setArtifactId(data.id);
+  function handleRetry() {
+    retry(() => fetch('/api/retry-generation', { method: 'POST' }));
+  }
+
+  // #162: every lock and the bottom strip start the identity checkout.
+  async function handleUnlock() {
+    setUnlockLoading(true);
+    try {
+      const res = await fetch('/api/identity-checkout', { method: 'POST' });
+      const { url, error } = await res.json() as { url?: string; error?: string };
+      if (error || !url) throw new Error(error ?? 'No checkout URL');
+      window.location.href = url;
+    } catch (err) {
+      console.error('Identity checkout failed:', err);
+      setUnlockLoading(false);
+    }
   }
 
   async function handleCheckout() {
@@ -271,15 +269,9 @@ export default function IdentityPage() {
     handleCheckout();
   }
 
-  // ── has-artifact: hook-driven generation states ────────────────────
-  if (genPhase.phase === 'idle') {
-    return (
-      <GeneratingState
-        heading="Your Identity Signature Report is being prepared."
-        description="This usually takes about a minute."
-      />
-    );
-  }
+  // ── has-questionnaire: hook-driven generation states ───────────────
+  // First read in flight, or on its way to /login.
+  if (genPhase.phase === 'loading' || genPhase.phase === 'error') return null;
 
   if (genPhase.phase === 'spinner') {
     return (
@@ -315,26 +307,31 @@ export default function IdentityPage() {
   }
 
   // ── State 3c: Ready ────────────────────────────────────────────────
-  if (!report) return null;
+  // #162: a report is either the full stored one (`report`) or, for unpaid
+  // users under the paywall, the free projection (`locked`): free sections
+  // plus presence flags for the locked ones. Both feed the same layout.
+  if (!report && !locked) return null;
 
-  const {
-    primary_constellation,
-    energisers,
-    friction_points,
-    pairings,
-    distinctive_pattern,
-    pattern_to_notice,
-  } = report;
-  const secondaries = report.secondary_signature_analysis ?? [];
+  const hero = report ? toIdentityHero(report) : locked!.hero;
+  const energisers = report ? report.energisers : locked!.energisers;
+  const friction_points = report ? report.friction_points : locked!.friction_points;
+  const pairings = report?.pairings;
+  const distinctive_pattern = report?.distinctive_pattern;
+  const pattern_to_notice = report?.pattern_to_notice;
+  const secondaries = report?.secondary_signature_analysis ?? [];
 
-  const deepDives = new Map((report.signature_deep_dives ?? []).map(d => [d.name, d]));
+  const deepDives = new Map((report?.signature_deep_dives ?? []).map(d => [d.name, d]));
   const secondaryNames = new Set(secondaries.map(s => s.name));
-  const rows: SignatureRowData[] = [
-    ...primary_constellation.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: false })),
-    ...secondaries.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: true })),
-  ];
-  const hasPairings = Array.isArray(pairings) && pairings.length > 0;
-  const hasPattern = !!distinctive_pattern;
+  const rows: SignatureRowData[] = report
+    ? [
+        ...report.primary_constellation.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: false })),
+        ...secondaries.map(s => ({ name: s.name, domain: s.domain, score: s.score, coreStatement: s.core_statement, secondary: true })),
+      ]
+    : locked!.rows.map(r => ({ name: r.name, domain: r.domain, score: r.score, coreStatement: '', secondary: r.secondary }));
+  const lockedRows = new Set(locked ? locked.rows.filter(r => r.has_deep_dive).map(r => r.name) : []);
+  const hasPairings = locked ? locked.has_pairings : Array.isArray(pairings) && pairings.length > 0;
+  const hasPattern = locked ? locked.has_distinctive_pattern : !!distinctive_pattern;
+  const hasPatternToNotice = locked ? locked.has_pattern_to_notice : !!pattern_to_notice;
   const ctaDisabled = checkoutLoading || entitled === null;
 
   function toggleRow(name: string) {
@@ -359,7 +356,13 @@ export default function IdentityPage() {
     );
   }
 
-  const pairingsCard = hasPairings && (
+  function lockedTeaser(eyebrow: string, line: string) {
+    return (
+      <LockedTeaser eyebrow={eyebrow} line={line} onUnlock={handleUnlock} disabled={unlockLoading} />
+    );
+  }
+
+  const pairingsCard = hasPairings && (locked ? lockedTeaser(COPY.pairings.eyebrow, COPY.locks.pairings) : (
     <div className="card flex flex-col gap-12">
       <p className="eyebrow">{COPY.pairings.eyebrow}</p>
       <div className="divided-list">
@@ -371,9 +374,9 @@ export default function IdentityPage() {
         ))}
       </div>
     </div>
-  );
+  ));
 
-  const patternCard = hasPattern && (
+  const patternCard = hasPattern && (locked ? lockedTeaser(COPY.distinctivePattern.eyebrow, COPY.locks.distinctivePattern) : (
     <div className="card flex flex-col gap-12">
       <p className="eyebrow">{COPY.distinctivePattern.eyebrow}</p>
       <div className="chips-wrap items-center">
@@ -388,14 +391,14 @@ export default function IdentityPage() {
       </div>
       {paragraphs(distinctive_pattern!.paragraphs).map((para, i) => <p key={i}>{para}</p>)}
     </div>
-  );
+  ));
 
   return (
     <div className="flow-container flow-container--wide">
       <div className="scroll gap-16">
 
         <IdentityHero
-          hero={toIdentityHero(report)}
+          hero={hero}
           action={
             <button type="button" className="btn-link btn-link-inline" onClick={() => setShareOpen(true)}>
               <span className="inline-flex items-center gap-8">
@@ -427,7 +430,9 @@ export default function IdentityPage() {
           </div>
           {rows.map(row => {
             const dive = deepDives.get(row.name);
-            const open = !!dive && openRows.has(row.name);
+            // #162: a locked row has a deep dive the user hasn't unlocked.
+            const rowLocked = lockedRows.has(row.name);
+            const open = (!!dive || rowLocked) && openRows.has(row.name);
             const scored = row.score >= 1;
             const id = rowId(row.name);
             const rowContent = (
@@ -452,7 +457,7 @@ export default function IdentityPage() {
             );
             return (
               <div key={row.name} className={`card flex flex-col gap-20${open ? ' card--active' : ''}`}>
-                {dive ? (
+                {dive || rowLocked ? (
                   // The whole row is the toggle. The padding is cancelled by equal
                   // negative margins, so the content box (and the bars) don't move;
                   // it only gives the hover tint some room.
@@ -461,13 +466,18 @@ export default function IdentityPage() {
                     className="sig-depth-row w-[calc(100%+16px)] -mx-[8px] -my-[6px] px-[8px] py-[6px] rounded-[var(--radius-md)] text-left cursor-pointer hover:bg-[var(--color-bg)]"
                     aria-expanded={open}
                     aria-controls={id}
-                    aria-label={open ? COPY.depth.collapse(row.name) : COPY.depth.expand(row.name)}
+                    aria-label={open ? COPY.depth.collapse(row.name) : rowLocked ? COPY.locks.toggleAria(row.name) : COPY.depth.expand(row.name)}
                     onClick={() => toggleRow(row.name)}
                   >
                     {rowContent}
                     <span data-row-toggle-label className="inline-flex items-center justify-end gap-1 text-[13px] font-semibold text-[var(--color-grad-2)]">
-                      {open ? COPY.depth.close : COPY.depth.explore}
-                      {open ? <IconChevronUp size={16} stroke={2.2} aria-hidden="true" /> : <IconChevronDown size={16} stroke={2.2} aria-hidden="true" />}
+                      {open ? COPY.depth.close : rowLocked ? (
+                        <>
+                          <IconLock size={16} stroke={2.2} aria-hidden="true" />
+                          {COPY.locks.toggle}
+                        </>
+                      ) : COPY.depth.explore}
+                      {open ? <IconChevronUp size={16} stroke={2.2} aria-hidden="true" /> : !rowLocked && <IconChevronDown size={16} stroke={2.2} aria-hidden="true" />}
                     </span>
                   </button>
                 ) : (
@@ -484,6 +494,12 @@ export default function IdentityPage() {
                     dive={dive}
                     secondaryNames={secondaryNames}
                   />
+                )}
+                {rowLocked && open && (
+                  <div id={id} className="flex flex-col gap-12">
+                    <p>{COPY.locks.deepDive}</p>
+                    <UnlockLink onUnlock={handleUnlock} disabled={unlockLoading} />
+                  </div>
                 )}
               </div>
             );
@@ -529,17 +545,45 @@ export default function IdentityPage() {
         )}
 
         {/* ── The Pattern to Notice ───────────────────────────────── */}
-        {pattern_to_notice && (
+        {hasPatternToNotice && (locked ? lockedTeaser(COPY.patternToNotice.eyebrow, COPY.locks.patternToNotice) : (
           <div className="card flex flex-col gap-12">
             <p className="eyebrow">{COPY.patternToNotice.eyebrow}</p>
-            <h2>{pattern_to_notice.headline}</h2>
-            <p>{pattern_to_notice.body}</p>
-            <p><strong>{pattern_to_notice.takeaway}</strong></p>
+            <h2>{pattern_to_notice!.headline}</h2>
+            <p>{pattern_to_notice!.body}</p>
+            <p><strong>{pattern_to_notice!.takeaway}</strong></p>
           </div>
-        )}
+        ))}
 
-        {/* ── Bottom CTA strip (#162: hidden with Path off) ───────── */}
-        {PATH_ENABLED && (
+        {/* ── Bottom CTA strip: the unlock pitch on a locked report
+               (#162), else the Path strip, hidden with Path off ─────── */}
+        {locked ? (
+          <div className="section-cta section-cta--report">
+            <div className="flex flex-col gap-12">
+              <h2>{COPY.unlockCta.heading}</h2>
+              <p>{COPY.unlockCta.body}</p>
+              <ul className="bullet-list">
+                {COPY.unlockCta.bullets.map(item => (
+                  <li key={item} className="bullet-item">
+                    <IconCheck size={18} stroke={2.4} color="#fff" aria-hidden="true" className="shrink-0 mt-[3px]" />
+                    <p>{item}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <button
+                type="button"
+                className="btn-cta btn-cta--light"
+                onClick={handleUnlock}
+                disabled={unlockLoading}
+              >
+                {/* #162 step 4 supplies the price from Stripe; until then the label has none. */}
+                {unlockLoading ? 'Redirecting…' : COPY.unlockCta.button(null)}
+                <IconArrowRight size={18} stroke={2.2} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        ) : PATH_ENABLED && (
           <div className="section-cta section-cta--report">
             <div className="flex flex-col gap-8">
               <h2>{COPY.bottomCta.heading}</h2>
@@ -558,6 +602,44 @@ export default function IdentityPage() {
         </footer>
 
       </div>{/* end .scroll */}
+    </div>
+  );
+}
+
+// #162: the "Unlock your full report" text link inside every lock.
+function UnlockLink({ onUnlock, disabled }: { onUnlock: () => void; disabled: boolean }) {
+  // The wrapper keeps the link at its own width (left-aligned) instead of
+  // stretching across the flex column, where .btn-link would centre it.
+  return (
+    <div>
+      <LinkButton inline onClick={onUnlock} disabled={disabled}>
+        {COPY.locks.link}
+      </LinkButton>
+    </div>
+  );
+}
+
+// #162: stands in for a locked section (Pairings, Distinctive Pattern, The
+// Pattern to Notice) on an unpaid report.
+function LockedTeaser({
+  eyebrow,
+  line,
+  onUnlock,
+  disabled,
+}: {
+  eyebrow: string;
+  line: string;
+  onUnlock: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="card flex flex-col gap-12">
+      <div className="row-between">
+        <p className="eyebrow">{eyebrow}</p>
+        <IconLock size={18} stroke={2} color="var(--color-grad-2)" aria-hidden="true" />
+      </div>
+      <p>{line}</p>
+      <UnlockLink onUnlock={onUnlock} disabled={disabled} />
     </div>
   );
 }

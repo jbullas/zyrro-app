@@ -80,6 +80,33 @@ export const IDENTITY_REPORT_COPY = {
     button: 'Find your path',
     price: 'One-time payment of $49',
   },
+  // #162: the paywalled report (REPORT_PAYWALL on, unpaid). Draft copy,
+  // pending Jeff's approval.
+  locks: {
+    toggle: 'Unlock',                                  // row toggle label, collapsed
+    toggleAria: (name: string) => `Unlock ${name}`,    // row button aria-label, contains the visible label
+    deepDive: 'What this signature means for you, the evidence from your own answers, and how it shows up in your work and life.',
+    pairings: 'How your signatures combine, and what each pairing makes possible.',
+    distinctivePattern: 'The sequence your signatures follow, the pattern that makes you distinctive.',
+    patternToNotice: 'The one pattern worth watching as you decide what’s next.',
+    link: 'Unlock your full report',
+  },
+  unlockCta: {
+    heading: 'See the full picture behind your signatures',
+    body: 'Your signatures show who you are. The full report shows how they work in your life, drawn from your own answers.',
+    bullets: [
+      'A deep dive into every signature: what it means, how it shows up, and where it serves you',
+      'The evidence from your own answers behind each one',
+      'How you operate, where you meet friction, and how you act under pressure',
+      'How your signatures pair up, and the pattern that makes you distinctive',
+      'The one pattern to notice as you decide what’s next',
+    ],
+    // The price comes from the Stripe price object, never typed here.
+    button: (price: string | null) => (price ? `Unlock your full report, ${price}` : 'Unlock your full report'),
+  },
+  unlocked: {
+    notice: 'Your full report is unlocked.',
+  },
   footer: {
     disclaimer:
       'This report is a reflective interpretation of recurring patterns in your answers. It is designed to help you ' +

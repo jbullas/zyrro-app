@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { getCurrentArtifact } from '@/lib/artifacts';
-import { createOrGetShareSlug, getActiveShareSlug, revokeShareSlug, shareUrl } from '@/lib/share-link';
+import { createOrGetShareSlug, getActiveShareSlug, hasReadyIdentityReport, revokeShareSlug, shareUrl } from '@/lib/share-link';
 
 // #7: the caller's own Identity share link. Every method acts only on the
 // signed-in user's link; there is no way to name another user's link here.
@@ -22,16 +21,10 @@ export async function GET() {
 
 // POST: create the link, or return the existing active one. Needs a ready report.
 export async function POST() {
-  const { supabase, user } = await currentUser();
+  const { user } = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: report } = await getCurrentArtifact<{ id: string }>(
-    supabase,
-    user.id,
-    'identity_report',
-    { status: 'ready', select: 'id' },
-  );
-  if (!report) return NextResponse.json({ error: 'No ready identity report to share' }, { status: 409 });
+  if (!(await hasReadyIdentityReport(user.id))) return NextResponse.json({ error: 'No ready identity report to share' }, { status: 409 });
 
   const slug = await createOrGetShareSlug(user.id);
   return NextResponse.json({ slug, url: shareUrl(slug) });

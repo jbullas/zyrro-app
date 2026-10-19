@@ -14,7 +14,7 @@ import OptionsFlow, { COMMENTS_ACKNOWLEDGMENT } from '@/components/OptionsFlow';
 import PathReportFlow from '@/components/PathReportFlow';
 import type { ReframeTeaser } from '@/lib/artifact-schemas';
 import { useCheckpointSessionStatus } from '@/lib/checkpoint-status';
-import { getCurrentArtifact } from '@/lib/artifacts';
+import type { IdentityReportResponse } from '@/lib/identity-report-view';
 import { usePathDirection } from '@/lib/use-path-direction';
 import { usePathOptions } from '@/lib/use-path-options';
 import { usePathReport } from '@/lib/use-path-report';
@@ -130,14 +130,15 @@ export default function PathPage() {
 
         if (cancelled) return;
 
-        const { data: reportArtifact } = await getCurrentArtifact<{ content: unknown }>(
-          supabase,
-          user.id,
-          'identity_report',
-          { status: 'ready', select: 'content' },
-        );
+        // #162: the latest ready report, read through the paywalled route
+        // rather than artifacts directly. A failed read counts as no report,
+        // as the direct read's error did.
+        const reportArtifact = await fetch('/api/identity-report?status=ready', { cache: 'no-store' })
+          .then(res => (res.ok ? res.json() as Promise<IdentityReportResponse> : null))
+          .then(body => body?.artifact ?? null)
+          .catch(() => null);
 
-        if (!reportArtifact) {
+        if (!reportArtifact || reportArtifact.status !== 'ready') {
           if (!cancelled) setPageState('no-report');
           return;
         }
@@ -153,10 +154,13 @@ export default function PathPage() {
 
           if (!entitlement) {
             if (!cancelled) {
+              // A locked projection (#162) carries reframe_teaser and the
+              // primary names in its hero; the full report has them as before.
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const content = reportArtifact.content as any;
               setReframeTeaser(content?.reframe_teaser ?? null);
-              setPrimaryConstellation(Array.isArray(content?.primary_constellation) ? content.primary_constellation : []);
+              const primaries = reportArtifact.locked ? content?.hero?.primary : content?.primary_constellation;
+              setPrimaryConstellation(Array.isArray(primaries) ? primaries : []);
               setPageState('unpaid');
             }
             return;

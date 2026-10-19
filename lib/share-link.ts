@@ -21,6 +21,21 @@ function newSlug(): string {
   return randomBytes(12).toString('base64url');
 }
 
+// #162: does the user have a ready report to share? Read with the service role:
+// once the identity_report RLS rule is applied, an unpaid user's own session
+// can't see the row, but sharing the free hero stays open to them.
+export async function hasReadyIdentityReport(userId: string): Promise<boolean> {
+  const { data, error } = await getCurrentArtifact<{ id: string }>(
+    createServiceClient(),
+    userId,
+    'identity_report',
+    { status: 'ready', select: 'id' },
+  );
+  // A failed read counts as no report (409), as the session read's did.
+  if (error) console.error('hasReadyIdentityReport error', { userId, error });
+  return !!data;
+}
+
 export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/+$/, '');
 }

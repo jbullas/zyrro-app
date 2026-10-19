@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
 import LinkButton from '@/components/LinkButton';
 import IdentityBadge from '@/components/IdentityBadge';
 import DomainRadarChart from '@/components/DomainRadarChart';
 import PrimarySignatureBars from '@/components/PrimarySignatureBars';
 import type { DomainProfile } from '@/lib/artifact-schemas';
-import { getCurrentArtifact } from '@/lib/artifacts';
+import type { IdentityReportArtifact, IdentityReportResponse } from '@/lib/identity-report-view';
 
 type CardState = 'loading' | 'no-artifact' | 'pending' | 'ready';
 
@@ -28,33 +27,45 @@ export default function IdentityCard() {
 
   useEffect(() => {
     if (authLoading) return;
-    const supabase = createClient();
     let cancelled = false;
 
     async function load() {
       const user = authUser;
       if (!user) { if (!cancelled) setState('no-artifact'); return; }
 
-      const { data, error } = await getCurrentArtifact<{ status: string; content: unknown }>(
-        supabase,
-        user.id,
-        'identity_report',
-        { select: 'status, content' },
-      );
+      // #162: read through the paywalled route, not artifacts directly. The
+      // card only shows free fields, so a locked projection is enough.
+      let data: IdentityReportArtifact | null = null;
+      try {
+        const res = await fetch('/api/identity-report', { cache: 'no-store' });
+        if (res.ok) data = (await res.json() as IdentityReportResponse).artifact;
+      } catch {
+        data = null;
+      }
 
       if (cancelled) return;
 
-      if (error || !data) { setState('no-artifact'); return; }
+      if (!data) { setState('no-artifact'); return; }
       if (data.status !== 'ready') { setState('pending'); return; }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const report = data.content as any;
-      setContent({
-        named_identity: report.cover.named_identity,
-        identity_thesis: report.cover.identity_thesis,
-        domain_profile: report.domain_profile,
-        primary_signatures: report.primary_constellation,
-      });
+      if (data.locked) {
+        const { hero } = data.content;
+        setContent({
+          named_identity: hero.named_identity,
+          identity_thesis: hero.identity_thesis,
+          domain_profile: hero.domain_profile as unknown as DomainProfile,
+          primary_signatures: hero.primary,
+        });
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const report = data.content as any;
+        setContent({
+          named_identity: report.cover.named_identity,
+          identity_thesis: report.cover.identity_thesis,
+          domain_profile: report.domain_profile,
+          primary_signatures: report.primary_constellation,
+        });
+      }
       setState('ready');
     }
 
