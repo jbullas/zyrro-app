@@ -55,6 +55,16 @@ export async function hasFullIdentityReport(userId: string): Promise<boolean> {
   return !!data;
 }
 
+// #162: the product a completed Checkout Session pays for, from its metadata.
+// Sessions without one are the $49 Adventurer checkout (it has never set a
+// product), so they keep granting onetime_payment. Anything else is unknown:
+// null, and the caller grants nothing.
+export function checkoutProduct(metadata: Record<string, string> | null | undefined): EntitlementProduct | null {
+  const product = metadata?.product;
+  if (!product) return 'onetime_payment';
+  return product === 'identity_unlock' || product === 'onetime_payment' ? product : null;
+}
+
 export async function grantEntitlement(
   userId: string,
   source: 'stripe' | 'manual',

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconArrowRight, IconCheck, IconChevronDown, IconChevronUp, IconLock, IconShare } from '@tabler/icons-react';
+import { IconArrowRight, IconCheck, IconChevronDown, IconChevronUp, IconCircleCheck, IconLock, IconShare } from '@tabler/icons-react';
 import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
 import PrimaryButton from '@/components/PrimaryButton';
@@ -96,6 +96,9 @@ export default function IdentityPage() {
   const [entitled, setEntitled]     = useState<boolean | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [unlockLoading, setUnlockLoading]     = useState(false);
+  // #162: set only on return from a checkout that verify-checkout granted.
+  // Page state, not storage, so a reload never shows the notice again.
+  const [justUnlocked, setJustUnlocked]       = useState(false);
   const [openRows, setOpenRows]     = useState<Set<string>>(new Set());
 
   const { report: genPhase, retry } = useIdentityReport(pageState === 'has-questionnaire');
@@ -172,6 +175,26 @@ export default function IdentityPage() {
 
       if (cancelled) return;
       setUserId(user.id);
+
+      // #162: back from the identity checkout. Grant the entitlement before
+      // the report is read, so it arrives unlocked without a reload, then drop
+      // session_id from the URL so a reload doesn't verify (or notify) again.
+      const sessionIdParam = new URLSearchParams(window.location.search).get('session_id');
+      if (sessionIdParam) {
+        try {
+          const res = await fetch('/api/verify-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionIdParam }),
+          });
+          const { granted } = await res.json() as { granted?: boolean };
+          if (!cancelled && granted) setJustUnlocked(true);
+        } catch (err) {
+          console.error('verify-checkout failed:', err);
+        }
+        window.history.replaceState({}, '', '/identity');
+        if (cancelled) return;
+      }
 
       const { count, error } = await readAnswersCount(user.id);
       if (cancelled) return;
@@ -397,6 +420,14 @@ export default function IdentityPage() {
     <div className="flow-container flow-container--wide">
       <div className="scroll gap-16">
 
+        {/* #162: once, on return from a granted checkout. */}
+        {justUnlocked && report && (
+          <div className="card flex items-center gap-8" role="status">
+            <IconCircleCheck size={20} stroke={2} color="var(--color-success)" aria-hidden="true" />
+            <p>{COPY.unlocked.notice}</p>
+          </div>
+        )}
+
         <IdentityHero
           hero={hero}
           action={
@@ -577,8 +608,7 @@ export default function IdentityPage() {
                 onClick={handleUnlock}
                 disabled={unlockLoading}
               >
-                {/* #162 step 4 supplies the price from Stripe; until then the label has none. */}
-                {unlockLoading ? 'Redirecting…' : COPY.unlockCta.button(null)}
+                {unlockLoading ? 'Redirecting…' : COPY.unlockCta.button(ready?.locked ? ready.unlockPrice : null)}
                 <IconArrowRight size={18} stroke={2.2} aria-hidden="true" />
               </button>
             </div>

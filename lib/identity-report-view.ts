@@ -28,11 +28,13 @@ export interface LockedIdentityReport {
 }
 
 // `content` is null until the row is ready; then it's the stored report when
-// locked is false, or the projection when locked is true.
+// locked is false, or the projection when locked is true. A locked report
+// also carries the unlock price, formatted from the Stripe price ("$19"), or
+// null if it can't be read.
 export type IdentityReportArtifact =
   | { id: string; status: Exclude<IdentityReportStatus, 'ready'>; created_at: string; locked: false; content: null }
   | { id: string; status: 'ready'; created_at: string; locked: false; content: unknown }
-  | { id: string; status: 'ready'; created_at: string; locked: true; content: LockedIdentityReport };
+  | { id: string; status: 'ready'; created_at: string; locked: true; content: LockedIdentityReport; unlock_price: string | null };
 
 export interface IdentityReportResponse {
   artifact: IdentityReportArtifact | null;

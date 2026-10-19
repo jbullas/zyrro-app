@@ -16,7 +16,7 @@ export type IdentityReportPhase =
   | { phase: 'come-back-later' }
   | { phase: 'failed' }
   | { phase: 'ready'; locked: false; content: unknown }
-  | { phase: 'ready'; locked: true; content: LockedIdentityReport };
+  | { phase: 'ready'; locked: true; content: LockedIdentityReport; unlockPrice: string | null };
 
 const POLL_MS = 3000;
 
@@ -49,7 +49,7 @@ export function useIdentityReport(active: boolean): {
 
       if (artifact.status === 'ready') {
         setReport(artifact.locked
-          ? { phase: 'ready', locked: true, content: artifact.content }
+          ? { phase: 'ready', locked: true, content: artifact.content, unlockPrice: artifact.unlock_price }
           : { phase: 'ready', locked: false, content: artifact.content });
         return;
       }

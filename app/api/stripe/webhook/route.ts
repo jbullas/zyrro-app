@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
-import { grantEntitlement } from '@/lib/entitlements';
+import { checkoutProduct, grantEntitlement } from '@/lib/entitlements';
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -20,8 +20,12 @@ export async function POST(req: NextRequest) {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const userId = session.metadata?.user_id;
-    if (userId && session.payment_status === 'paid') {
-      await grantEntitlement(userId, 'stripe');
+    // #162: grant what the session paid for (no product = the $49 checkout).
+    const product = checkoutProduct(session.metadata);
+    if (!product) {
+      console.error('Webhook: unknown product in checkout metadata', { sessionId: session.id, product: session.metadata?.product });
+    } else if (userId && session.payment_status === 'paid') {
+      await grantEntitlement(userId, 'stripe', product);
     }
   }
 

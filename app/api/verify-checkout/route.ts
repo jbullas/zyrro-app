@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
-import { grantEntitlement } from '@/lib/entitlements';
+import { checkoutProduct, grantEntitlement } from '@/lib/entitlements';
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json() as { session_id: string };
@@ -16,8 +16,13 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Missing user_id in session metadata' }, { status: 400 });
     }
-    const granted = await grantEntitlement(userId, 'stripe');
-    return NextResponse.json({ granted });
+    // #162: grant what the session paid for (no product = the $49 checkout).
+    const product = checkoutProduct(session.metadata);
+    if (!product) {
+      return NextResponse.json({ error: 'Unknown product in session metadata' }, { status: 400 });
+    }
+    const granted = await grantEntitlement(userId, 'stripe', product);
+    return NextResponse.json({ granted, product });
   }
 
   return NextResponse.json({ granted: false });

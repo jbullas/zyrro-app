@@ -3,6 +3,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 import { createClient as createSessionClient } from '@/utils/supabase/server';
 import { getCurrentArtifact } from '@/lib/artifacts';
 import { hasFullIdentityReport } from '@/lib/entitlements';
+import { getIdentityPriceLabel } from '@/lib/identity-price';
 import { REPORT_PAYWALL } from '@/lib/feature-flags';
 import { FLIP_GUARD_MS, GENERATION_BUDGET_MS } from '@/lib/generation-budget';
 import {
@@ -78,7 +79,15 @@ export async function GET(req: NextRequest) {
   if (status !== 'ready') {
     body = { artifact: { ...base, status, locked: false, content: null } };
   } else if (REPORT_PAYWALL && !(await hasFullIdentityReport(user.id))) {
-    body = { artifact: { ...base, status, locked: true, content: toLockedIdentityReport(row.content) } };
+    body = {
+      artifact: {
+        ...base,
+        status,
+        locked: true,
+        content: toLockedIdentityReport(row.content),
+        unlock_price: await getIdentityPriceLabel(),
+      },
+    };
   } else {
     body = { artifact: { ...base, status, locked: false, content: row.content } };
   }
