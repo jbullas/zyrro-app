@@ -23,8 +23,8 @@ import {
   PATH_TURN_CONFIG,
   profileComplete,
   toMessageView,
-  type PathChoices,
 } from '@/lib/path-conversation';
+import { choiceContent, validateChoiceIds, type ChatChoiceSet } from '@/lib/chat-choices';
 
 // #168 step 3: the Path conversation, owned by the server. The browser sends
 // only the conversation id and the new message (or the tapped choice).
@@ -157,17 +157,14 @@ async function prepareChoice(
   if (phaseError) return phaseError;
 
   const [latest] = await listConversationMessages(supabase, conversation.id, 1);
-  const choices = latest?.choices as PathChoices | null | undefined;
+  const choices = latest?.choices as ChatChoiceSet | null | undefined;
   if (!latest || latest.id !== messageId || latest.role !== 'assistant' || !choices) {
     return { ok: false, status: 409, error: 'stale_choice' };
   }
 
-  const ids = Array.isArray(choiceIds) ? [...new Set(choiceIds.filter((id): id is string => typeof id === 'string'))] : [];
-  const picked = choices.options.filter(o => ids.includes(o.id));
-  const allowed = choices.mode === 'single' ? 1 : choices.max;
-  if (picked.length === 0 || picked.length !== ids.length || picked.length > allowed) {
-    return { ok: false, status: 400, error: 'invalid_choice' };
-  }
+  // Single: one id. Multi: up to max. Matrix (the signature grid): every row once.
+  const ids = validateChoiceIds(choices, choiceIds);
+  if (!ids) return { ok: false, status: 400, error: 'invalid_choice' };
 
-  return { content: picked.map(o => o.label).join('; '), selected_choice_ids: picked.map(o => o.id) };
+  return { content: choiceContent(choices, ids), selected_choice_ids: ids };
 }

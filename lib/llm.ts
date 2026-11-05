@@ -187,6 +187,8 @@ export type ChatCompletionUsage = {
   prompt_tokens: number;
   completion_tokens: number;
   cached_tokens: number;
+  /** Reasoning tokens, already included in completion_tokens (0 for non-reasoning models). */
+  reasoning_tokens: number;
 };
 
 /**
@@ -218,6 +220,7 @@ export async function getChatCompletionDetailed(options: {
       prompt_tokens: response.usage?.prompt_tokens ?? 0,
       completion_tokens: response.usage?.completion_tokens ?? 0,
       cached_tokens: response.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+      reasoning_tokens: response.usage?.completion_tokens_details?.reasoning_tokens ?? 0,
     },
   };
 }

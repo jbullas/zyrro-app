@@ -21,13 +21,18 @@ export type ItemSource = 'questionnaire' | 'report' | 'conversation';
 const STATUSES: ItemStatus[] = ['known', 'inferred', 'missing', 'confirmed', 'not_known'];
 const SOURCES: ItemSource[] = ['questionnaire', 'report', 'conversation'];
 
-export type SignatureReaction = 'unreacted' | 'confirmed' | 'corrected' | 'rejected';
+// draining: "that's me, but I don't enjoy it" (step 3b). drain_source says
+// whether the activity itself drains them or the context they do it in now.
+export type SignatureReaction = 'unreacted' | 'confirmed' | 'corrected' | 'rejected' | 'draining';
+export type DrainSource = 'activity' | 'context' | 'unclear';
 export type RiskLevel = 'keep_and_explore' | 'gradual_shift' | 'significant_change' | 'change_everything';
 export type DirectionKind = 'specific_idea' | 'rough_leaning' | 'no_idea';
 export type Urgency = 'no_rush' | 'soon' | 'deadline';
 
+export type SignatureEntry = { name: string; reaction: SignatureReaction; correction: string | null; drain_source: DrainSource | null };
+
 export type ItemValues = {
-  pattern_confirmation: { signatures: Array<{ name: string; reaction: SignatureReaction; correction: string | null }> };
+  pattern_confirmation: { signatures: SignatureEntry[] };
   pushing_now: { pressure: string; urgency: Urgency | null; deadline: string | null };
   tried_before: { attempts: Array<{ what: string; why_it_stalled: string }>; never_tried: boolean };
   clarity_of_direction: { kind: DirectionKind; description: string | null };
@@ -71,10 +76,12 @@ const COERCE: { [K in ItemKey]: (v: unknown) => ItemValues[K] | null } = {
       const so = obj(s);
       const name = str(so?.name);
       if (!so || !name) return [];
+      const reaction = oneOf(so.reaction, ['unreacted', 'confirmed', 'corrected', 'rejected', 'draining'] as const) ?? 'unreacted';
       return [{
         name,
-        reaction: oneOf(so.reaction, ['unreacted', 'confirmed', 'corrected', 'rejected'] as const) ?? 'unreacted',
+        reaction,
         correction: str(so.correction),
+        drain_source: reaction === 'draining' ? oneOf(so.drain_source, ['activity', 'context', 'unclear'] as const) : null,
       }];
     });
     return signatures.length ? { signatures } : null;
@@ -166,7 +173,7 @@ export function applySeedRules(profile: PathProfile, signatureNames: string[]): 
     ...emptyItem(),
     status: signatureNames.length ? 'inferred' : 'missing',
     value: signatureNames.length
-      ? { signatures: signatureNames.map(name => ({ name, reaction: 'unreacted' as const, correction: null })) }
+      ? { signatures: signatureNames.map(name => ({ name, reaction: 'unreacted' as const, correction: null, drain_source: null })) }
       : null,
     source: signatureNames.length ? 'report' : null,
     refs: ['signature_profile_summary.primary_signatures'],
@@ -188,13 +195,11 @@ export function applySeedRules(profile: PathProfile, signatureNames: string[]): 
   }
 
   // What they tried is only ever partly covered by the questionnaire (design
-  // doc: "Partial. Ask."), and a questionnaire never establishes "never
-  // tried": seeded attempts get confirmed, otherwise it's asked.
-  if (p.tried_before.value?.attempts.length) {
-    p.tried_before = { ...p.tried_before, status: 'inferred', value: { ...p.tried_before.value, never_tried: false } };
-  } else {
-    p.tried_before = { ...emptyItem(), refs: p.tried_before.refs };
-  }
+  // doc: "Partial. Ask."). Always asked openly: seeding kept counting things
+  // that were not attempts (a role they enjoyed, an idea they talked about),
+  // and Zyrro then confirmed those instead of finding the real ones. The
+  // seed's pointers stay as hints.
+  p.tried_before = { ...emptyItem(), refs: p.tried_before.refs };
 
   // What's pushing them is usually well covered but changes with time.
   if (p.pushing_now.value && p.pushing_now.status === 'known') p.pushing_now.needs_timing_check = true;
@@ -219,6 +224,28 @@ function mergeMustHold(current: ItemValues['must_hold'] | null, update: ItemValu
   };
 }
 
+// Signature reactions often come from a tap that code has already applied; a
+// model update must not undo them. Merged per signature, on the existing names
+// only: an update can't drop or invent a signature, turn a reacted one back to
+// unreacted, or clear a drain source or reason already recorded.
+function mergePatterns(current: ItemValues['pattern_confirmation'] | null, update: ItemValues['pattern_confirmation']): ItemValues['pattern_confirmation'] {
+  if (!current) return update;
+  const byName = new Map(update.signatures.map(s => [s.name.toLowerCase(), s]));
+  return {
+    signatures: current.signatures.map(s => {
+      const u = byName.get(s.name.toLowerCase());
+      if (!u) return s;
+      const reaction = u.reaction === 'unreacted' ? s.reaction : u.reaction;
+      return {
+        name: s.name,
+        reaction,
+        correction: u.correction ?? s.correction,
+        drain_source: reaction === 'draining' ? u.drain_source ?? s.drain_source : null,
+      };
+    }),
+  };
+}
+
 // in_their_words is a short phrase for the options to echo; a whole message is
 // not, so anything longer is ignored.
 const MAX_QUOTE_WORDS = 25;
@@ -234,7 +261,7 @@ function words(s: string): string[] {
   return s.toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, ' ').split(/\s+/).filter(w => w.length > 2);
 }
 
-function inUserWords(phrase: string, userText: string): boolean {
+export function inUserWords(phrase: string, userText: string): boolean {
   const said = new Set(words(userText));
   const ws = words(phrase);
   return ws.length > 0 && ws.filter(w => said.has(w)).length / ws.length >= 0.8;
@@ -253,10 +280,24 @@ function keepOwnWords(item: ItemKey, value: unknown, current: unknown, userText:
 }
 
 /**
- * `userText` is the user's message this turn; when given, corrections and
- * in_their_words that are not in it are dropped.
+ * During the conversation (`turn` given), code decides statuses, not the
+ * model. In live runs the update call left an item the user had just answered
+ * at "known" or "inferred" (so the same question came back), and marked items
+ * confirmed that were never asked (a constraints picture never put to the
+ * user; working hours from the questionnaire taken as hours available). So:
+ * - the item the previous message asked about: the user's answer confirms it
+ *   (or "not_known" if they said so);
+ * - any other item: inferred, to be confirmed when it is asked, unless it was
+ *   already confirmed;
+ * - hours per week change only in answer to the hours question.
+ * Corrections and in_their_words not in `turn.userText` are dropped.
  */
-export function applyProfileUpdates(profile: PathProfile, updates: unknown, userText?: string): { profile: PathProfile; changed: ItemKey[] } {
+export function applyProfileUpdates(
+  profile: PathProfile,
+  updates: unknown,
+  turn?: { userText: string; answeredItem: ItemKey | null },
+): { profile: PathProfile; changed: ItemKey[] } {
+  const userText = turn?.userText;
   const next = structuredClone(profile);
   const changed: ItemKey[] = [];
   if (!Array.isArray(updates)) return { profile: next, changed };
@@ -264,16 +305,32 @@ export function applyProfileUpdates(profile: PathProfile, updates: unknown, user
   for (const raw of updates) {
     const u = obj(raw);
     const item = oneOf(u?.item, ITEM_KEYS);
-    const status = oneOf(u?.status, STATUSES);
+    let status = oneOf(u?.status, STATUSES);
     if (!u || !item || !status) continue;
-
     const current = next[item] as ProfileItem<unknown>;
+    if (turn) {
+      if (item === turn.answeredItem) {
+        if (status === 'known' || status === 'inferred') status = 'confirmed';
+      } else {
+        status = current.status === 'confirmed' ? 'confirmed' : current.status === 'not_known' ? 'not_known' : 'inferred';
+      }
+    }
+
     let value: unknown = current.value;
     if (status !== 'not_known' && u.value !== undefined && u.value !== null) {
       const coerced = coerceItemValue(item, u.value);
       if (!coerced) continue; // malformed value: drop this update
-      value = item === 'must_hold' ? mergeMustHold(current.value as ItemValues['must_hold'] | null, coerced as ItemValues['must_hold']) : coerced;
+      value = item === 'must_hold' ? mergeMustHold(current.value as ItemValues['must_hold'] | null, coerced as ItemValues['must_hold'])
+        : item === 'pattern_confirmation' ? mergePatterns(current.value as ItemValues['pattern_confirmation'] | null, coerced as ItemValues['pattern_confirmation'])
+        : coerced;
       if (userText !== undefined) value = keepOwnWords(item, value, current.value, userText);
+      // Time per week is always asked explicitly: it changes only when the hours
+      // question was the one asked (constraints already confirmed, hours missing).
+      if (turn && item === 'constraints') {
+        const asked = turn.answeredItem === 'constraints' && current.status === 'confirmed';
+        const before = (current.value as ItemValues['constraints'] | null)?.hours_per_week ?? null;
+        if (!asked) value = { ...(value as ItemValues['constraints']), hours_per_week: before };
+      }
     }
     const quote = shortQuote(u.in_their_words);
     const ownQuote = quote && (userText === undefined || inUserWords(quote, userText)) ? quote : null;
@@ -300,11 +357,14 @@ export function applyProfileUpdates(profile: PathProfile, updates: unknown, user
 
 function valueSettles(item: ItemKey, value: unknown): boolean {
   switch (item) {
-    // Every signature reacted to; a rejection or a qualified yes needs the user's reason.
+    // Every signature reacted to; a rejection or a qualified yes needs the user's
+    // reason, and a draining one needs its source (unclear counts).
     case 'pattern_confirmation': {
       const signatures = (value as ItemValues['pattern_confirmation'] | null)?.signatures ?? [];
       return signatures.length > 0 && signatures.every(s =>
-        s.reaction === 'confirmed' || ((s.reaction === 'rejected' || s.reaction === 'corrected') && !!s.correction));
+        s.reaction === 'confirmed'
+        || ((s.reaction === 'rejected' || s.reaction === 'corrected') && !!s.correction)
+        || (s.reaction === 'draining' && !!s.drain_source));
     }
     case 'pushing_now': return !!(value as ItemValues['pushing_now'])?.urgency;
     case 'tried_before': return !!value;
@@ -341,13 +401,10 @@ export function stillNeeded(profile: PathProfile, item: ItemKey): string {
   const toConfirm = it.status === 'known' || it.status === 'inferred';
   switch (item) {
     case 'pattern_confirmation': {
-      const signatures = (it.value as ItemValues['pattern_confirmation'] | null)?.signatures ?? [];
-      const unreacted = signatures.filter(s => s.reaction === 'unreacted').map(s => s.name);
-      const noReason = signatures.filter(s => s.reaction !== 'confirmed' && s.reaction !== 'unreacted' && !s.correction).map(s => s.name);
-      // A signature left unpicked in a multi-select is a "no": ask why once, typed, not again as choices.
-      if (unreacted.length === signatures.length) return 'which of the primary signatures ring true';
-      const unsettled = [...unreacted, ...noReason];
-      if (unsettled.length) return `one typed question, no choices: what does not fit about ${unsettled.join(', ')}`;
+      const step = nextPatternStep(profile);
+      if (step?.kind === 'grid') return 'their reaction to each primary signature (code attaches the signature grid)';
+      if (step?.kind === 'reasons') return `one typed question, no choices: what does not fit about ${step.names.join(', ')}`;
+      if (step?.kind === 'drain') return `for ${step.name}: whether it is the work itself that drains them, or where and how they do it now (code attaches the choices)`;
       return 'their confirmation of the patterns';
     }
     case 'pushing_now': {
@@ -363,23 +420,62 @@ export function stillNeeded(profile: PathProfile, item: ItemKey): string {
       if (v && v.kind !== 'no_idea' && !v.description) return 'what the idea or leaning actually is, in their words';
       return 'whether they have a specific idea, a rough leaning or no idea, and what it is';
     }
+    // One part at a time: asked together, the reply stacked them into one message.
     case 'must_hold': {
       const v = it.value as ItemValues['must_hold'] | null;
-      const parts = [];
-      if (!v?.energisers.length) parts.push('which energisers the path must include');
-      if (!v?.friction_points.length) parts.push('which friction points it must avoid');
-      return parts.length ? parts.join('; ') : 'their confirmation';
+      if (!v?.energisers.length) return 'which energisers the path must include (code attaches the report list)';
+      if (!v?.friction_points.length) return 'which friction points the path must avoid (code attaches the report list)';
+      return 'their confirmation';
     }
     case 'risk_appetite':
       return 'how much they are prepared to put on the line now';
     case 'constraints': {
       const v = it.value as ItemValues['constraints'] | null;
-      const parts = [];
-      if (it.status !== 'confirmed') parts.push('confirmation of their money and family picture, and any hard limits');
-      if (v?.hours_per_week == null) parts.push('the hours per week they have now');
-      return parts.join('; ') || 'their confirmation';
+      if (it.status !== 'confirmed') return 'confirmation of their money and family picture, and any hard limits (hours come in a separate message)';
+      if (v?.hours_per_week == null) return 'how many hours a week they can give to this change right now, alongside their current job and commitments (not how many hours they work)';
+      return 'their confirmation';
     }
   }
+}
+
+// ── Pattern confirmation steps (step 3b) ───────────────────────────────────
+// 1. grid: every signature still unreacted; one message, one row per signature.
+// 2. reasons: "partly" / "not me" without the user's reason; one typed question.
+// 3. drain: "me, but I don't enjoy it" without a source; one question per signature.
+
+export type PatternStep = { kind: 'grid' } | { kind: 'reasons'; names: string[] } | { kind: 'drain'; name: string };
+
+export function nextPatternStep(profile: PathProfile): PatternStep | null {
+  const signatures = profile.pattern_confirmation.value?.signatures ?? [];
+  if (!signatures.length || profile.pattern_confirmation.status === 'not_known') return null;
+  if (signatures.some(s => s.reaction === 'unreacted')) return { kind: 'grid' };
+  const noReason = signatures.filter(s => (s.reaction === 'rejected' || s.reaction === 'corrected') && !s.correction).map(s => s.name);
+  if (noReason.length) return { kind: 'reasons', names: noReason };
+  const drain = signatures.find(s => s.reaction === 'draining' && !s.drain_source);
+  return drain ? { kind: 'drain', name: drain.name } : null;
+}
+
+/** Applies a tapped grid answer or drain source exactly, without the model. */
+export function applySignatureTaps(
+  profile: PathProfile,
+  reactions: Map<string, SignatureReaction>,
+  drainSources: Map<string, DrainSource> = new Map(),
+): PathProfile {
+  const p = structuredClone(profile);
+  const value = p.pattern_confirmation.value;
+  if (!value) return p;
+  value.signatures = value.signatures.map(s => {
+    const reaction = reactions.get(s.name) ?? s.reaction;
+    return {
+      ...s,
+      reaction,
+      drain_source: reaction === 'draining' ? drainSources.get(s.name) ?? s.drain_source : null,
+    };
+  });
+  if (valueSettles('pattern_confirmation', value)) {
+    p.pattern_confirmation = { ...p.pattern_confirmation, status: 'confirmed', source: 'conversation' };
+  }
+  return p;
 }
 
 export function openItems(profile: PathProfile): ItemKey[] {

@@ -136,6 +136,34 @@ Whenever Zyrro already knows or suspects something and only needs confirmation, 
 
 This is a capability of the shared chat engine, so Mentor can use it too (check-ins, picking a focus, confirming changes), with typing staying the default there. The Mentor use is out of scope for this redesign and gets its own ticket.
 
+## Living user summary
+
+Recording answers accurately is not enough. Zyrro has to show the user that it understands them: connecting what they say to what they said earlier and to their report, and naming tensions and patterns in their own terms. The first build of the Path conversation (#168 step 3) asked one call to both update the profile and write the reply. The replies became form-filling: echo the answer, ask the next item. They never connected answers to each other or to the report, and signature lines were generic.
+
+So a living user summary sits underneath the conversation, as a shared foundation layer: Path uses it now, Plan and Mentor later.
+
+- **It belongs to the user, not to a conversation.** One per user, server-only.
+- **Fixed sections, fixed size.** Confirmed patterns, tensions and contradictions, connections between answers, what they've tried, what's pushing them, current direction, open questions. Each section has a cap, and so does the whole.
+- **Rewritten, never appended to.** Each update merges new information, replaces what is outdated and drops what no longer matters. The full history stays in the messages.
+- **Seeded at the start of Path** from the Identity report and the questionnaire.
+
+**Each user answer takes two steps.**
+
+1. **Update.** Updates the seven profile items exactly as before, and rewrites the summary with anything new: links to earlier answers or the report, tensions, confirmed patterns.
+2. **Reply.** Written from the summary. Its job is to show what Zyrro now understands, using the user's own words and evidence from their report, then ask the next question. It does not echo the answer back or narrate the session.
+
+Signature references always come from that user's own evidence, never from a generic description of the signature. The reply sees that evidence itself, not just a pointer to it: before it is written, every reference it relies on is resolved to a short excerpt of the source (the questionnaire answer, the user's message, or the report text).
+
+**Rejected signatures stay.** A signature the user rejects stays in the summary, marked rejected, with their reason in their own words. A rejection with a reason is often the strongest material for connections.
+
+**"Not me" is different from "me, but I don't enjoy it".** When confirming patterns, the user can also say a signature is them but drains them. Zyrro then asks one follow-up: is it the work itself, or where and how they're doing it now (the projects, the people, the organisation, how much control they have)? The answer is recorded as the source of the drain: the activity, the context, or unclear if they can't say. These signatures are material for tensions and connections, especially links to what's pushing them and to their friction points. They shape the path options:
+
+- **The activity drains them:** the path must not centre on that pattern. It can appear as a tool, and the option's cost must name it.
+- **The context drains them:** the pattern can be central, and the option must show the different context that makes it enjoyable.
+- **Unclear:** options may use it, but must say what context they assume.
+
+**Reflection moments.** At one or two points in the conversation, Zyrro offers an interpretation of the user for them to confirm or correct, with tap choices and room to type. The confirmed version goes into the summary. The final confirmation before options shows how Zyrro sees the user, not a list of their answers.
+
 ## Plan
 
 The Plan turns the chosen path and its starting point into action. Its job is to show the user what needs to happen and to get them moving straight away.

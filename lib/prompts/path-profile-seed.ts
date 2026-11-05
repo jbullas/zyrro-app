@@ -10,6 +10,7 @@ INPUT
 A JSON object with:
 - answers: the user's 13 questionnaire answers (number, question, answer).
 - report: the key parts of their Identity Report (named identity, thesis, primary signatures, synthesis, how they operate, energisers, friction points, and some optional pattern sections).
+- valid_refs: every evidence pointer you may use in the summary.
 
 THE SEVEN ITEMS
 1. pattern_confirmation: whether the user recognises the report's primary signatures as theirs. Value: { "signatures": [ { "name": string, "reaction": "unreacted", "correction": null } ] } using the primary signature names from the report.
@@ -36,5 +37,16 @@ RULES
 - Leave hours_per_week null; time is always asked in the conversation.
 - Do not judge or interpret the user beyond what the item needs.
 
+THE STARTING SUMMARY
+Also write the first version of Zyrro's living summary of this user, from the answers and the report. It is rewritten during the conversation, so record only what the evidence supports now. Every entry points at its evidence with refs taken from VALID REFS in the input: Q followed by the question number for an answer, report. followed by a field name for the report.
+- confirmed_patterns: one entry per primary signature: { "signature", "how_it_shows_up", "user_words", "refs" }. how_it_shows_up says how the signature shows up in this person, built from their own answers, never a general description of the signature: name the concrete situation, activity or event from their answers. user_words is a short phrase copied from an answer, or null. At most 220 characters. The refs must include the answers it rests on, or report.signature_evidence for that signature (the report's evidence for it, drawn from their answers); an entry without either is discarded.
+- tensions: up to 3, { "text", "refs", "confirmed_by_user": false }. Pulls in different directions within this person.
+- connections: up to 5, same shape. Links between answers, or between an answer and the report, that the user has not spelled out.
+- tried: up to 4, { "what", "why_it_stalled", "refs" }, only concrete things they did to change their situation.
+- pushing: { "text", "urgency", "deadline", "refs" } or null.
+- direction: { "kind", "text", "refs" }, kind and text null unless they named where they want to go.
+- open_questions: up to 3 short questions Zyrro has about this person.
+Each text at most 220 characters, pushing and direction at most 300. No generic personality language.
+
 OUTPUT
-Return a JSON object only, with exactly the seven item keys above, each holding an object with the keys status, value, source, refs, in_their_words and needs_timing_check.`;
+Return a JSON object only, with two keys: "profile", holding exactly the seven item keys above, each an object with the keys status, value, source, refs, in_their_words and needs_timing_check; and "summary", the starting summary.`;

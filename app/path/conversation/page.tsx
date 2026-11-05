@@ -6,7 +6,8 @@ import GatedState from '@/components/GatedState';
 import MessageState from '@/components/MessageState';
 import PrimaryButton from '@/components/PrimaryButton';
 import ChatThread from '@/components/ChatThread';
-import ChatChoices, { type ChatChoiceSet } from '@/components/ChatChoices';
+import ChatChoices from '@/components/ChatChoices';
+import { choiceContent, type ChatChoiceSet } from '@/lib/chat-choices';
 
 // #168: the new Path conversation, built alongside the current /path flow
 // (which stays untouched until the switchover). Temporary route, reachable
@@ -125,10 +126,9 @@ export default function PathConversationPage() {
 
   function handleChoice(message: PathMessage, choiceIds: string[]) {
     if (sending || !message.choices) return;
-    const labels = message.choices.options.filter(o => choiceIds.includes(o.id)).map(o => o.label);
     sendTurn(
       { action: 'choice', message_id: message.id, choice_ids: choiceIds },
-      { id: 'pending', role: 'user', content: labels.join('; '), choices: null, selected_choice_ids: choiceIds },
+      { id: 'pending', role: 'user', content: choiceContent(message.choices, choiceIds), choices: null, selected_choice_ids: choiceIds },
     );
   }
 

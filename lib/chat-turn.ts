@@ -134,25 +134,45 @@ export type TurnContext = {
   userMessage: NewUserMessage | null; // null for an assistant-only turn (the opening)
 };
 
-export type ChatTurnConfig<P> = {
+type ChatTurnBase = {
   kind: ConversationKind;
   entitlement: EntitlementProduct;
   recentLimit: number;
+};
+
+export type AssistantMessage = { content: string; choices: unknown | null };
+
+/**
+ * What a turn produced, before anything is saved. `commit` runs after both
+ * messages are saved (it gets them, with their ids) and writes whatever else
+ * the turn changed. A failure still reports the tokens it used.
+ */
+export type TurnRun =
+  | { ok: true; assistant: AssistantMessage; tokens: number; commit: (saved: StoredMessage[]) => Promise<void> }
+  | (TurnFailure & { tokens: number });
+
+/** A turn that runs its own model calls (Path: update, then reply). */
+export type RunTurn = ChatTurnBase & { run: (ctx: TurnContext) => Promise<TurnRun> };
+
+export type ChatTurnConfig<P = unknown> = SingleCallTurn<P> | RunTurn;
+
+export type SingleCallTurn<P> = ChatTurnBase & {
   temperature: number;
   retry: RetryOptions;
   responseFormat?: { type: 'json_object' };
   buildMessages: (ctx: TurnContext) => Promise<ChatCompletionMessageParam[]>;
   /** Null when the model output is unusable; the turn retries once. */
   parse: (raw: string | null) => P | null;
-  toAssistantMessage: (parsed: P) => { content: string; choices: unknown | null };
+  toAssistantMessage: (parsed: P) => AssistantMessage;
   afterTurn?: (ctx: TurnContext, parsed: P) => Promise<void>;
 };
 
 /**
  * One turn on a conversation the caller has already authorised and claimed:
- * build the prompt, call the model (one retry on unusable output), save the
- * user message (if any) and the reply, run afterTurn, count tokens. Nothing is
- * saved when the model call fails, so the user can simply send again.
+ * produce the reply (one model call by default, or the config's own `run`),
+ * then save the user message (if any) and the reply, commit, count tokens.
+ * Nothing is saved when producing the reply fails, so the user can simply
+ * send again.
  */
 export async function runClaimedTurn<P>(
   config: ChatTurnConfig<P>,
@@ -166,32 +186,13 @@ export async function runClaimedTurn<P>(
 
   const recent = await listConversationMessages(supabase, conversation.id, config.recentLimit);
   const ctx: TurnContext = { supabase, conversation, recent, userMessage };
-  const messages = await config.buildMessages(ctx);
 
-  let tokens = 0;
-  let parsed: P | null = null;
-  try {
-    for (let attempt = 0; attempt < 2 && parsed === null; attempt++) {
-      const result = await getChatCompletionDetailed({
-        messages,
-        temperature: config.temperature,
-        response_format: config.responseFormat,
-        retry: config.retry,
-      });
-      tokens += result.usage.prompt_tokens + result.usage.completion_tokens;
-      parsed = config.parse(result.content);
-      if (parsed === null) console.warn(`[chat-turn] ${config.kind}: unusable model output (attempt ${attempt + 1})`);
-    }
-  } catch (error) {
-    await addTokens(supabase, conversation.id, tokens);
-    if (isRateLimitError(error)) return { ok: false, status: 503, error: 'busy' };
-    throw error;
+  const produced = 'run' in config ? await config.run(ctx) : await singleCall(config, ctx);
+  if (!produced.ok) {
+    await addTokens(supabase, conversation.id, produced.tokens);
+    return { ok: false, status: produced.status, error: produced.error };
   }
-
-  if (parsed === null) {
-    await addTokens(supabase, conversation.id, tokens);
-    return { ok: false, status: 502, error: 'no_usable_reply' };
-  }
+  const { assistant, tokens, commit } = produced;
 
   const saved: StoredMessage[] = [];
   if (userMessage) {
@@ -210,7 +211,6 @@ export async function runClaimedTurn<P>(
     saved.push(data as StoredMessage);
   }
 
-  const assistant = config.toAssistantMessage(parsed);
   const { data: reply, error: replyError } = await supabase
     .from('messages')
     .insert({
@@ -225,10 +225,41 @@ export async function runClaimedTurn<P>(
   if (replyError) throw replyError;
   saved.push(reply as StoredMessage);
 
-  if (config.afterTurn) await config.afterTurn(ctx, parsed);
+  await commit(saved);
   await addTokens(supabase, conversation.id, tokens);
 
   return { ok: true, messages: saved };
+}
+
+// The default turn: one model call (one retry on unusable output).
+async function singleCall<P>(config: SingleCallTurn<P>, ctx: TurnContext): Promise<TurnRun> {
+  const messages = await config.buildMessages(ctx);
+  let tokens = 0;
+  let parsed: P | null = null;
+  try {
+    for (let attempt = 0; attempt < 2 && parsed === null; attempt++) {
+      const result = await getChatCompletionDetailed({
+        messages,
+        temperature: config.temperature,
+        response_format: config.responseFormat,
+        retry: config.retry,
+      });
+      tokens += result.usage.prompt_tokens + result.usage.completion_tokens;
+      parsed = config.parse(result.content);
+      if (parsed === null) console.warn(`[chat-turn] ${config.kind}: unusable model output (attempt ${attempt + 1})`);
+    }
+  } catch (error) {
+    if (isRateLimitError(error)) return { ok: false, status: 503, error: 'busy', tokens };
+    throw error;
+  }
+  if (parsed === null) return { ok: false, status: 502, error: 'no_usable_reply', tokens };
+  const result = parsed;
+  return {
+    ok: true,
+    assistant: config.toAssistantMessage(result),
+    tokens,
+    commit: async () => { if (config.afterTurn) await config.afterTurn(ctx, result); },
+  };
 }
 
 /**
