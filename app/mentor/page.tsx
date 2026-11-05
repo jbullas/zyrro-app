@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { createConversation, listConversations, type ConversationListItem } from "@/lib/conversations";
 import { saveMessage, listMessages } from "@/lib/messages";
 import { createClient } from "@/utils/supabase/client";
@@ -10,6 +9,7 @@ import { useAuthUser } from "@/lib/use-auth-user";
 import GatedState from "@/components/GatedState";
 import SecondaryButton from "@/components/SecondaryButton";
 import LinkButton from "@/components/LinkButton";
+import ChatThread from "@/components/ChatThread";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -34,11 +34,6 @@ export default function MentorPage() {
   const [endLoading, setEndLoading] = useState(false);
   const [endError, setEndError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
 
   const { user: authUser, loading: authHookLoading } = useAuthUser();
 
@@ -258,13 +253,6 @@ export default function MentorPage() {
     window.location.reload();
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSend();
-    }
-  }
-
   if (!authChecked) return null;
 
   if (!isAuthenticated) {
@@ -348,56 +336,15 @@ export default function MentorPage() {
           <p className="form-error">{endError}</p>
         </div>
       )}
-      <div className="mentor-messages">
-        {messages.map((msg, i) => (
-          <div key={i} className={`mentor-message mentor-message--${msg.role}`}>
-            <div className={`mentor-bubble mentor-bubble--${msg.role}`}>
-              {msg.role === "assistant" ? (
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => <p className="mentor-md-p">{children}</p>,
-                    ul: ({ children }) => <ul className="mentor-md-ul">{children}</ul>,
-                    ol: ({ children }) => <ol className="mentor-md-ol">{children}</ol>,
-                    li: ({ children }) => <li className="mentor-md-li">{children}</li>,
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
-              ) : (
-                msg.content
-              )}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="mentor-message mentor-message--assistant">
-            <div className="mentor-typing">
-              <span className="spinner spin" />
-              <span>Thinking...</span>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="mentor-composer">
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask your mentor…"
-          className="input-field flex-1"
-        />
-        <button
-          onClick={handleSend}
-          disabled={loading || !input.trim()}
-          className="mentor-send-btn"
-        >
-          Send
-        </button>
-      </div>
+      <ChatThread
+        messages={messages}
+        loading={loading}
+        input={input}
+        onInputChange={setInput}
+        onSend={handleSend}
+        placeholder="Ask your mentor…"
+        inputRef={inputRef}
+      />
     </div>
   );
 }
