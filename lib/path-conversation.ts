@@ -58,7 +58,7 @@ const REPLY_RECENT_MESSAGES = 4;
 // Models. Seeding and call A (update) use the default (OPENAI_MODEL, else
 // gpt-4o). Call B (reply) is switchable on its own: change PATH_REPLY_MODEL
 // here, or set the PATH_REPLY_MODEL env var to override without a code change.
-export const PATH_REPLY_MODEL = process.env.PATH_REPLY_MODEL || 'gpt-4o';
+export const PATH_REPLY_MODEL = process.env.PATH_REPLY_MODEL || 'gpt-6.1-sol';
 // Only the gpt-4 family accepts a custom temperature; newer models use their default.
 const REPLY_TEMPERATURE = /^gpt-4/.test(PATH_REPLY_MODEL) ? 0.6 : undefined;
 
