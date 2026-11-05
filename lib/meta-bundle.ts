@@ -22,6 +22,8 @@ export async function resolveMetaBundle(userId: string): Promise<MetaBundle | nu
     .from('conversations')
     .select('id, summary, summary_generated_at, last_message_at')
     .eq('user_id', userId)
+    // #168: Mentor conversations only; Path conversations share this table.
+    .eq('kind', 'mentor')
     .order('created_at', { ascending: true });
 
   if (conversationsError) {

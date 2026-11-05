@@ -33,6 +33,8 @@ export default function MomentumCard() {
         .from('conversations')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
+        // #168: Path conversations share this table and don't count here.
+        .eq('kind', 'mentor')
         .gte('last_message_at', cutoff);
 
       if (cancelled) return;

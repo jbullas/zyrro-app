@@ -59,6 +59,8 @@ export async function listConversations(): Promise<ConversationListItem[]> {
     .from('conversations')
     .select('id, status, summary, summary_generated_at, last_message_at, created_at')
     .eq('user_id', user.id)
+    // #168: Path conversations share this table; Mentor's list shows only its own.
+    .eq('kind', 'mentor')
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
 

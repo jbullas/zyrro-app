@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
     .select('id')
     .eq('id', conversation_id)
     .eq('user_id', user.id)
+    // #168: only Mentor conversations can be ended (and summarised) here.
+    .eq('kind', 'mentor')
     .maybeSingle();
 
   if (!conversation) {
