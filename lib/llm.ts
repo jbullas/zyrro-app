@@ -37,6 +37,13 @@ export const PIPELINE_DEADLINE_MS = 220_000;
  */
 export const MENTOR_RETRY: RetryOptions = { maxRetries: 2, budgetMs: 10_000, maxRetryAfterMs: 5_000, label: 'mentor' };
 
+/**
+ * #168: a Path conversation turn is also a live reply, but a turn that fails
+ * costs the user more (the profile doesn't move), so it waits a little longer
+ * than Mentor: at most 3 retries and 20s in total, retry-after up to 10s.
+ */
+export const PATH_RETRY: RetryOptions = { maxRetries: 3, budgetMs: 20_000, maxRetryAfterMs: 10_000, label: 'path' };
+
 // Seam for the retry test script only: lets it record waits and drive a fake
 // clock instead of really sleeping. Production never touches it.
 export const __llmTestHooks = {
