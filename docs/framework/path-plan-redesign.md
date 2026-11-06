@@ -22,7 +22,7 @@ Behind the conversation sits a profile that fills in as the user talks. Six item
 2. **What's pushing them now,** and any deadline.
 3. **What they've tried before** to change things, and why it didn't stick.
 4. **Clarity of direction:** a specific idea, a rough leaning, or no idea.
-5. **Risk, constraints and time:** how much they're prepared to put on the line now (from "keep my job, explore on the side" to "ready to change everything"), hard limits (money, family, location, other commitments), and hours available per week (always asked explicitly).
+5. **Risk, constraints and time:** the change they're ready to make now (explore on the side, reduce what they do now, make a real move); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
 6. **Must-haves and must-avoids:** what a good direction has to include and what it has to avoid, taken from what the user said.
 
 Signatures are not a profile item. The user never confirms, rates or discusses individual signatures, and no signature names appear in the conversation. The report is supporting evidence, not something the user is asked to grade.
@@ -42,12 +42,12 @@ Zyrro never asks what the user has already told it. Before the conversation, one
 
 ## Conversation order
 
-About five exchanges, then the summary. If the user gives something away early, Zyrro records it and skips the question later.
+About five exchanges, then the summary. Five is a target, not a cap: a vague answer, a contradiction or a rejected read can justify an extra question, but only one whose answer would change the options. If the user gives something away early, Zyrro records it and skips the question later.
 
-1. **Opening read.** Two or three plain sentences on how Zyrro sees the user and what's pressing on them now, including any deadline. No signature names. Tap choices (that's right, partly, not quite) plus room to say what's off. The user's corrections here feed everything after.
+1. **Opening read.** Two or three plain sentences on how Zyrro sees the user and what's pressing on them now, including any deadline and what's still unknown about it. No signature names. Tap choices (that's right, partly, not quite) plus room to say what's off. The user's corrections here feed everything after.
 2. **What they've tried before.** What they tried, and what got in the way.
 3. **Where they want to go.** Zyrro adapts to a specific idea, a rough leaning, or no idea. If it has noticed a connection the user hasn't made, it offers it in the same message as this question, not as a separate turn.
-4. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. A tap scale for risk (explore on the side, reduce what I do now, make a real move), a choice of hours per week, and an optional note for hard limits.
+4. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. Tap choices for the change they're ready to make now and for what they'd put at risk (including "not sure yet"), a choice of hours per week, and a direct question about hard limits, with "nothing off the table" as a choice.
 5. **Summary.** The one explicit confirmation before options (see Summary before options).
 
 ## When Zyrro has enough
@@ -58,14 +58,14 @@ An item is needed only if its answer would change the options. Each needed item 
 - Pushing them: the main pressure is known, plus whether there's a deadline ("no rush" counts).
 - Tried before: at least one past attempt and why it stalled, or a clear "never tried".
 - Direction: specific idea, rough leaning, or no idea.
-- Risk, constraints, time: a point on the risk scale, any hard limits, hours per week.
+- Risk, constraints, time: the change they're ready for now, what they'd put at risk (or not sure yet), hard limits (or none), hours per week now.
 
 ## Summary before options
 
 When the needed items are filled, the conversation phase ends and the summary card appears in the same turn. No message announces it. The card shows how Zyrro sees the user (not a list of their answers), what they want, their must-haves and must-avoids, and their risk, limits and hours.
 
 - Choices: that's right, mostly (with changes), that's not it, plus an optional note.
-- "Mostly" or "that's not it" updates the summary and shows it again.
+- "Mostly" or "that's not it" needs a note or a pick of which part is off (the read, what they want, must-haves, must-avoids, risk and limits). Zyrro may ask one clarifying question, then updates the summary and shows it again. Each must-have and must-avoid can also be removed on its own.
 - Only after confirmation are options generated.
 - The free-text box is not shown once the conversation phase has ended.
 
@@ -131,7 +131,7 @@ The strongest fit adds one line: why Zyrro picked it over the other two.
 The report's energiser and friction lists are not offered as choices in Path. They describe the user's signatures, not always what the user said, and can miss what matters most for the path.
 
 - **Derived from the user.** Zyrro derives the must-haves and must-avoids from the 13 answers and the conversation.
-- **Evidence required.** Each item points to the questionnaire answer or user message it came from. Code checks every reference and drops any item without valid evidence.
+- **Evidence required.** Each item points to the questionnaire answer or user message it came from and quotes the words that support it. Code checks that the reference exists and that the quote appears in that source, and drops any item that fails. A valid reference alone doesn't prove the item, so each is also marked stated (the user said it) or inferred (Zyrro's reading), and inferred items are labelled as such on the card.
 - **Confirmed in the summary,** where the user can correct them. No separate turn asks for them.
 - **The options honour them.** "Why it fits you" refers to the must-haves; "What it would cost them" says so honestly if a must-avoid can't be avoided.
 
@@ -152,7 +152,7 @@ So a living user summary sits underneath the conversation, as a shared foundatio
 
 - **It belongs to the user, not to a conversation.** One per user, server-only.
 - **Fixed sections, fixed size.** The confirmed read, tensions and contradictions, connections between answers, what they've tried, what's pushing them, current direction, must-haves and must-avoids, open questions. Each section has a cap, and so does the whole.
-- **Balanced threads.** No single theme crowds out the rest; each distinct thread the user has shown keeps its place.
+- **Balanced threads.** No single theme crowds out the rest; each distinct thread the user has shown keeps its place. Corrections and limits stay attached to what they qualify: an activity enjoyed in one form but not another, a change they can afford but haven't decided on, time available now for exploring rather than as a lasting commitment. Updates never flatten these into the plain version.
 - **Rewritten, never appended to.** Each update merges new information, replaces what is outdated and drops what no longer matters. The full history stays in the messages.
 - **Seeded at the start of Path** from the questionnaire first, and the Identity report as support.
 
@@ -165,7 +165,7 @@ The reply sees the evidence itself, not just a pointer to it: before it is writt
 
 **No repetition.** The reply receives the themes already stated or confirmed in the conversation. It may bring one back only to connect it to something new, never to restate it. This is a structural input, not a list of banned phrases.
 
-**One reflection at most.** At most once in the conversation, Zyrro offers an interpretation the user hasn't made, in the same message as the next question, never as its own turn. The user can confirm or push back in their answer. The summary card is the only standalone confirmation.
+**One interpretive reflection at most.** At most once in the conversation, Zyrro offers an interpretation the user hasn't made, in the same message as the next question, never as its own turn. The user can confirm or push back in their answer. The summary card is the only standalone confirmation. Brief acknowledgements of an answer are fine; the limit is on new interpretations.
 
 ## Plan
 
