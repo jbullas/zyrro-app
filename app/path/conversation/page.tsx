@@ -7,12 +7,14 @@ import MessageState from '@/components/MessageState';
 import PrimaryButton from '@/components/PrimaryButton';
 import ChatThread from '@/components/ChatThread';
 import ChatChoices from '@/components/ChatChoices';
+import PathSummaryCard from '@/components/PathSummaryCard';
 import { choiceContent, type ChatChoiceSet } from '@/lib/chat-choices';
 
 // #168: the new Path conversation, built alongside the current /path flow
 // (which stays untouched until the switchover). Temporary route, reachable
 // by URL only. The server owns the conversation: this page only reads it
-// back and sends new messages or tapped choices.
+// back and sends typed answers, or tapped choices with an optional note
+// (brief docs/briefs/168-shorter-flow.md, "UI").
 
 type PathMessage = {
   id: string;
@@ -22,26 +24,67 @@ type PathMessage = {
   selected_choice_ids: string[] | null;
 };
 
+type PathPhase = 'seeding' | 'conversation' | 'summary' | 'options' | 'chosen';
+
 type ConversationResponse = {
-  conversation: { id: string; phase: string };
+  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean };
   messages: PathMessage[];
-  profile_complete: boolean;
 };
 
+type TurnResponse = { messages: PathMessage[]; phase: PathPhase; summary_confirmed: boolean };
+
 type PageState = 'loading' | 'unpaid' | 'not-started' | 'no-report' | 'chat' | 'error';
+
+const STEPS = ['About you', 'A few questions', 'Your summary', 'Your options'] as const;
+
+function currentStep(phase: PathPhase, confirmed: boolean, messages: PathMessage[]): number {
+  if (confirmed || phase === 'options' || phase === 'chosen') return 3;
+  if (phase === 'summary') return 2;
+  return messages.some(m => m.role === 'user') ? 1 : 0;
+}
+
+function PathHeader({ step }: { step: number }) {
+  return (
+    <div className="flex flex-col gap-12 mb-8">
+      <p className="eyebrow">Your Path</p>
+      <h1>Where you go from here</h1>
+      <p>
+        A short conversation that builds on your Identity Report and ends with three path options.
+        It takes about ten minutes, and you can stop and pick it up again any time.
+      </p>
+      <ol className="path-steps" aria-label="Progress">
+        {STEPS.map((label, i) => (
+          <li
+            key={label}
+            className={`path-step${i === step ? ' path-step--current' : i < step ? ' path-step--done' : ''}`}
+            aria-current={i === step ? 'step' : undefined}
+          >
+            <span className="path-step-dot" aria-hidden="true" />
+            {label}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
 export default function PathConversationPage() {
   const { user, loading: authLoading } = useAuthUser();
   const [pageState, setPageState] = useState<PageState>('loading');
   const [conversationId, setConversationId] = useState('');
+  const [phase, setPhase] = useState<PathPhase>('seeding');
+  const [confirmed, setConfirmed] = useState(false);
   const [messages, setMessages] = useState<PathMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState('');
   const [sendError, setSendError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   function showConversation(data: ConversationResponse) {
     setConversationId(data.conversation.id);
+    setPhase(data.conversation.phase);
+    setConfirmed(data.conversation.summary_confirmed);
     setMessages(data.messages);
     setPageState('chat');
   }
@@ -65,6 +108,7 @@ export default function PathConversationPage() {
   async function handleStart() {
     setPageState('chat');
     setSending(true);
+    setStatus('Reading your report and answers…');
     setSendError('');
     try {
       const res = await fetch('/api/path-conversation', {
@@ -87,8 +131,9 @@ export default function PathConversationPage() {
     }
   }
 
-  async function sendTurn(body: Record<string, unknown>, pending: PathMessage) {
+  async function sendTurn(body: Record<string, unknown>, pending: PathMessage, statusLine: string) {
     setSending(true);
+    setStatus(statusLine);
     setSendError('');
     setMessages(prev => [...prev, pending]);
     try {
@@ -98,8 +143,10 @@ export default function PathConversationPage() {
         body: JSON.stringify({ ...body, conversation_id: conversationId }),
       });
       if (!res.ok) throw new Error(`turn failed: ${res.status}`);
-      const data = await res.json() as { messages: PathMessage[] };
+      const data = await res.json() as TurnResponse;
       setMessages(prev => [...prev.filter(m => m !== pending), ...data.messages]);
+      setPhase(data.phase);
+      setConfirmed(data.summary_confirmed);
       return true;
     } catch (err) {
       console.error(err);
@@ -120,15 +167,21 @@ export default function PathConversationPage() {
     const ok = await sendTurn(
       { action: 'message', text },
       { id: 'pending', role: 'user', content: text, choices: null, selected_choice_ids: null },
+      'Reading your answer…',
     );
     if (!ok) setInput(text);
   }
 
-  function handleChoice(message: PathMessage, choiceIds: string[]) {
+  function handleChoice(message: PathMessage, choiceIds: string[], note: string | null) {
     if (sending || !message.choices) return;
+    const purpose = message.choices.purpose;
+    const statusLine = purpose === 'summary' || purpose === 'summary_clarify'
+      ? 'Updating your summary…'
+      : purpose === 'risk_time' ? 'Putting your summary together…' : 'Reading your answer…';
     sendTurn(
-      { action: 'choice', message_id: message.id, choice_ids: choiceIds },
-      { id: 'pending', role: 'user', content: choiceContent(message.choices, choiceIds), choices: null, selected_choice_ids: choiceIds },
+      { action: 'choice', message_id: message.id, choice_ids: choiceIds, note },
+      { id: 'pending', role: 'user', content: choiceContent(message.choices, choiceIds, note), choices: null, selected_choice_ids: choiceIds },
+      statusLine,
     );
   }
 
@@ -190,6 +243,10 @@ export default function PathConversationPage() {
   }
 
   const latest = messages[messages.length - 1];
+  // Only the latest assistant message takes an answer, and nothing once the summary is confirmed.
+  const answerable = (m: PathMessage) => m === latest && m.role === 'assistant' && !sending && !confirmed;
+  // One input at a time: the free-text box only on an open question in the conversation phase.
+  const showComposer = phase === 'conversation' && !(latest?.role === 'assistant' && latest.choices);
 
   return (
     <div className="flow-container mentor-chat-container">
@@ -201,14 +258,33 @@ export default function PathConversationPage() {
       <ChatThread
         messages={messages}
         loading={sending}
+        statusText={status}
         input={input}
         onInputChange={setInput}
         onSend={handleSend}
         placeholder="Type your answer…"
         inputRef={inputRef}
-        renderAfterAssistant={message =>
-          message === latest && message.choices && !sending ? (
-            <ChatChoices choices={message.choices} disabled={sending} onSubmit={ids => handleChoice(message, ids)} />
+        header={<PathHeader step={currentStep(phase, confirmed, messages)} />}
+        preserveUserLineBreaks
+        hideComposer={!showComposer}
+        renderAssistant={message =>
+          message.choices?.card ? (
+            <PathSummaryCard
+              card={message.choices.card}
+              choices={answerable(message) ? message.choices : null}
+              disabled={sending}
+              onSubmit={(ids, note) => handleChoice(message, ids, note)}
+            />
+          ) : null
+        }
+        renderInBubble={message =>
+          message.choices && !message.choices.card && answerable(message) ? (
+            <ChatChoices
+              key={message.id}
+              choices={message.choices}
+              disabled={sending}
+              onSubmit={(ids, note) => handleChoice(message, ids, note)}
+            />
           ) : null
         }
       />

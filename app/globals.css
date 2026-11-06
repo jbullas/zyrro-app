@@ -2264,3 +2264,52 @@ p {
 /* #7: the /s/* header CTA is .btn-cta; its margin-top (for in-page CTAs)
    would push it off-centre in the header row. */
 .nav-bar .btn-cta { margin-top: 0; }
+
+/* ── #168 shorter flow: Path conversation (/path/conversation) ──
+   Only what no existing class covers. Bubbles, choices, card, bullets and
+   buttons reuse .mentor-*, .selectable-*, .card.constellation-card,
+   .energiser-bullets/.friction-bullets and .btn-secondary. */
+
+/* Step indicator: About you, A few questions, Your summary, Your options. */
+.path-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.path-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-nav-inactive);
+}
+
+.path-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.path-step--done { color: var(--color-text-secondary); }
+.path-step--current { color: var(--color-grad-2); }
+
+/* The summary card spans the thread, unlike a bubble (max-width 88%). */
+.path-summary-card { width: 100%; }
+
+/* "Zyrro's reading" on an inferred must-have or must-avoid. */
+.path-inferred-tag {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
