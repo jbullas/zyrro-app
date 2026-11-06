@@ -34,7 +34,8 @@ const SOURCES: ItemSource[] = ['questionnaire', 'report', 'conversation'];
 export type ReadVerdict = 'right' | 'partly' | 'not_quite';
 export type Urgency = 'no_rush' | 'soon' | 'deadline';
 export type DirectionKind = 'specific_idea' | 'rough_leaning' | 'no_idea';
-export type Readiness = 'side' | 'reduce' | 'real_move';
+// Design doc, "The profile" item 5 (revised 2026-11-06): concrete readiness choices, plus not sure yet.
+export type Readiness = 'side' | 'reduce' | 'real_move' | 'unsure';
 export type AtStake = 'income' | 'position' | 'location';
 export type LimitKind = 'money' | 'family' | 'location' | 'commitments';
 
@@ -98,8 +99,10 @@ export type Asked =
   | { kind: 'card_clarify' };
 
 export type ProfileMeta = {
-  // Theme labels already stated or confirmed in the conversation (no repetition).
-  stated_themes: string[];
+  // Sources (Q<n> answers, m:<id> user messages) Zyrro's messages have already
+  // rested on. An idea resting only on these may come back only to connect it
+  // to something new (no repetition, tracked by source rather than by label).
+  used_refs: string[];
   // A contradiction call A found, waiting for its one clarifying question.
   pending_clarify: { item: AskedItem; text: string; refs: string[] } | null;
   // Must-haves and must-avoids the user removed on the card; never proposed again.
@@ -125,7 +128,12 @@ const COERCE: { [K in ModelItem]: (v: unknown) => Partial<ItemValues[K]> | null 
     const o = obj(v);
     const pressure = str(o?.pressure);
     if (!o || !pressure) return null;
-    return { pressure, urgency: oneOf(o.urgency, ['no_rush', 'soon', 'deadline'] as const), deadline: str(o.deadline) };
+    // A decision recorded with its term or date is a deadline (follow-up
+    // brief, item 3): in a live run the seed wrote the renewal as the deadline
+    // but labelled it "soon", so the card showed no deadline.
+    const deadline = str(o.deadline);
+    const urgency = deadline ? 'deadline' : oneOf(o.urgency, ['no_rush', 'soon', 'deadline'] as const);
+    return { pressure, urgency, deadline };
   },
   tried_before(v) {
     const o = obj(v);
@@ -168,13 +176,22 @@ export function emptyRiskTime(): ItemValues['risk_time'] {
   };
 }
 
+function emptyMeta(): ProfileMeta {
+  return { used_refs: [], pending_clarify: null, removed_items: [], last_asked: null };
+}
+
 export function emptyProfile(): PathProfile {
-  const profile = {
-    version: 2,
-    meta: { stated_themes: [], pending_clarify: null, removed_items: [], last_asked: null },
-  } as unknown as PathProfile;
+  const profile = { version: 2, meta: emptyMeta() } as unknown as PathProfile;
   for (const key of ITEM_KEYS) (profile as Record<string, unknown>)[key] = emptyItem();
   return profile;
+}
+
+/** A stored profile with any meta field it predates filled in (rows saved before the follow-up brief). */
+export function withMetaDefaults(profile: PathProfile): PathProfile {
+  const meta = { ...emptyMeta(), ...(profile.meta ?? {}) } as ProfileMeta & { stated_themes?: unknown };
+  delete meta.stated_themes;
+  if (!Array.isArray(meta.used_refs)) meta.used_refs = [];
+  return { ...profile, meta };
 }
 
 // in_their_words is a short phrase for the options to echo; a whole message is not.
@@ -333,7 +350,7 @@ export function applyOpeningReadFollowUp(profile: PathProfile, text: string): Pa
 export function applyRiskTimeTap(profile: PathProfile, ids: string[]): PathProfile {
   const p = structuredClone(profile);
   const v = { ...(p.risk_time.value ?? emptyRiskTime()) };
-  const readiness = oneOf(pickedIn(ids, 'readiness')[0], ['side', 'reduce', 'real_move'] as const);
+  const readiness = oneOf(pickedIn(ids, 'readiness')[0], ['side', 'reduce', 'real_move', 'unsure'] as const);
   if (readiness) v.readiness = readiness;
   const stake = pickedIn(ids, 'at_stake');
   if (stake.length) {
@@ -350,6 +367,32 @@ export function applyRiskTimeTap(profile: PathProfile, ids: string[]): PathProfi
   p.risk_time = { ...p.risk_time, value: v, source: 'conversation' };
   if (valueSettles('risk_time', v)) p.risk_time.status = 'confirmed';
   return p;
+}
+
+/**
+ * The direction tap: whether they already have something in mind. The note is
+ * what it is, in their own words. A specific idea or rough leaning without a
+ * description stays open for its one follow-up.
+ */
+export function applyDirectionTap(profile: PathProfile, ids: string[], note: string | null): PathProfile {
+  const p = structuredClone(profile);
+  const kind = DIRECTION_TAPS[pickedIn(ids, 'direction')[0] as keyof typeof DIRECTION_TAPS];
+  if (!kind) return p;
+  const value = { kind, description: note ?? p.direction.value?.description ?? null };
+  p.direction = { ...p.direction, value, source: 'conversation', status: valueSettles('direction', value) ? 'confirmed' : 'inferred' };
+  return p;
+}
+
+/** After call A, the tapped kind stands; call A may only add or refine the description. */
+export function keepDirectionKind(profile: PathProfile, tapped: PathProfile): PathProfile {
+  const kind = tapped.direction.value?.kind;
+  if (!kind) return profile;
+  const description = profile.direction.value?.description ?? tapped.direction.value?.description ?? null;
+  const value = { kind, description };
+  return {
+    ...profile,
+    direction: { ...profile.direction, value, source: 'conversation', status: valueSettles('direction', value) ? 'confirmed' : 'inferred' },
+  };
 }
 
 // ── The "enough" rule (design doc, "When Zyrro has enough") ────────────────
@@ -410,26 +453,30 @@ export function settleAnswered(profile: PathProfile, item: AskedItem): PathProfi
   return p;
 }
 
-/** What an open item still needs, in plain words, for the reply. */
+/**
+ * What the next question is about, in plain words, for the reply. Worded as
+ * a person would say it, so none of it reads as Zyrro's internal workings if
+ * the reply echoes it.
+ */
 export function stillNeeded(profile: PathProfile, item: AskedItem): string {
   const it = profile[item] as ProfileItem<unknown>;
   switch (item) {
     case 'opening_read':
-      return 'what is off about Zyrro\'s read of them, in their own words';
+      return 'what Zyrro got wrong about them, in their own words';
     case 'pushing_now': {
       const v = it.value as ItemValues['pushing_now'] | null;
-      if (!v) return 'what is pushing them to change now, and whether anything forces a decision';
+      if (!v) return 'what is pushing them to change now';
       return 'whether anything forces a decision, and by when';
     }
     case 'tried_before':
       return 'what they have actually tried before to change things, and what got in the way';
     case 'direction': {
       const v = it.value as ItemValues['direction'] | null;
-      if (v && v.kind !== 'no_idea' && !v.description) return 'what the idea or leaning actually is, in their words';
-      return 'where they want to go: a specific idea, a rough leaning, or no idea yet';
+      if (v && v.kind !== 'no_idea' && !v.description) return 'what the idea they have in mind actually is, in their words';
+      return 'whether they already have something in mind; the attached choices ask it';
     }
     case 'risk_time':
-      return 'their hard limits, asked directly; code attaches choices for the change they are ready to make now, what they would put at risk, their hard limits, and the hours a week they have for this now';
+      return 'what they can change now, what they would risk, what is off the table and how much time they have; the attached choices ask each of these';
   }
 }
 
@@ -440,10 +487,13 @@ export function isPathProfile(v: unknown): v is PathProfile {
 
 // ── Labels shown on the summary card and in choices ────────────────────────
 
+// Brief 168-followup, Part A items 4 and 10: words people say, and readiness
+// choices that say concretely what changes.
 export const READINESS_LABELS: Record<Readiness, string> = {
-  side: 'Explore it on the side',
-  reduce: 'Reduce what I do now',
-  real_move: 'Make a real move',
+  side: 'Explore alongside my current work, nothing changes yet',
+  reduce: 'Change my current setup: fewer hours or a different role',
+  real_move: 'Leave or make a big change: a new job, field or way of life',
+  unsure: 'Not sure yet',
 };
 export const AT_STAKE_LABELS: Record<AtStake | 'unsure', string> = {
   income: 'Some income',
@@ -454,7 +504,36 @@ export const AT_STAKE_LABELS: Record<AtStake | 'unsure', string> = {
 export const LIMIT_LABELS: Record<LimitKind | 'none', string> = {
   money: 'Money',
   family: 'Family',
-  location: 'Location',
+  location: 'Where I live',
   commitments: 'Other commitments',
-  none: 'Nothing off the table',
+  none: 'Nothing is off the table',
+};
+// The same answers on the summary card, which speaks to the user in the
+// second person throughout (follow-up brief, item 9). Tap labels above are
+// written from the user's side.
+export const READINESS_CARD_LABELS: Record<Readiness, string> = {
+  side: 'Explore alongside your current work, nothing changes yet',
+  reduce: 'Change your current setup: fewer hours or a different role',
+  real_move: 'Leave or make a big change: a new job, field or way of life',
+  unsure: 'Not sure yet',
+};
+export const AT_STAKE_CARD_LABELS: Record<AtStake | 'unsure', string> = {
+  income: 'Some income',
+  position: 'Your current position',
+  location: 'Where you live',
+  unsure: 'Not sure yet',
+};
+export const LIMIT_CARD_LABELS: Record<LimitKind | 'none', string> = {
+  money: 'Money',
+  family: 'Family',
+  location: 'Where you live',
+  commitments: 'Other commitments',
+  none: 'Nothing is off the table',
+};
+
+export const DIRECTION_TAPS = { specific: 'specific_idea', rough: 'rough_leaning', not_yet: 'no_idea' } as const;
+export const DIRECTION_LABELS: Record<keyof typeof DIRECTION_TAPS, string> = {
+  specific: 'Yes, something specific',
+  rough: 'A rough idea',
+  not_yet: 'Not yet',
 };

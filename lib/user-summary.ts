@@ -11,12 +11,32 @@ import type { EvidencedItem, PathProfile } from '@/lib/path-profile';
 // Refs are checked against what actually exists, and resolved into short
 // excerpts before the reply is written, so the reply can use the user's words.
 //
-// Schema 2 (shorter flow): no signature section. Tensions and connections
-// carry a short theme label, which code uses to track what the conversation
-// has already said. Must-haves and must-avoids are copied in from the profile
-// by code, never written by the model here.
+// Schema 2 (shorter flow): no signature section. Must-haves and must-avoids
+// are copied in from the profile by code, never written by the model here.
+// What the conversation has already said is tracked by source refs in the
+// profile (meta.used_refs), not by labels on these notes (follow-up brief).
 
-export type SummaryNote = { theme: string; text: string; refs: string[]; confirmed_by_user: boolean };
+export type SummaryNote = { text: string; refs: string[]; confirmed_by_user: boolean };
+
+/** The user's own sources among refs: questionnaire answers and their messages. */
+export function sourceRefs(refs: Iterable<string>): string[] {
+  return [...new Set([...refs].filter(r => /^Q\d+$/.test(r) || r.startsWith('m:')))];
+}
+
+export const SUMMARY_SECTIONS = ['confirmed_read', 'tensions', 'connections', 'tried', 'pushing', 'direction', 'open_questions'] as const;
+
+/**
+ * Call A returns only the sections that changed (follow-up brief, speed). The
+ * candidate is the previous summary with those sections replaced; it is then
+ * validated as a whole, like a full rewrite.
+ */
+export function mergeSummaryChanges(previous: UserSummary, changes: unknown): Record<string, unknown> | null {
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return null;
+  const c = changes as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...previous };
+  for (const key of SUMMARY_SECTIONS) if (key in c && c[key] !== undefined) merged[key] = c[key];
+  return merged;
+}
 
 export type UserSummary = {
   schema_version: 2;
@@ -39,7 +59,9 @@ export const SUMMARY_CAPS = {
   tried: 4,
   must_items: 5,
   open_questions: 3,
-  theme_chars: 60,
+  // The prompt asks for 400; this is the safety net (live runs ran slightly
+  // over and the confirmed read was lost).
+  read_chars: 600,
   entry_chars: 240,
   open_question_chars: 160,
   single_chars: 400,
@@ -196,8 +218,9 @@ export function isCurrentSummary(v: unknown): v is UserSummary {
 
 export type SummaryValidationContext = {
   index: RefIndex;
-  // Notes the user has confirmed in a reflection, by theme; only these may be confirmed_by_user.
-  confirmedThemes: string[];
+  // Sources of the reflection the user confirmed; only a note sharing one of
+  // them may be confirmed_by_user.
+  confirmedRefs: string[];
   previous: UserSummary | null;
 };
 
@@ -220,21 +243,20 @@ export function validateSummary(raw: unknown, ctx: SummaryValidationContext): { 
 
   const ro = obj(o.confirmed_read);
   const readText = str(ro?.text);
-  const confirmed_read = readText && fits(readText, SUMMARY_CAPS.single_chars, 'confirmed_read')
+  const confirmed_read = readText && fits(readText, SUMMARY_CAPS.read_chars, 'confirmed_read')
     ? { text: readText, refs: refsOf(ro?.refs) }
     : ctx.previous?.confirmed_read ?? null;
 
-  const confirmed = new Set(ctx.confirmedThemes.map(t => t.toLowerCase()));
+  const confirmed = new Set(sourceRefs(ctx.confirmedRefs));
   const notes = (key: 'tensions' | 'connections', max: number): SummaryNote[] =>
     list(o[key]).flatMap(n => {
       const no = obj(n);
       const text = str(no?.text);
-      const theme = str(no?.theme);
       const refs = refsOf(no?.refs);
       if (!fits(text, SUMMARY_CAPS.entry_chars, key)) return [];
-      if (!theme || theme.length > SUMMARY_CAPS.theme_chars) { dropped.push(`${key}: missing or long theme`); return []; }
       if (!refs.length) { dropped.push(`${key}: no valid refs`); return []; }
-      return [{ theme, text: text!, refs, confirmed_by_user: confirmed.has(theme.toLowerCase()) }];
+      // Decided by code from the confirmed reflection's sources, never by the model's flag.
+      return [{ text: text!, refs, confirmed_by_user: refs.some(r => confirmed.has(r)) }];
     }).slice(0, max);
 
   const tried = list(o.tried).flatMap(t => {
@@ -249,11 +271,13 @@ export function validateSummary(raw: unknown, ctx: SummaryValidationContext): { 
 
   const po = obj(o.pushing);
   const pushingText = str(po?.text);
+  // As in the profile: a recorded deadline makes the urgency a deadline.
+  const pushingDeadline = str(po?.deadline);
   const pushing = pushingText && pushingText.length <= SUMMARY_CAPS.single_chars
     ? {
         text: pushingText,
-        urgency: (['no_rush', 'soon', 'deadline'] as const).find(u => u === po?.urgency) ?? null,
-        deadline: str(po?.deadline),
+        urgency: pushingDeadline ? 'deadline' as const : (['no_rush', 'soon', 'deadline'] as const).find(u => u === po?.urgency) ?? null,
+        deadline: pushingDeadline,
         refs: refsOf(po?.refs),
       }
     : ctx.previous?.pushing ?? null;

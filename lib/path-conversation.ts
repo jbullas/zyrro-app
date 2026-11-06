@@ -4,28 +4,35 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
 import type { ConversationRow, RunTurn, StoredMessage, TurnContext, TurnRun } from '@/lib/chat-turn';
 import { addTokens, listConversationMessages } from '@/lib/chat-turn';
-import { noteFromContent, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
+import { noteFromContent, type ChatChoiceSet, type ChoiceGroup, type RiskLine, type SummaryCard } from '@/lib/chat-choices';
 import { mergeAnswersWithQuestions } from '@/lib/identity-questions';
 import { getChatCompletionDetailed, isRateLimitError, PATH_RETRY } from '@/lib/llm';
 import {
+  applyDirectionTap,
   applyOpeningReadFollowUp,
   applyOpeningReadTap,
   applyProfileUpdates,
   applyRiskTimeTap,
   ASKED_ITEMS,
+  AT_STAKE_CARD_LABELS,
   AT_STAKE_LABELS,
+  DIRECTION_LABELS,
   emptyProfile,
   HOURS_BANDS,
   isItemComplete,
   isPathProfile,
   ITEM_KEYS,
+  keepDirectionKind,
+  LIMIT_CARD_LABELS,
   LIMIT_LABELS,
   MODEL_ITEMS,
   openItems,
+  READINESS_CARD_LABELS,
   READINESS_LABELS,
   seedProfile,
   settleAnswered,
   stillNeeded,
+  withMetaDefaults,
   type Asked,
   type AskedItem,
   type EvidencedItem,
@@ -39,7 +46,9 @@ import {
   emptySummary,
   isCurrentSummary,
   loadUserSummary,
+  mergeSummaryChanges,
   resolveExcerpts,
+  sourceRefs,
   summaryRefs,
   syncMustItems,
   validateEvidenced,
@@ -62,8 +71,11 @@ import {
 
 export const PATH_ENTITLEMENT = 'onetime_payment' as const;
 
-// Recent messages each call sees; everything older lives on in the profile and summary.
-const UPDATE_RECENT_MESSAGES = 8;
+// Recent messages each call sees; everything older lives on in the profile and
+// summary. Call A went from 8 to 4 for speed (follow-up brief).
+const UPDATE_RECENT_MESSAGES = 4;
+// Report excerpts call A sees: enough to link to, not the whole digest.
+const UPDATE_REPORT_EXCERPT_CHARS = 400;
 const REPLY_RECENT_MESSAGES = 4;
 
 // Guardrails (step 0, approved 2026-11-06). Five exchanges is the target; the
@@ -81,13 +93,15 @@ const REPLY_TEMPERATURE = /^gpt-4/.test(PATH_REPLY_MODEL) ? 0.6 : undefined;
 
 export type PathPhase = 'seeding' | 'conversation' | 'summary' | 'options' | 'chosen';
 
-// The one interpretive reflection (design doc, "One interpretive reflection at most").
+// The one interpretive reflection (design doc, "One interpretive reflection at
+// most"). refs: the summary note's sources; a note sharing one of them counts
+// as confirmed once the user confirms the reflection.
 export type Reflection = {
   id: 'r1';
   status: 'offered' | 'confirmed' | 'corrected' | 'rejected' | 'no_reaction';
   message_id: string | null;
-  theme: string;
   text: string;
+  refs: string[];
 };
 
 // path_profiles.summary while in the summary phase: the latest card, and a
@@ -320,7 +334,7 @@ export async function seedPath(digest: ContextDigest, conversationId?: string): 
         value: { must_haves: haves.items, must_avoids: avoids.items },
         source: 'questionnaire',
       };
-      const validated = validateSummary(parsed.summary, { index, confirmedThemes: [], previous: null });
+      const validated = validateSummary(parsed.summary, { index, confirmedRefs: [], previous: null });
       // Nothing is confirmed, and nothing counts as tried, before the user has spoken.
       const summary = { ...(validated?.summary ?? emptySummary()), confirmed_read: null, tried: [] };
       return { profile, summary: syncMustItems(summary, profile), tokens, fromModel: true };
@@ -404,10 +418,10 @@ export async function ensureSeeded(supabase: SupabaseClient, conversation: Conve
 // ── What the next message must do ───────────────────────────────────────────
 
 type Next =
-  | { kind: 'open_read'; urgency_unknown: boolean }
+  | { kind: 'open_read'; deadline: string | null; urgency_unknown: boolean }
   | { kind: 'follow_up'; item: AskedItem; still_needed: string }
   | { kind: 'clarify'; item: AskedItem; contradiction: { text: string; refs: string[] } }
-  | { kind: 'item'; item: AskedItem; still_needed: string; reflection?: { theme: string; text: string; refs: string[] } }
+  | { kind: 'item'; item: AskedItem; still_needed: string; reflection?: { text: string; refs: string[] } }
   | { kind: 'card' };
 
 function asAsked(next: Next): Asked {
@@ -418,15 +432,19 @@ function asAsked(next: Next): Asked {
   }
 }
 
-/** The one reflection: a note the user hasn't confirmed and Zyrro hasn't said yet. */
-function reflectionCandidate(summary: UserSummary, stated: string[]) {
-  const said = new Set(stated.map(s => s.toLowerCase()));
-  return [...summary.connections, ...summary.tensions].find(n => !n.confirmed_by_user && !said.has(n.theme.toLowerCase())) ?? null;
+/**
+ * The one reflection: a note the user hasn't confirmed that rests on at least
+ * one of their own sources Zyrro hasn't used yet (so it isn't a restatement).
+ */
+function reflectionCandidate(summary: UserSummary, usedRefs: string[]) {
+  const used = new Set(usedRefs);
+  return [...summary.connections, ...summary.tensions]
+    .find(n => !n.confirmed_by_user && sourceRefs(n.refs).some(r => !used.has(r))) ?? null;
 }
 
 /**
  * Code decides what comes next (design doc, "Conversation order" and "When
- * Zyrro has enough"): the opening read, then a pending clarification, then
+ * Zyrro has enough"): the opening message, then a pending clarification, then
  * the summary card if the conversation has stalled or hit the cap, then the
  * first open item in order (its one follow-up if it needs one). The one
  * reflection goes with the direction question.
@@ -437,7 +455,10 @@ function computeNext(
   reflections: Reflection[],
   state: { opening: boolean; turns: number; turnsSinceProgress: number },
 ): Next {
-  if (state.opening) return { kind: 'open_read', urgency_unknown: !profile.pushing_now.value?.urgency };
+  if (state.opening) {
+    const p = profile.pushing_now.value;
+    return { kind: 'open_read', deadline: p?.urgency === 'deadline' ? p.deadline ?? 'a decision they are putting off' : null, urgency_unknown: !p?.urgency };
+  }
   const clarify = profile.meta.pending_clarify;
   if (clarify) return { kind: 'clarify', item: clarify.item, contradiction: { text: clarify.text, refs: clarify.refs } };
   if (state.turns >= MAX_USER_TURNS || state.turnsSinceProgress >= STALL_TURNS) return { kind: 'card' };
@@ -446,20 +467,22 @@ function computeNext(
   if (!item) return { kind: 'card' };
   if (profile[item].follow_ups >= 1) return { kind: 'follow_up', item, still_needed: stillNeeded(profile, item) };
   if (item === 'direction' && reflections.length === 0) {
-    const r = reflectionCandidate(summary, profile.meta.stated_themes);
-    if (r) return { kind: 'item', item, still_needed: stillNeeded(profile, item), reflection: { theme: r.theme, text: r.text, refs: r.refs } };
+    const r = reflectionCandidate(summary, profile.meta.used_refs);
+    if (r) return { kind: 'item', item, still_needed: stillNeeded(profile, item), reflection: { text: r.text, refs: r.refs } };
   }
   return { kind: 'item', item, still_needed: stillNeeded(profile, item) };
 }
 
 // ── Choices code attaches itself ───────────────────────────────────────────
+// Each group's label is the question it asks, in words people say (brief
+// 168-followup, Part A items 4 and 5; Part B item 6).
 
 const OPTIONAL_NOTE = { placeholder: 'Anything to add? (optional)' };
 
 function openingReadChoices(profile: PathProfile): ChatChoiceSet {
   const groups: ChoiceGroup[] = [{
     id: 'read',
-    label: 'This read',
+    label: 'Does this sound like you?',
     mode: 'single',
     required: true,
     options: [
@@ -471,47 +494,71 @@ function openingReadChoices(profile: PathProfile): ChatChoiceSet {
   if (profile.pushing_now.value && !profile.pushing_now.value.urgency) {
     groups.push({
       id: 'urgency',
-      label: 'Anything forcing a decision',
+      label: 'Is anything forcing a decision?',
       mode: 'single',
       required: true,
       options: [
         { id: 'no_rush', label: 'No rush' },
         { id: 'soon', label: 'Fairly soon' },
-        { id: 'deadline', label: 'A real deadline' },
+        { id: 'deadline', label: 'Yes, there’s a deadline' },
       ],
     });
   }
-  return { mode: 'groups', purpose: 'opening_read', groups, note: { placeholder: 'What’s off, if anything? (optional)' } };
+  return { mode: 'groups', purpose: 'opening_read', groups, note: { placeholder: 'Anything I got wrong? (optional)' } };
+}
+
+function directionChoices(): ChatChoiceSet {
+  return {
+    mode: 'groups',
+    purpose: 'direction',
+    note: { placeholder: 'What is it? (optional)' },
+    groups: [{
+      id: 'direction', label: 'Do you already have something in mind?', mode: 'single', required: true,
+      options: (Object.keys(DIRECTION_LABELS) as Array<keyof typeof DIRECTION_LABELS>).map(id => ({ id, label: DIRECTION_LABELS[id] })),
+    }],
+  };
+}
+
+function riskGroups(): ChoiceGroup[] {
+  return [
+    {
+      id: 'readiness', label: 'What change are you ready to make now?', mode: 'single', required: true,
+      options: (Object.keys(READINESS_LABELS) as Array<keyof typeof READINESS_LABELS>).map(id => ({ id, label: READINESS_LABELS[id] })),
+    },
+    {
+      id: 'at_stake', label: 'What would you put at risk?', mode: 'multi', required: true, exclusive: ['unsure'],
+      options: (Object.keys(AT_STAKE_LABELS) as Array<keyof typeof AT_STAKE_LABELS>).map(id => ({ id, label: AT_STAKE_LABELS[id] })),
+    },
+    {
+      id: 'limits', label: 'Is anything off the table?', mode: 'multi', required: true, exclusive: ['none'],
+      options: (Object.keys(LIMIT_LABELS) as Array<keyof typeof LIMIT_LABELS>).map(id => ({ id, label: LIMIT_LABELS[id] })),
+    },
+    {
+      id: 'hours', label: 'How many hours a week do you have for this now?', mode: 'single', required: true,
+      options: HOURS_BANDS.map(b => ({ id: b.id, label: b.label })),
+    },
+  ];
 }
 
 function riskTimeChoices(): ChatChoiceSet {
-  return {
-    mode: 'groups',
-    purpose: 'risk_time',
-    note: OPTIONAL_NOTE,
-    groups: [
-      {
-        id: 'readiness', label: 'The change I’m ready to make now', mode: 'single', required: true,
-        options: (Object.keys(READINESS_LABELS) as Array<keyof typeof READINESS_LABELS>).map(id => ({ id, label: READINESS_LABELS[id] })),
-      },
-      {
-        id: 'at_stake', label: 'What I’d put at risk', mode: 'multi', required: true, exclusive: ['unsure'],
-        options: (Object.keys(AT_STAKE_LABELS) as Array<keyof typeof AT_STAKE_LABELS>).map(id => ({ id, label: AT_STAKE_LABELS[id] })),
-      },
-      {
-        id: 'limits', label: 'Hard limits', mode: 'multi', required: true, exclusive: ['none'],
-        options: (Object.keys(LIMIT_LABELS) as Array<keyof typeof LIMIT_LABELS>).map(id => ({ id, label: LIMIT_LABELS[id] })),
-      },
-      {
-        id: 'hours', label: 'Hours a week I have for this now', mode: 'single', required: true,
-        options: HOURS_BANDS.map(b => ({ id: b.id, label: b.label })),
-      },
-    ],
-  };
+  return { mode: 'groups', purpose: 'risk_time', note: OPTIONAL_NOTE, groups: riskGroups() };
+}
+
+/** The current risk and time answers as tap ids, to pre-fill re-offered groups. */
+function riskPreselected(profile: PathProfile): string[] {
+  const v = profile.risk_time.value;
+  if (!v) return [];
+  return [
+    ...(v.readiness ? [`readiness:${v.readiness}`] : []),
+    ...(v.at_stake_unsure ? ['at_stake:unsure'] : v.at_stake.map(s => `at_stake:${s}`)),
+    ...(v.no_limits ? ['limits:none'] : v.limits.map(l => `limits:${l}`)),
+    ...(v.hours_band ? [`hours:${v.hours_band}`] : []),
+  ];
 }
 
 function fixedChoices(next: Next, profile: PathProfile): ChatChoiceSet | null {
   if (next.kind === 'open_read') return openingReadChoices(profile);
+  if (next.kind === 'item' && next.item === 'direction') return directionChoices();
   if ((next.kind === 'item' || next.kind === 'follow_up') && next.item === 'risk_time') return riskTimeChoices();
   return null;
 }
@@ -541,24 +588,45 @@ const CARD_PARTS = [
   { id: 'wants', label: 'What you want' },
   { id: 'must_haves', label: 'Must-haves' },
   { id: 'must_avoids', label: 'Must-avoids' },
-  { id: 'risk', label: 'Risk and limits' },
+  { id: 'risk', label: 'Risk, limits and time' },
 ];
 
-function cardRisk(profile: PathProfile): SummaryCard['risk'] {
+const RISK_LINES: RiskLine[] = ['readiness', 'at_stake', 'limits', 'hours', 'deadline'];
+
+/**
+ * The card's risk lines, built by code from the profile. Each line carries
+ * the note call B wrote for it (second person, brief item 9); the user's own
+ * typed note is never pasted here.
+ */
+function cardRisk(profile: PathProfile, notes: Partial<Record<RiskLine, string>> = {}): SummaryCard['risk'] {
   const v = profile.risk_time.value;
   const notKnown = 'Not known yet';
   const band = HOURS_BANDS.find(b => b.id === v?.hours_band);
-  const limits = v?.no_limits ? LIMIT_LABELS.none : v?.limits.length ? v.limits.map(l => LIMIT_LABELS[l]).join(', ') : notKnown;
+  const p = profile.pushing_now.value;
+  const deadline = p?.urgency === 'deadline' ? (p.deadline ? fixDashes(p.deadline) : 'A decision with a deadline') : null;
+  const kept = Object.fromEntries(Object.entries(notes).filter(([k, n]) => !!n && (k !== 'deadline' || !!deadline)));
   return {
-    readiness: v?.readiness ? READINESS_LABELS[v.readiness] : notKnown,
-    at_stake: v?.at_stake_unsure ? AT_STAKE_LABELS.unsure : v?.at_stake.length ? v.at_stake.map(s => AT_STAKE_LABELS[s]).join(', ') : notKnown,
-    limits: v?.limits_detail ? `${limits}. ${fixDashes(v.limits_detail)}` : limits,
+    readiness: v?.readiness ? READINESS_CARD_LABELS[v.readiness] : notKnown,
+    at_stake: v?.at_stake_unsure ? AT_STAKE_CARD_LABELS.unsure : v?.at_stake.length ? v.at_stake.map(s => AT_STAKE_CARD_LABELS[s]).join(', ') : notKnown,
+    limits: v?.no_limits ? LIMIT_CARD_LABELS.none : v?.limits.length ? v.limits.map(l => LIMIT_CARD_LABELS[l]).join(', ') : notKnown,
     hours: band ? `${band.label} a week, available now` : notKnown,
-    qualifier: v?.qualifier ? fixDashes(v.qualifier) : null,
+    deadline,
+    notes: kept,
   };
 }
 
-function buildCard(round: number, prose: { seen_as: string; wants: string }, profile: PathProfile): SummaryCard {
+// The facts behind the risk lines, for call B to write the second-person notes from.
+function riskFacts(profile: PathProfile) {
+  const v = profile.risk_time.value;
+  return {
+    lines: cardRisk(profile),
+    what_they_said: { limits: v?.limits_detail ?? null, qualifier: v?.qualifier ?? null, deadline: profile.pushing_now.value?.deadline ?? null },
+  };
+}
+
+type CardProse = { seen_as: string; wants: string; notes: Partial<Record<RiskLine, string>> };
+
+function buildCard(round: number, prose: CardProse, profile: PathProfile): SummaryCard {
   const toItems = (items: EvidencedItem[] = []) => items.map(i => ({ id: i.id, text: fixDashes(i.text), inferred: i.basis === 'inferred' }));
   return {
     round,
@@ -566,31 +634,51 @@ function buildCard(round: number, prose: { seen_as: string; wants: string }, pro
     wants: prose.wants,
     must_haves: toItems(profile.must_haves_avoids.value?.must_haves),
     must_avoids: toItems(profile.must_haves_avoids.value?.must_avoids),
-    risk: cardRisk(profile),
+    risk: cardRisk(profile, prose.notes),
   };
 }
 
-function cardChoices(card: SummaryCard): ChatChoiceSet {
+const RISK_KEYS = ['readiness', 'at_stake', 'limits', 'hours'] as const;
+
+/** A card's risk lines rebuilt after re-tapped answers: a line whose value changed loses its old note. */
+function refreshRisk(card: SummaryCard, profile: PathProfile): { card: SummaryCard; changed: boolean } {
+  const before = card.risk;
+  const fresh = cardRisk(profile);
+  const notes: Partial<Record<RiskLine, string>> = {};
+  for (const line of RISK_LINES) {
+    const note = before.notes?.[line];
+    const same = line === 'deadline' ? before.deadline === fresh.deadline : before[line] === fresh[line];
+    if (note && same) notes[line] = note;
+  }
+  const changed = RISK_KEYS.some(k => before[k] !== fresh[k]);
+  return { card: { ...card, risk: { ...fresh, notes } }, changed };
+}
+
+function cardChoices(card: SummaryCard, profile: PathProfile, offerRisk: boolean): ChatChoiceSet {
   const removable = [...card.must_haves, ...card.must_avoids];
   const groups: ChoiceGroup[] = [
     {
-      id: 'verdict', label: 'This summary', mode: 'single', required: true,
+      id: 'verdict', label: 'Does this summary sound right?', mode: 'single', required: true,
       options: [
-        { id: 'right', label: 'That’s right' },
+        { id: 'right', label: 'Yes, that’s right' },
         { id: 'mostly', label: 'Mostly, with changes' },
-        { id: 'not_it', label: 'That’s not it' },
+        { id: 'not_it', label: 'No, that’s not it' },
       ],
     },
-    { id: 'part', label: 'What’s off', mode: 'multi', required: false, options: CARD_PARTS },
+    { id: 'part', label: 'What’s off?', mode: 'multi', required: false, options: CARD_PARTS },
   ];
   if (removable.length) {
     groups.push({ id: 'remove', label: 'Remove', mode: 'multi', required: false, options: removable.map(i => ({ id: i.id, label: i.text })) });
   }
+  // Brief item 8: when risk, limits and time were marked off, the tapped
+  // answers come back as taps, filled with what is recorded now.
+  if (offerRisk) groups.push(...riskGroups());
   return {
     mode: 'groups',
     purpose: 'summary',
     groups,
     card,
+    ...(offerRisk && { preselected: riskPreselected(profile) }),
     note: { placeholder: 'What should change?', required_when: { ids: ['verdict:mostly', 'verdict:not_it'], unless_group: 'part' } },
   };
 }
@@ -598,7 +686,9 @@ function cardChoices(card: SummaryCard): ChatChoiceSet {
 /** The card as plain markdown: the message's content, for read-back anywhere. */
 function cardMarkdown(card: SummaryCard): string {
   const list = (items: SummaryCard['must_haves']) =>
-    items.length ? items.map(i => `- ${i.text}${i.inferred ? ' (Zyrro’s reading)' : ''}`).join('\n') : '- None recorded';
+    items.length ? items.map(i => `- ${i.text}${i.inferred ? ' (Zyrro’s guess)' : ''}`).join('\n') : '- None recorded';
+  const r = card.risk;
+  const line = (label: string, value: string, key: RiskLine) => `- ${label}: ${value}${r.notes?.[key] ? `. ${r.notes[key]}` : ''}`;
   return [
     '**How Zyrro sees you**', card.seen_as,
     '**What you want**', card.wants,
@@ -606,11 +696,12 @@ function cardMarkdown(card: SummaryCard): string {
     '**Must-avoids**', list(card.must_avoids),
     '**Risk, limits and time**',
     [
-      `- Ready to: ${card.risk.readiness}`,
-      `- Would put at risk: ${card.risk.at_stake}`,
-      `- Hard limits: ${card.risk.limits}`,
-      `- Time: ${card.risk.hours}`,
-      ...(card.risk.qualifier ? [`- ${card.risk.qualifier}`] : []),
+      line('Ready to', r.readiness, 'readiness'),
+      line('Would put at risk', r.at_stake, 'at_stake'),
+      line('Off the table', r.limits, 'limits'),
+      line('Time', r.hours, 'hours'),
+      ...(r.deadline ? [line('Deadline', r.deadline, 'deadline')] : []),
+      ...(r.qualifier ? [`- ${r.qualifier}`] : []),
     ].join('\n'),
   ].join('\n\n');
 }
@@ -667,16 +758,27 @@ type CallAInput = {
   correction?: { card: SummaryCard; parts: string[]; note: string | null };
 };
 
+// Call A's view of the user: all 13 answers, and short report excerpts keyed
+// by the refs it may cite (the full digest made the call slow; follow-up brief).
+function updateContext(digest: ContextDigest) {
+  const excerpts: Record<string, string> = {};
+  for (const [key, text] of Object.entries(reportFields(digest))) {
+    excerpts[`report.${key}`] = text.length > UPDATE_REPORT_EXCERPT_CHARS ? `${text.slice(0, UPDATE_REPORT_EXCERPT_CHARS)}…` : text;
+  }
+  return { answers: digest.answers, report_excerpts: excerpts };
+}
+
 /**
  * Call A, and everything code does with its output: profile updates (code
- * decides statuses), must-haves and must-avoids (each quote checked), the
- * reflection result, the summary (validated) and this turn's insights.
+ * decides statuses), must-haves and must-avoids (each quote checked; null
+ * means unchanged), the reflection result, the summary (changed sections
+ * merged, then validated as a whole) and this turn's insights.
  */
 async function runUpdate(s: TurnState, input: CallAInput, conversationId: string) {
   const pending = s.reflections.find(r => r.status === 'offered');
   const update = await chatJson([
     { role: 'system', content: PATH_UPDATE_PROMPT },
-    { role: 'system', content: `USER CONTEXT\n${JSON.stringify(s.digest)}` },
+    { role: 'system', content: `USER CONTEXT\n${JSON.stringify(updateContext(s.digest))}` },
     {
       role: 'user',
       content: JSON.stringify({
@@ -688,13 +790,20 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
         latest_message: {
           ref: LATEST_REF,
           ...(input.latest.tapped
-            ? { tapped: { offered: { ...input.latest.tapped.offered, card: undefined }, picked: input.latest.tapped.picked }, note: input.latest.own || null }
+            ? { tapped: { offered: { ...input.latest.tapped.offered, card: undefined, preselected: undefined }, picked: input.latest.tapped.picked }, note: input.latest.own || null }
             : { text: input.latest.content }),
         },
         asked: input.asked,
-        pending_reflection: pending ? { theme: pending.theme, text: pending.text } : null,
+        pending_reflection: pending ? { text: pending.text } : null,
         removed_items: s.profile.meta.removed_items,
-        ...(input.correction && { card: input.correction.card, parts_marked_off: input.correction.parts, correction_note: input.correction.note }),
+        ...(input.correction && {
+          card: input.correction.card,
+          parts_marked_off: input.correction.parts,
+          correction_note: input.correction.note,
+          // A marked list must come back in full: in a live run it came back
+          // null ("unchanged"), so a reworded item the user asked for was lost.
+          lists_to_return: (['must_haves', 'must_avoids'] as const).filter(l => input.correction!.parts.includes(l)),
+        }),
       }),
     },
   ], 0.2, input.mode === 'conversation' ? 'path update' : 'path card correction', undefined, conversationId);
@@ -703,27 +812,47 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
 
   let profile = applyProfileUpdates(s.profile, out.profile_updates, input.answered).profile;
 
+  // null (or missing) means unchanged. A returned list that is empty or wholly
+  // invalid also keeps what was there: removals are the user's, on the card.
   const removed = profile.meta.removed_items;
-  const haves = validateEvidenced(out.must_haves, s.ownIndex, 'h', removed);
-  const avoids = validateEvidenced(out.must_avoids, s.ownIndex, 'a', removed);
-  const dropped = [...haves.dropped, ...avoids.dropped];
-  if (dropped.length) console.warn(`[path update] must items dropped: ${dropped.join('; ')}`);
-  // A missing, empty or wholly invalid list keeps what was there: removals are
-  // the user's, on the card, never the model's by omission.
-  for (const key of ['must_haves', 'must_avoids'] as const) {
-    if (!Array.isArray(out[key]) || !(out[key] as unknown[]).length) console.warn(`[path update] ${key}: ${Array.isArray(out[key]) ? 'empty list' : 'missing'}; keeping the current items`);
-  }
   const current = profile.must_haves_avoids.value;
+  const pick = (key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a') => {
+    if (!Array.isArray(out[key])) return current?.[key] ?? [];
+    const checked = validateEvidenced(out[key], s.ownIndex, prefix, removed);
+    if (checked.dropped.length) console.warn(`[path update] ${key} dropped: ${checked.dropped.join('; ')}`);
+    if (!checked.items.length) {
+      console.warn(`[path update] ${key}: returned list had no usable items; keeping the current ones`);
+      return current?.[key] ?? [];
+    }
+    return checked.items;
+  };
+  // Items a correction note asks for, merged in by code after the same quote
+  // check (ref fixed to the note): in live runs a full list sometimes came back
+  // without the reworded item the user had asked for.
+  const requested = { must_haves: [] as unknown[], must_avoids: [] as unknown[] };
+  if (input.mode === 'summary_correction' && Array.isArray(out.added_from_note)) {
+    for (const a of out.added_from_note) {
+      const o = a && typeof a === 'object' ? (a as Record<string, unknown>) : null;
+      if (o?.list === 'must_haves' || o?.list === 'must_avoids') requested[o.list].push({ ...o, ref: LATEST_REF });
+    }
+  }
+  const withRequested = (key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a') => {
+    const base = pick(key, prefix);
+    if (!requested[key].length) return base;
+    const checked = validateEvidenced(requested[key], s.ownIndex, prefix, []);
+    if (checked.dropped.length) console.warn(`[path update] added_from_note ${key} dropped: ${checked.dropped.join('; ')}`);
+    const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const added = checked.items.filter(i => !base.some(b => norm(b.text) === norm(i.text)));
+    const merged = [...base.slice(0, Math.max(0, SUMMARY_CAPS.must_items - added.length)), ...added];
+    return merged.map((item, i) => ({ ...item, id: `${prefix}${i + 1}` }));
+  };
   profile = {
     ...profile,
     must_haves_avoids: {
       ...profile.must_haves_avoids,
       status: 'inferred',
       source: 'conversation',
-      value: {
-        must_haves: haves.items.length ? haves.items : current?.must_haves ?? [],
-        must_avoids: avoids.items.length ? avoids.items : current?.must_avoids ?? [],
-      },
+      value: { must_haves: withRequested('must_haves', 'h'), must_avoids: withRequested('must_avoids', 'a') },
     },
   };
 
@@ -734,8 +863,13 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     reflections = reflections.map(x => (x === pending ? { ...x, status } : x));
   }
 
-  const confirmedThemes = reflections.filter(r => r.status === 'confirmed' || r.status === 'corrected').map(r => r.theme);
-  const validated = validateSummary(out.summary, { index: s.index, confirmedThemes, previous: s.summary });
+  const confirmedRefs = reflections.filter(r => r.status === 'confirmed' || r.status === 'corrected').flatMap(r => r.refs ?? []);
+  // Changed sections only; a full "summary" (the pre-follow-up shape) is accepted too.
+  const merged = mergeSummaryChanges(s.summary, out.summary_changes ?? out.summary);
+  const validated = merged ? validateSummary(merged, { index: s.index, confirmedRefs, previous: s.summary }) : null;
+  if (!merged) {
+    console.warn(`[path update] no usable summary_changes (got ${JSON.stringify(out.summary_changes)?.slice(0, 120)}; keys ${Object.keys(out).join(',')}); keeping the summary`);
+  }
   const summary = syncMustItems(validated?.summary ?? s.summary, profile);
 
   let contradiction: { item: AskedItem; text: string; refs: string[] } | null = null;
@@ -759,9 +893,14 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
 
 type ReplyNext = Next | { kind: 'card_clarify'; parts: string[]; note: string | null };
 
+// The card and its clarifying question restate by design; repetition is checked elsewhere.
+const REPEAT_EXEMPT = new Set<ReplyNext['kind']>(['card', 'card_clarify']);
+
 /**
- * Call B. Retries once if the output names a signature or the named identity
- * (brief: no signature names); a second miss is logged and kept.
+ * Call B. Retries once if the output names a signature or the named identity,
+ * or if it rests only on sources already used without anything new (no
+ * repetition, tracked by source refs); a second miss is logged and kept.
+ * Returns the user sources the message rests on, for meta.used_refs.
  */
 async function runReply(
   s: TurnState,
@@ -772,17 +911,14 @@ async function runReply(
   conversationId: string,
 ) {
   const reflection = next.kind === 'item' ? next.reflection : undefined;
-  const evidence = resolveExcerpts([
+  const used = new Set(s.profile.meta.used_refs);
+  const excerpts = resolveExcerpts([
     ...summaryRefs(s.summary),
     ...insights.flatMap(i => i.refs),
     ...(reflection?.refs ?? []),
     ...(next.kind === 'clarify' ? next.contradiction.refs : []),
   ], s.index);
-  const alreadyStated = [
-    ...s.profile.meta.stated_themes,
-    ...(s.profile.opening_read.value?.text ? [`Opening read: ${s.profile.opening_read.value.text}`] : []),
-    ...s.reflections.map(r => `Reflection: ${r.text}`),
-  ];
+  const evidence = Object.fromEntries(Object.entries(excerpts).map(([ref, text]) => [ref, { text, used: used.has(ref) }]));
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: PATH_REPLY_PROMPT },
     {
@@ -790,12 +926,11 @@ async function runReply(
       content: JSON.stringify({
         first_name: s.digest.report.prepared_for.split(/\s+/)[0] ?? '',
         next,
-        fixed_choices: fixed ? { ...fixed, card: undefined } : null,
+        fixed_choices: fixed ? { ...fixed, card: undefined, preselected: undefined } : null,
         summary: s.summary,
         turn_insights: insights,
         evidence,
-        already_stated: alreadyStated,
-        ...(next.kind === 'card' && { risk_and_time: cardRisk(s.profile) }),
+        ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile) }),
         recent_messages: s.all.slice(-REPLY_RECENT_MESSAGES).map(({ role, content }) => ({ role, content })),
         latest_message: latestText !== null ? { ref: LATEST_REF, content: latestText } : null,
       }),
@@ -804,46 +939,64 @@ async function runReply(
 
   let tokens = 0;
   let parsed: Record<string, unknown> | null = null;
+  let refsUsed: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     const reply = await chatJson(messages, REPLY_TEMPERATURE, next.kind === 'card' ? 'path card' : 'path reply', PATH_REPLY_MODEL, conversationId);
     tokens += reply.tokens;
     parsed = reply.parsed;
-    const text = [parsed?.reply, parsed?.seen_as, parsed?.wants].filter(t => typeof t === 'string').join(' ');
+    const notes = parsed?.risk_notes && typeof parsed.risk_notes === 'object' ? Object.values(parsed.risk_notes as Record<string, unknown>) : [];
+    const text = [parsed?.reply, parsed?.seen_as, parsed?.wants, ...notes].filter(t => typeof t === 'string').join(' ');
+    refsUsed = sourceRefs((Array.isArray(parsed?.refs_used) ? parsed.refs_used : [])
+      .filter((r): r is string => typeof r === 'string' && (r === LATEST_REF || r in excerpts)));
     const hit = text ? mentionsSignature(text, s.digest) : null;
-    if (!hit) break;
-    console.warn(`[path reply] named "${hit}" (attempt ${attempt + 1})${attempt === 1 ? '; kept' : '; retrying'}`);
+    const restated = !REPEAT_EXEMPT.has(next.kind) && refsUsed.length > 0
+      && !refsUsed.includes(LATEST_REF) && refsUsed.every(r => used.has(r));
+    if (!hit && !restated) break;
+    const why = hit ? `named "${hit}"` : `rested only on used sources ${refsUsed.join(', ')}`;
+    console.warn(`[path reply] ${why} (attempt ${attempt + 1})${attempt === 1 ? '; kept' : '; retrying'}`);
+    if (attempt === 0 && restated) {
+      messages.push({ role: 'system', content: 'Your draft rested only on sources marked used, with nothing new. Write it again: build on the latest message or a source not yet used.' });
+    }
   }
-
-  const known = new Map([...s.summary.tensions, ...s.summary.connections].map(n => [n.theme.toLowerCase(), n.theme]));
-  const themesUsed = (Array.isArray(parsed?.themes_used) ? parsed.themes_used : [])
-    .map(t => (typeof t === 'string' ? known.get(t.trim().toLowerCase()) : undefined))
-    .filter((t): t is string => !!t);
-  return { parsed, tokens, themesUsed };
+  // One line per reply: what it rested on, against what was already used (repetition audit).
+  console.info(`[path refs] ${JSON.stringify({ conversation: conversationId, kind: next.kind, refs_used: refsUsed, already_used: refsUsed.filter(r => used.has(r)) })}`);
+  return { parsed, tokens, refsUsed };
 }
 
-function addThemes(profile: PathProfile, themes: string[]): PathProfile {
-  const all = [...profile.meta.stated_themes];
-  for (const t of themes) if (!all.some(x => x.toLowerCase() === t.toLowerCase())) all.push(t);
-  return { ...profile, meta: { ...profile.meta, stated_themes: all.slice(-20) } };
+function addUsedRefs(profile: PathProfile, refs: string[]): PathProfile {
+  const all = [...new Set([...profile.meta.used_refs, ...sourceRefs(refs)])];
+  return { ...profile, meta: { ...profile.meta, used_refs: all } };
 }
 
-// The prompt asks for about 600 and 350 characters; these ceilings are only a
-// safety net against a runaway output.
+// The prompt asks for about 600 and 350 characters (160 per risk note); these
+// ceilings are only a safety net against a runaway output.
 const CARD_SEEN_AS_MAX = 900;
 const CARD_WANTS_MAX = 600;
+const CARD_NOTE_MAX = 240;
 
-function cardProse(parsed: Record<string, unknown> | null): { seen_as: string; wants: string } | null {
+function cardProse(parsed: Record<string, unknown> | null): CardProse | null {
   const seen = typeof parsed?.seen_as === 'string' ? fixDashes(parsed.seen_as.trim()) : '';
   const wants = typeof parsed?.wants === 'string' ? fixDashes(parsed.wants.trim()) : '';
-  if (seen && wants && seen.length <= CARD_SEEN_AS_MAX && wants.length <= CARD_WANTS_MAX) return { seen_as: seen, wants };
-  console.warn(`[path card] unusable prose: seen_as ${seen.length} chars, wants ${wants.length} chars`);
-  return null;
+  if (!seen || !wants || seen.length > CARD_SEEN_AS_MAX || wants.length > CARD_WANTS_MAX) {
+    console.warn(`[path card] unusable prose: seen_as ${seen.length} chars, wants ${wants.length} chars`);
+    return null;
+  }
+  const raw = parsed?.risk_notes && typeof parsed.risk_notes === 'object' ? (parsed.risk_notes as Record<string, unknown>) : {};
+  const notes: Partial<Record<RiskLine, string>> = {};
+  for (const line of RISK_LINES) {
+    const n = typeof raw[line] === 'string' ? fixDashes((raw[line] as string).trim()) : '';
+    if (n && n.length <= CARD_NOTE_MAX) notes[line] = n;
+  }
+  return { seen_as: seen, wants, notes };
 }
 
 async function loadTurnState(ctx: TurnContext, row: PathProfileRow) {
   const digest = row.context_digest!;
-  const stored = await loadUserSummary(ctx.supabase, ctx.conversation.user_id);
-  const all = await listConversationMessages(ctx.supabase, ctx.conversation.id);
+  // In parallel: each is a database round trip, and a turn's overhead is mostly these.
+  const [stored, all] = await Promise.all([
+    loadUserSummary(ctx.supabase, ctx.conversation.user_id),
+    listConversationMessages(ctx.supabase, ctx.conversation.id),
+  ]);
   const own = ownMessages(all);
   const latestOwn = ctx.userMessage
     ? ctx.userMessage.selected_choice_ids ? ctx.userMessage.note ?? '' : ctx.userMessage.content
@@ -855,9 +1008,9 @@ async function loadTurnState(ctx: TurnContext, row: PathProfileRow) {
     own,
     index: refIndexFor(digest, withLatest),
     ownIndex: ownIndexFor(digest, withLatest),
-    profile: row.profile as PathProfile,
+    profile: withMetaDefaults(row.profile as PathProfile),
     summary: stored && isCurrentSummary(stored.summary) ? stored.summary : emptySummary(),
-    reflections: row.reflections ?? [],
+    reflections: (row.reflections ?? []).map(r => ({ ...r, refs: r.refs ?? [] })),
   };
   return { state, storedVersion: stored?.version ?? null, latestOwn };
 }
@@ -886,8 +1039,10 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
 
       // Taps on code-owned choices, applied exactly, before call A.
       if (ids && answeredChoices?.purpose === 'opening_read') s.profile = applyOpeningReadTap(s.profile, ids, note);
+      if (ids && answeredChoices?.purpose === 'direction') s.profile = applyDirectionTap(s.profile, ids, note);
       if (ids && answeredChoices?.purpose === 'risk_time') s.profile = applyRiskTimeTap(s.profile, ids);
       if (!ids && asked?.kind === 'follow_up' && asked.item === 'opening_read') s.profile = applyOpeningReadFollowUp(s.profile, userMessage.content);
+      const tapped = s.profile;
 
       const answered: AskedItem[] = !asked || asked.kind === 'card' || asked.kind === 'card_clarify' ? []
         : asked.kind === 'open_read' ? ['opening_read', 'pushing_now']
@@ -901,7 +1056,7 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       }, conversation.id);
       tokens += a.tokens;
       if (!a.ok) return { ok: false, status: 502, error: 'no_usable_update', tokens };
-      s.profile = a.profile;
+      s.profile = answeredChoices?.purpose === 'direction' ? keepDirectionKind(a.profile, tapped) : a.profile;
       s.summary = a.summary;
       s.reflections = a.reflections;
       insights = a.insights;
@@ -922,7 +1077,7 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       }
     }
 
-    const progress = itemsSnapshot(s.profile) !== itemsSnapshot(row.profile as PathProfile);
+    const progress = itemsSnapshot(s.profile) !== itemsSnapshot(withMetaDefaults(row.profile as PathProfile));
     const turnsSinceProgress = userMessage ? (progress ? 0 : row.turns_since_progress + 1) : row.turns_since_progress;
     const next = computeNext(s.profile, s.summary, s.reflections, { opening: !userMessage, turns, turnsSinceProgress });
 
@@ -933,26 +1088,26 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       tokens += b.tokens;
       const prose = cardProse(b.parsed);
       if (!prose) return { ok: false, status: 502, error: 'no_usable_card', tokens };
-      s.profile = addThemes(s.profile, b.themesUsed);
       const card = buildCard(1, prose, s.profile);
       cardState = { round: 1, card, correction: null, clarify_pending: false, confirmed: false };
-      assistant = { content: cardMarkdown(card), choices: cardChoices(card) };
+      assistant = { content: cardMarkdown(card), choices: cardChoices(card, s.profile, false) };
     } else {
       const fixed = fixedChoices(next, s.profile);
       const b = await runReply(s, next, fixed, insights, latestOwn, conversation.id);
       tokens += b.tokens;
       const text = typeof b.parsed?.reply === 'string' ? fixDashes(b.parsed.reply.trim()) : '';
       if (!text) return { ok: false, status: 502, error: 'no_usable_reply', tokens };
-      s.profile = addThemes(s.profile, [...b.themesUsed, ...(next.kind === 'item' && next.reflection ? [next.reflection.theme] : [])]);
+      s.profile = addUsedRefs(s.profile, [...b.refsUsed, ...(next.kind === 'item' && next.reflection ? next.reflection.refs : [])]);
       if (next.kind === 'open_read') {
         s.profile = { ...s.profile, opening_read: { ...s.profile.opening_read, value: { text, verdict: null, correction: null } } };
       }
       if (next.kind === 'item' && next.reflection) {
-        s.reflections = [...s.reflections, { id: 'r1', status: 'offered', message_id: null, theme: next.reflection.theme, text: next.reflection.text }];
+        s.reflections = [...s.reflections, { id: 'r1', status: 'offered', message_id: null, text: next.reflection.text, refs: next.reflection.refs }];
       }
-      // The model may offer its own choices on an item question, never on the
-      // opening read's follow-up (what's off is only the user's to say).
-      const modelChoicesAllowed = (next.kind === 'item' || next.kind === 'follow_up') && next.item !== 'opening_read';
+      // The model may offer its own choices on an open question only: never
+      // where code attaches choices, and never on a follow-up that asks for
+      // something only the user can put in words.
+      const modelChoicesAllowed = next.kind === 'item' || (next.kind === 'follow_up' && next.item !== 'opening_read' && next.item !== 'direction');
       assistant = { content: text, choices: fixed ?? (modelChoicesAllowed ? normalizeChoices(b.parsed?.choices) : null) };
     }
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: asAsked(next) } };
@@ -965,20 +1120,22 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
         const userId = userMessage ? saved[0]?.id ?? null : null;
         const assistantId = saved[saved.length - 1]?.id ?? null;
         const profile = withLatestRef(s.profile, userId);
-        const reflections = s.reflections.map(r => (r.status === 'offered' && !r.message_id ? { ...r, message_id: assistantId } : r));
+        const reflections = withLatestRef(s.reflections, userId).map(r => (r.status === 'offered' && !r.message_id ? { ...r, message_id: assistantId } : r));
 
-        const { error } = await supabase
-          .from('path_profiles')
-          .update({
-            profile,
-            reflections,
-            turns,
-            turns_since_progress: turnsSinceProgress,
-            ...(cardState && { phase: 'summary', summary: cardState }),
-          })
-          .eq('conversation_id', conversation.id);
+        const [{ error }] = await Promise.all([
+          supabase
+            .from('path_profiles')
+            .update({
+              profile,
+              reflections,
+              turns,
+              turns_since_progress: turnsSinceProgress,
+              ...(cardState && { phase: 'summary', summary: cardState }),
+            })
+            .eq('conversation_id', conversation.id),
+          saveSummary(ctx, withLatestRef(s.summary, userId), storedVersion),
+        ]);
         if (error) console.error('Path profile update failed:', error);
-        await saveSummary(ctx, withLatestRef(s.summary, userId), storedVersion);
       },
     };
   } catch (error) {
@@ -988,6 +1145,9 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
 }
 
 // ── The summary phase: confirm, correct, clarify ──────────────────────────
+
+const offeredRisk = (choices: ChatChoiceSet | null | undefined) =>
+  choices?.mode === 'groups' && choices.groups.some(g => g.id === 'readiness');
 
 async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<TurnRun> {
   const { supabase, conversation, userMessage } = ctx;
@@ -1000,40 +1160,68 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
   const note = userMessage.note ?? null;
   let tokens = 0;
 
-  // Removals on the card are applied by code, exactly, and never proposed again.
-  let profile = s.profile;
+  // Removals on the card are applied by code, exactly. Only that exact item is
+  // blocked from coming back; a reworded version the user asks for may be added.
   let card = cardState.card;
   const removeIds = answeredChoices?.purpose === 'summary' ? pickedIn(ids, 'remove') : [];
   if (removeIds.length) {
-    const v = profile.must_haves_avoids.value ?? { must_haves: [], must_avoids: [] };
+    const v = s.profile.must_haves_avoids.value ?? { must_haves: [], must_avoids: [] };
     const removedTexts = [...v.must_haves, ...v.must_avoids].filter(i => removeIds.includes(i.id)).map(i => i.text);
-    profile = {
-      ...profile,
+    s.profile = {
+      ...s.profile,
       must_haves_avoids: {
-        ...profile.must_haves_avoids,
+        ...s.profile.must_haves_avoids,
         value: { must_haves: v.must_haves.filter(i => !removeIds.includes(i.id)), must_avoids: v.must_avoids.filter(i => !removeIds.includes(i.id)) },
       },
-      meta: { ...profile.meta, removed_items: [...profile.meta.removed_items, ...removedTexts] },
+      meta: { ...s.profile.meta, removed_items: [...s.profile.meta.removed_items, ...removedTexts] },
     };
     card = { ...card, must_haves: card.must_haves.filter(i => !removeIds.includes(i.id)), must_avoids: card.must_avoids.filter(i => !removeIds.includes(i.id)) };
   }
-  s.profile = profile;
-  s.summary = syncMustItems(s.summary, profile);
+  // Re-offered risk and time taps (brief item 8), applied by code as before.
+  let riskChanged = false;
+  if (answeredChoices?.purpose === 'summary' && offeredRisk(answeredChoices)) {
+    s.profile = applyRiskTimeTap(s.profile, ids);
+    ({ card, changed: riskChanged } = refreshRisk(card, s.profile));
+  }
+  s.summary = syncMustItems(s.summary, s.profile);
 
   const commitWith = (next: CardState, extra: Record<string, unknown> = {}) => async (saved: StoredMessage[]) => {
     const userId = saved[0]?.id ?? null;
-    const { error } = await supabase
-      .from('path_profiles')
-      .update({ profile: withLatestRef(s.profile, userId), reflections: s.reflections, summary: next, turns: row.turns + 1, ...extra })
-      .eq('conversation_id', conversation.id);
+    const [{ error }] = await Promise.all([
+      supabase
+        .from('path_profiles')
+        .update({ profile: withLatestRef(s.profile, userId), reflections: s.reflections, summary: next, turns: row.turns + 1, ...extra })
+        .eq('conversation_id', conversation.id),
+      saveSummary(ctx, withLatestRef(s.summary, userId), storedVersion),
+    ]);
     if (error) console.error('Path profile update failed:', error);
-    await saveSummary(ctx, withLatestRef(s.summary, userId), storedVersion);
+  };
+
+  // A card built by code from the current one: same prose, current must-haves,
+  // must-avoids and risk lines. No model call.
+  const codeCard = (round: number, offerRisk: boolean): TurnRun => {
+    const fresh: SummaryCard = {
+      ...card,
+      round,
+      must_haves: card.must_haves,
+      must_avoids: card.must_avoids,
+    };
+    s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
+    return {
+      ok: true,
+      assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },
+      tokens,
+      commit: commitWith({ round, card: fresh, correction: null, clarify_pending: false, confirmed: false }),
+    };
   };
 
   try {
     if (answeredChoices?.purpose === 'summary') {
       const verdict = pickedIn(ids, 'verdict')[0];
       if (verdict === 'right') {
+        // Changed risk and time answers: show the updated card once more before
+        // confirming (Miroslav, 2026-11-06), built by code.
+        if (riskChanged) return codeCard(cardState.round + 1, false);
         // Confirmed: no model call. The options come next (not built in this brief).
         const confirmed: CardState = { ...cardState, card, correction: null, clarify_pending: false, confirmed: true };
         return {
@@ -1044,11 +1232,15 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
         };
       }
       if (verdict !== 'mostly' && verdict !== 'not_it') return { ok: false, status: 400, error: 'invalid_choice', tokens: 0 };
-      const correction = { verdict, parts: pickedIn(ids, 'part'), note } as const;
-
-      // Parts marked off but no note: nothing to apply yet, so the one
-      // clarifying question comes first, decided by code (in a live run the
-      // model applied a part-only correction and returned an unchanged card).
+      const parts = pickedIn(ids, 'part');
+      const correction = { verdict, parts, note } as const;
+      const riskOnly = parts.length > 0 && parts.every(p => p === 'risk');
+      // Risk, limits and time are taps: when only they are off and there's no
+      // note, the card comes back with those taps (or, if the user already
+      // changed them, updated). No model call.
+      if (!note && riskOnly) return codeCard(cardState.round + 1, !riskChanged);
+      // Other parts marked off but no note: nothing to apply yet, so the one
+      // clarifying question comes first, decided by code.
       if (!note) return await clarify(correction);
 
       const a = await runUpdate(s, {
@@ -1056,7 +1248,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
         latest: { content: userMessage.content, own: latestOwn ?? '', tapped: { offered: answeredChoices, picked: ids } },
         asked: { kind: 'card' },
         answered: [...MODEL_ITEMS],
-        correction: { card, parts: correction.parts, note },
+        correction: { card, parts, note },
       }, conversation.id);
       tokens += a.tokens;
       if (!a.ok) return { ok: false, status: 502, error: 'no_usable_update', tokens };
@@ -1065,7 +1257,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
 
       // One clarifying question per correction, only when Zyrro can't tell what to change.
       if (a.needsClarification) return await clarify(correction);
-      return await newCard(cardState.round + 1);
+      return await newCard(cardState.round + 1, parts.includes('risk') && !offeredRisk(answeredChoices));
     }
 
     if (answeredChoices?.purpose === 'summary_clarify' && cardState.clarify_pending) {
@@ -1081,7 +1273,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       if (!a.ok) return { ok: false, status: 502, error: 'no_usable_update', tokens };
       s.profile = a.profile;
       s.summary = a.summary;
-      return await newCard(cardState.round + 1);
+      return await newCard(cardState.round + 1, !!prior?.parts.includes('risk'));
     }
 
     return { ok: false, status: 409, error: 'stale_choice', tokens };
@@ -1104,16 +1296,25 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     };
   }
 
-  async function newCard(round: number): Promise<TurnRun> {
+  async function newCard(round: number, offerRisk: boolean): Promise<TurnRun> {
     const b = await runReply(s, { kind: 'card' }, null, [], latestOwn, conversation.id);
     tokens += b.tokens;
     const prose = cardProse(b.parsed);
     if (!prose) return { ok: false, status: 502, error: 'no_usable_card', tokens };
-    s.profile = { ...addThemes(s.profile, b.themesUsed), meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
-    const fresh = buildCard(round, prose, s.profile);
+    s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
+    // A line whose value didn't change keeps its note unless the new card
+    // writes one (a regenerated card once dropped qualifiers the user never touched).
+    const previous = card.risk;
+    const unchanged = cardRisk(s.profile);
+    const keptNotes: Partial<Record<RiskLine, string>> = {};
+    for (const l of RISK_LINES) {
+      const same = l === 'deadline' ? previous.deadline === unchanged.deadline : previous[l] === unchanged[l];
+      if (same && previous.notes?.[l]) keptNotes[l] = previous.notes[l];
+    }
+    const fresh = buildCard(round, { ...prose, notes: { ...keptNotes, ...prose.notes } }, s.profile);
     return {
       ok: true,
-      assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh) },
+      assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },
       tokens,
       commit: commitWith({ round, card: fresh, correction: null, clarify_pending: false, confirmed: false }),
     };

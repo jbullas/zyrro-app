@@ -33,9 +33,11 @@ export type NoteRule = {
   placeholder?: string;
 };
 
-export type ChoicePurpose = 'opening_read' | 'risk_time' | 'summary' | 'summary_clarify';
+export type ChoicePurpose = 'opening_read' | 'direction' | 'risk_time' | 'summary' | 'summary_clarify';
 
 export type SummaryCardItem = { id: string; text: string; inferred: boolean };
+
+export type RiskLine = 'readiness' | 'at_stake' | 'limits' | 'hours' | 'deadline';
 
 export type SummaryCard = {
   round: number;
@@ -43,10 +45,23 @@ export type SummaryCard = {
   wants: string;
   must_haves: SummaryCardItem[];
   must_avoids: SummaryCardItem[];
-  risk: { readiness: string; at_stake: string; limits: string; hours: string; qualifier: string | null };
+  risk: {
+    readiness: string;
+    at_stake: string;
+    limits: string;
+    hours: string;
+    // A decision with a term or date attached; it limits how long they can explore.
+    deadline?: string | null;
+    // What qualifies each line, in the second person, on the line it qualifies.
+    notes?: Partial<Record<RiskLine, string>>;
+    // Cards from before the follow-up brief: one free-text qualifier.
+    qualifier?: string | null;
+  };
 };
 
-type ChoiceBase = { purpose?: ChoicePurpose; note?: NoteRule; card?: SummaryCard };
+// preselected: ids already picked when the choices are shown (the card's
+// re-offered risk and time taps, filled with the current answers).
+type ChoiceBase = { purpose?: ChoicePurpose; note?: NoteRule; card?: SummaryCard; preselected?: string[] };
 
 export type ChatChoiceSet =
   | (ChoiceBase & { mode: 'single' | 'multi'; max: number; options: ChoiceOption[] })
@@ -112,7 +127,9 @@ export function choiceLabels(choices: ChatChoiceSet, ids: string[]): string {
     return choices.groups
       .map(group => {
         const labels = group.options.filter(o => ids.includes(`${group.id}:${o.id}`)).map(o => o.label);
-        return labels.length ? `${group.label}: ${labels.join(', ')}` : null;
+        if (!labels.length) return null;
+        // A question reads as question and answer; a plain label takes a colon.
+        return group.label.trim().endsWith('?') ? `${group.label} ${labels.join(', ')}` : `${group.label}: ${labels.join(', ')}`;
       })
       .filter((s): s is string => !!s)
       .join('\n');
