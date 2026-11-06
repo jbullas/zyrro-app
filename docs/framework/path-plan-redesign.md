@@ -22,7 +22,7 @@ Behind the conversation sits a profile that fills in as the user talks. Six item
 2. **What's pushing them now,** and any deadline.
 3. **What they've tried before** to change things, and why it didn't stick.
 4. **Clarity of direction:** a specific idea, a rough leaning, or no idea.
-5. **Risk, constraints and time:** the change they're ready to make now (explore on the side, reduce what they do now, make a real move); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
+5. **Risk, constraints and time:** the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; or not sure yet); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
 6. **Must-haves and must-avoids:** what a good direction has to include and what it has to avoid, taken from what the user said.
 
 Signatures are not a profile item. The user never confirms, rates or discusses individual signatures, and no signature names appear in the conversation. The report is supporting evidence, not something the user is asked to grade.
@@ -47,7 +47,7 @@ About five exchanges, then the summary. Five is a target, not a cap: a vague ans
 1. **Opening read.** Two or three plain sentences on how Zyrro sees the user and what's pressing on them now, including any deadline and what's still unknown about it. No signature names. Tap choices (that's right, partly, not quite) plus room to say what's off. The user's corrections here feed everything after.
 2. **What they've tried before.** What they tried, and what got in the way.
 3. **Where they want to go.** Zyrro adapts to a specific idea, a rough leaning, or no idea. If it has noticed a connection the user hasn't made, it offers it in the same message as this question, not as a separate turn.
-4. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. Tap choices for the change they're ready to make now and for what they'd put at risk (including "not sure yet"), a choice of hours per week, and a direct question about hard limits, with "nothing off the table" as a choice.
+4. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. Tap choices for the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; not sure yet) and for what they'd put at risk (including "not sure yet"), a choice of hours per week, and a direct question about hard limits, with "nothing off the table" as a choice.
 5. **Summary.** The one explicit confirmation before options (see Summary before options).
 
 ## When Zyrro has enough
@@ -58,7 +58,7 @@ An item is needed only if its answer would change the options. Each needed item 
 - Pushing them: the main pressure is known, plus whether there's a deadline ("no rush" counts).
 - Tried before: at least one past attempt and why it stalled, or a clear "never tried".
 - Direction: specific idea, rough leaning, or no idea.
-- Risk, constraints, time: the change they're ready for now, what they'd put at risk (or not sure yet), hard limits (or none), hours per week now.
+- Risk, constraints, time: the change they're ready for now (or not sure yet), what they'd put at risk (or not sure yet), hard limits (or none), hours per week now.
 
 ## Summary before options
 
