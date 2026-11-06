@@ -7,13 +7,16 @@ type SelectableListProps = {
                                      // genuinely different semantics (reuses /identity's
                                      // energiser=green / friction=red color language)
   disabled?: boolean;
+  // #168 follow-up: Path's multi-answer questions use square checkboxes.
+  // Not passed elsewhere, so every other list keeps its round checks and DOM.
+  checkShape?: 'square';
 };
 
 // #134 Slice 1 — Checkpoint 1 "Direction": a flat select-up-to-`max` list,
 // replacing the old two-column "click to move into a slot" mechanic (brief
 // §3) that didn't hold up for longer text / mobile. Once `max` items are
 // selected, every unselected row disables until one is deselected.
-export default function SelectableList({ items, selected, onToggle, max, variant, disabled }: SelectableListProps) {
+export default function SelectableList({ items, selected, onToggle, max, variant, disabled, checkShape }: SelectableListProps) {
   const atMax = selected.length >= max;
 
   return (
@@ -29,7 +32,7 @@ export default function SelectableList({ items, selected, onToggle, max, variant
             disabled={disabled || (!isSelected && atMax)}
             aria-pressed={isSelected}
           >
-            <span className="selectable-row-check" aria-hidden="true">{isSelected ? '✓' : ''}</span>
+            <span className={`selectable-row-check${checkShape === 'square' ? ' selectable-row-check--square' : ''}`} aria-hidden="true">{isSelected ? '✓' : ''}</span>
             <span>{item}</span>
           </button>
         );

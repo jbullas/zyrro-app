@@ -8,6 +8,7 @@ import PrimaryButton from '@/components/PrimaryButton';
 import ChatThread from '@/components/ChatThread';
 import ChatChoices from '@/components/ChatChoices';
 import PathSummaryCard from '@/components/PathSummaryCard';
+import PathStart from '@/components/PathStart';
 import { choiceContent, type ChatChoiceSet } from '@/lib/chat-choices';
 
 // #168: the new Path conversation, built alongside the current /path flow
@@ -232,14 +233,7 @@ export default function PathConversationPage() {
   }
 
   if (pageState === 'not-started') {
-    return (
-      <MessageState
-        eyebrow="YOUR PATH"
-        heading="Let’s work out where you’re going."
-        body={sendError || 'A short conversation, built on your Identity Report. Zyrro asks only what it doesn’t already know, then turns it into path options.'}
-        cta={<PrimaryButton onClick={handleStart} disabled={sending}>Start the conversation</PrimaryButton>}
-      />
-    );
+    return <PathStart onStart={handleStart} starting={sending} error={sendError} />;
   }
 
   const latest = messages[messages.length - 1];

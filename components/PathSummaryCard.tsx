@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import ChatChoices from '@/components/ChatChoices';
-import type { ChatChoiceSet, SummaryCard, SummaryCardItem } from '@/lib/chat-choices';
+import type { ChatChoiceSet, RiskLine, SummaryCard, SummaryCardItem } from '@/lib/chat-choices';
 
 type PathSummaryCardProps = {
   card: SummaryCard;
@@ -11,22 +12,44 @@ type PathSummaryCardProps = {
   onSubmit: (choiceIds: string[], note: string | null) => void;
 };
 
-// #168 shorter flow: the summary card in the Path thread (brief
-// docs/briefs/168-shorter-flow.md, "Summary card"). Built from the Identity
-// report's card styles: .card with a header strip and body, and /identity's
-// +/– bullet lists for must-haves and must-avoids. Earlier rounds stay in the
-// thread without their choices.
+// #168: the summary card in the Path thread (briefs 168-shorter-flow and
+// 168-followup). Built from the Identity report's card styles: .card with a
+// header strip and body, and /identity's +/– bullet lists. Each must-have and
+// must-avoid has its own remove control (part of the card's answer, ids
+// "remove:<id>"). Risk, limits and time show one line each, with its note in
+// the second person underneath, and a Deadline line when there is one.
+// Earlier rounds stay in the thread without their choices.
 export default function PathSummaryCard({ card, choices, disabled, onSubmit }: PathSummaryCardProps) {
+  const [selected, setSelected] = useState<string[]>(choices?.preselected ?? []);
+  const removable = new Set(
+    choices?.mode === 'groups' ? choices.groups.find(g => g.id === 'remove')?.options.map(o => o.id) ?? [] : [],
+  );
+  const removed = (id: string) => selected.includes(`remove:${id}`);
+  const toggleRemove = (id: string) =>
+    setSelected(prev => (removed(id) ? prev.filter(x => x !== `remove:${id}`) : [...prev, `remove:${id}`]));
+
   const items = (list: SummaryCardItem[], className: string, icon: string) =>
     list.length ? (
       <ul className={className}>
         {list.map(item => (
-          <li key={item.id}>
+          <li key={item.id} className={removed(item.id) ? 'path-item--removed' : undefined}>
             <span className="bullet-icon">{icon}</span>
-            <span>
+            <span className="flex-1">
               {item.text}
-              {item.inferred && <span className="path-inferred-tag">Zyrro’s reading</span>}
+              {item.inferred && <span className="path-inferred-tag">Zyrro’s guess</span>}
             </span>
+            {choices && removable.has(item.id) && (
+              <button
+                type="button"
+                className="path-remove-btn"
+                onClick={() => toggleRemove(item.id)}
+                disabled={disabled}
+                aria-pressed={removed(item.id)}
+                aria-label={removed(item.id) ? `Keep ${item.text}` : `Remove ${item.text}`}
+              >
+                {removed(item.id) ? 'Undo' : 'Remove'}
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -34,12 +57,14 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
       <p>None recorded</p>
     );
 
-  const risk = [
-    ['Ready to', card.risk.readiness],
-    ['Would put at risk', card.risk.at_stake],
-    ['Hard limits', card.risk.limits],
-    ['Time', card.risk.hours],
-  ] as const;
+  const risk = card.risk;
+  const lines: Array<[string, string, RiskLine]> = [
+    ['Ready to', risk.readiness, 'readiness'],
+    ['Would put at risk', risk.at_stake, 'at_stake'],
+    ['Off the table', risk.limits, 'limits'],
+    ['Time', risk.hours, 'hours'],
+    ...(risk.deadline ? [['Deadline', risk.deadline, 'deadline'] as [string, string, RiskLine]] : []),
+  ];
 
   return (
     <div className="card constellation-card path-summary-card">
@@ -65,17 +90,27 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
         </div>
         <div>
           <p className="card-sub-label">Risk, limits and time</p>
-          <ul className="bullet-list">
-            {risk.map(([label, value]) => (
-              <li key={label}><strong>{label}:</strong> {value}</li>
+          <ul className="bullet-list path-risk-lines">
+            {lines.map(([label, value, key]) => (
+              <li key={key}>
+                <span><strong>{label}:</strong> {value}</span>
+                {risk.notes?.[key] && <span className="path-risk-note">{risk.notes[key]}</span>}
+              </li>
             ))}
-            {card.risk.qualifier && <li>{card.risk.qualifier}</li>}
+            {risk.qualifier && <li>{risk.qualifier}</li>}
           </ul>
         </div>
         {choices && (
           <div className="divided-list">
             <div />
-            <ChatChoices choices={choices} disabled={disabled} onSubmit={onSubmit} />
+            <ChatChoices
+              choices={choices}
+              disabled={disabled}
+              onSubmit={onSubmit}
+              selected={selected}
+              onSelectedChange={setSelected}
+              hiddenGroups={['remove']}
+            />
           </div>
         )}
       </div>

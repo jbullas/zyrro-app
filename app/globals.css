@@ -2313,3 +2313,110 @@ p {
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
+
+/* ── #168 follow-up (Part B): Path contrast, questions, removals, start ──
+   Everything is scoped to .path-choices, .path-summary-card or .path-start,
+   so /path (current flow) and /identity, which share the base classes, are
+   unaffected. */
+
+/* Group labels are questions in normal text, not pale small capitals. */
+.path-question {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.path-question-hint {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 2px 0 0;
+}
+
+/* Stronger option borders and checks. */
+.path-choices .selectable-row {
+  border: 1px solid rgba(0,0,0,0.22);
+}
+.path-choices .selectable-row-check {
+  border: 2px solid rgba(0,0,0,0.45);
+}
+/* Multi-answer groups: square checkboxes (SelectableList checkShape). */
+.selectable-row-check--square {
+  border-radius: 4px;
+}
+/* A locked Continue still looks like a button: full opacity, muted text. */
+.path-choices .btn-secondary.btn-disabled {
+  opacity: 1;
+  color: var(--color-text-secondary);
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.16);
+}
+
+/* Card: readable section labels, markers and tag. */
+.path-summary-card .card-sub-label {
+  color: var(--color-text-primary);
+}
+.path-summary-card .energiser-bullets li .bullet-icon {
+  background: rgba(30,142,90,0.22);
+}
+.path-summary-card .friction-bullets li .bullet-icon {
+  background: rgba(216,72,59,0.20);
+}
+.path-summary-card .path-inferred-tag {
+  color: var(--color-text-primary);
+  background: rgba(0,0,0,0.07);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* Remove control on each must-have and must-avoid. */
+.path-remove-btn {
+  flex-shrink: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid rgba(0,0,0,0.16);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.path-remove-btn[aria-pressed="true"] {
+  color: var(--color-text-primary);
+  border-color: rgba(0,0,0,0.4);
+}
+.path-item--removed > span:not(.bullet-icon) {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+/* Risk, limits and time: the line, then its note underneath. */
+.path-risk-lines {
+  margin-bottom: 0;
+}
+.path-risk-lines li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-primary);
+}
+.path-risk-note {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* Start screen: longer than one screen on a phone, so it scrolls. */
+.flow-container.path-start {
+  overflow-y: auto;
+  justify-content: flex-start;
+}
+.path-start-list {
+  margin-bottom: 0;
+}
+/* The hint sits right under its question, also inside a .card (whose
+   p + p rule would otherwise push it 12px down). (0,2,0) beats (0,1,2). */
+.path-question + .path-question-hint {
+  margin-top: 2px;
+}
