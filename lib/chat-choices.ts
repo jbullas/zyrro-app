@@ -2,65 +2,131 @@
 // a tap, writing the user's message) and the browser (rendering, the pending
 // message). No server-only imports.
 //
-// single / multi: one list of options. matrix: one row per item (Path uses it
-// for the signatures), each answered with exactly one of the same options;
-// a matrix tap's ids are "<rowId>:<optionId>".
+// single / multi: one list of options, ids are the option ids.
+// groups: several questions in one message (Path's opening read, the risk
+//   and time turn, the summary card); ids are "<groupId>:<optionId>". A
+//   required group needs an answer; a single group takes at most one; an
+//   exclusive option stands alone in its group.
+// note: no options, only the note (Path's clarifying question on the card).
 //
-// purpose/target are set by code for choices whose answers code itself maps
-// onto the profile (the signature grid, the drain-source question, reflections).
+// Every choice set can carry a note: optional unless `note.required`, or
+// required when one of `note.required_when.ids` is picked and nothing is
+// picked in `note.required_when.unless_group`.
+//
+// purpose is set by code for choices whose answers code itself maps onto the
+// Path profile; card is the summary card's content (purpose 'summary').
 
 export type ChoiceOption = { id: string; label: string };
 
+export type ChoiceGroup = {
+  id: string;
+  label: string;
+  mode: 'single' | 'multi';
+  options: ChoiceOption[];
+  required: boolean;
+  exclusive?: string[];
+};
+
+export type NoteRule = {
+  required?: boolean;
+  required_when?: { ids: string[]; unless_group?: string };
+  placeholder?: string;
+};
+
+export type ChoicePurpose = 'opening_read' | 'risk_time' | 'summary' | 'summary_clarify';
+
+export type SummaryCardItem = { id: string; text: string; inferred: boolean };
+
+export type SummaryCard = {
+  round: number;
+  seen_as: string;
+  wants: string;
+  must_haves: SummaryCardItem[];
+  must_avoids: SummaryCardItem[];
+  risk: { readiness: string; at_stake: string; limits: string; hours: string; qualifier: string | null };
+};
+
+type ChoiceBase = { purpose?: ChoicePurpose; note?: NoteRule; card?: SummaryCard };
+
 export type ChatChoiceSet =
-  | {
-      mode: 'single' | 'multi';
-      max: number;
-      options: ChoiceOption[];
-      purpose?: ChoicePurpose;
-      target?: string;
-    }
-  | {
-      mode: 'matrix';
-      rows: ChoiceOption[];
-      options: ChoiceOption[];
-      purpose?: ChoicePurpose;
-      target?: string;
-    };
+  | (ChoiceBase & { mode: 'single' | 'multi'; max: number; options: ChoiceOption[] })
+  | (ChoiceBase & { mode: 'groups'; groups: ChoiceGroup[] })
+  | (ChoiceBase & { mode: 'note' });
 
-export type ChoicePurpose = 'patterns' | 'drain_source' | 'reflection' | 'energisers' | 'friction_points';
+export const NOTE_MAX_CHARS = 1500;
 
-/** The picked ids if they are a valid answer to these choices, else null. */
-export function validateChoiceIds(choices: ChatChoiceSet, ids: unknown): string[] | null {
-  if (!Array.isArray(ids)) return null;
-  const unique = [...new Set(ids.filter((id): id is string => typeof id === 'string'))];
-  if (unique.length === 0 || unique.length !== ids.length) return null;
+export type ChoiceValidation =
+  | { ok: true; ids: string[]; note: string | null }
+  | { ok: false; error: 'invalid_choice' | 'note_required' | 'correction_detail_required' | 'note_too_long' };
 
-  if (choices.mode === 'matrix') {
-    const seenRows = new Set<string>();
-    for (const id of unique) {
-      const [rowId, optionId] = id.split(':');
-      if (!choices.rows.some(r => r.id === rowId) || !choices.options.some(o => o.id === optionId) || seenRows.has(rowId)) return null;
-      seenRows.add(rowId);
-    }
-    return seenRows.size === choices.rows.length ? unique : null;
-  }
-
-  if (!unique.every(id => choices.options.some(o => o.id === id))) return null;
-  const allowed = choices.mode === 'single' ? 1 : choices.max;
-  return unique.length <= allowed ? unique : null;
+function splitId(id: string): [string, string] {
+  const i = id.indexOf(':');
+  return i < 0 ? [id, ''] : [id.slice(0, i), id.slice(i + 1)];
 }
 
-/** The text of the user's message for a tap: what they picked, in plain words. */
-export function choiceContent(choices: ChatChoiceSet, ids: string[]): string {
-  if (choices.mode === 'matrix') {
-    return choices.rows
-      .map(row => {
-        const optionId = ids.find(id => id.startsWith(`${row.id}:`))?.split(':')[1];
-        const option = choices.options.find(o => o.id === optionId);
-        return option ? `${row.label}: ${option.label}` : null;
+/** The picked ids and note if they are a valid answer to these choices. */
+export function validateChoiceAnswer(choices: ChatChoiceSet, rawIds: unknown, rawNote: unknown): ChoiceValidation {
+  const ids = rawIds === undefined || rawIds === null ? [] : rawIds;
+  if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string')) return { ok: false, error: 'invalid_choice' };
+  const unique = [...new Set(ids as string[])];
+  if (unique.length !== ids.length) return { ok: false, error: 'invalid_choice' };
+  if (rawNote !== undefined && rawNote !== null && typeof rawNote !== 'string') return { ok: false, error: 'invalid_choice' };
+  const note = typeof rawNote === 'string' && rawNote.trim() ? rawNote.trim() : null;
+  if (note && note.length > NOTE_MAX_CHARS) return { ok: false, error: 'note_too_long' };
+
+  if (choices.mode === 'note') {
+    if (unique.length) return { ok: false, error: 'invalid_choice' };
+  } else if (choices.mode === 'groups') {
+    const picked = new Map<string, string[]>();
+    for (const id of unique) {
+      const [groupId, optionId] = splitId(id);
+      const group = choices.groups.find(g => g.id === groupId);
+      if (!group || !group.options.some(o => o.id === optionId)) return { ok: false, error: 'invalid_choice' };
+      picked.set(groupId, [...(picked.get(groupId) ?? []), optionId]);
+    }
+    for (const group of choices.groups) {
+      const got = picked.get(group.id) ?? [];
+      if (group.required && got.length === 0) return { ok: false, error: 'invalid_choice' };
+      if (group.mode === 'single' && got.length > 1) return { ok: false, error: 'invalid_choice' };
+      if (got.length > 1 && got.some(o => group.exclusive?.includes(o))) return { ok: false, error: 'invalid_choice' };
+    }
+  } else {
+    if (unique.length === 0 || !unique.every(id => choices.options.some(o => o.id === id))) return { ok: false, error: 'invalid_choice' };
+    if (unique.length > (choices.mode === 'single' ? 1 : choices.max)) return { ok: false, error: 'invalid_choice' };
+  }
+
+  const rule = choices.note;
+  if ((rule?.required || choices.mode === 'note') && !note) return { ok: false, error: 'note_required' };
+  const when = rule?.required_when;
+  if (when && unique.some(id => when.ids.includes(id)) && !note) {
+    const hasGroupPick = !!when.unless_group && unique.some(id => splitId(id)[0] === when.unless_group);
+    if (!hasGroupPick) return { ok: false, error: 'correction_detail_required' };
+  }
+  return { ok: true, ids: unique, note };
+}
+
+/** What the user picked, in plain words, without the note. */
+export function choiceLabels(choices: ChatChoiceSet, ids: string[]): string {
+  if (choices.mode === 'note') return '';
+  if (choices.mode === 'groups') {
+    return choices.groups
+      .map(group => {
+        const labels = group.options.filter(o => ids.includes(`${group.id}:${o.id}`)).map(o => o.label);
+        return labels.length ? `${group.label}: ${labels.join(', ')}` : null;
       })
       .filter((s): s is string => !!s)
-      .join('; ');
+      .join('\n');
   }
   return choices.options.filter(o => ids.includes(o.id)).map(o => o.label).join('; ');
+}
+
+/** The text of the user's message for a tap: what they picked, then their note. */
+export function choiceContent(choices: ChatChoiceSet, ids: string[], note?: string | null): string {
+  return [choiceLabels(choices, ids), note?.trim() || ''].filter(Boolean).join('\n\n');
+}
+
+/** The note part of a saved tap message (its content minus the labels). */
+export function noteFromContent(choices: ChatChoiceSet, ids: string[], content: string): string {
+  const labels = choiceLabels(choices, ids);
+  return (labels && content.startsWith(labels) ? content.slice(labels.length) : labels ? '' : content).trim();
 }

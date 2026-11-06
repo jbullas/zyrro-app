@@ -31,43 +31,12 @@ export default function ChatChoices({ choices, disabled, onSubmit }: ChatChoices
     );
   }
 
+  // #168 shorter flow: groups (opening read, risk and time, summary card) and
+  // the note-only clarifying question are rendered by the step 2 UI.
+  if (choices.mode === 'groups' || choices.mode === 'note') return null;
+
   const labelOf = (id: string) => choices.options.find(o => o.id === id)?.label ?? '';
   const idOf = (label: string) => choices.options.find(o => o.label === label)?.id;
-
-  if (choices.mode === 'matrix') {
-    // selected holds "<rowId>:<optionId>", one per answered row.
-    const answerFor = (rowId: string) => selected.find(id => id.startsWith(`${rowId}:`))?.split(':')[1];
-    return (
-      <div className="card">
-        {choices.rows.map(row => {
-          const answer = answerFor(row.id);
-          return (
-            <div key={row.id}>
-              <p className="card-sub-label">{row.label}</p>
-              <SelectableList
-                items={choices.options.map(o => o.label)}
-                selected={answer ? [labelOf(answer)] : []}
-                max={1}
-                variant="positive"
-                disabled={disabled}
-                onToggle={label => {
-                  const optionId = idOf(label);
-                  if (!optionId) return;
-                  setSelected(prev => {
-                    const others = prev.filter(id => !id.startsWith(`${row.id}:`));
-                    return answer === optionId ? others : [...others, `${row.id}:${optionId}`];
-                  });
-                }}
-              />
-            </div>
-          );
-        })}
-        <SecondaryButton onClick={() => onSubmit(selected)} disabled={disabled || selected.length !== choices.rows.length}>
-          Continue →
-        </SecondaryButton>
-      </div>
-    );
-  }
 
   return (
     <div className="card">

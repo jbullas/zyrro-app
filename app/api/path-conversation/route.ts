@@ -19,15 +19,20 @@ import {
   ensureSeeded,
   getPathConversation,
   getProfileRow,
+  MESSAGE_MAX_CHARS,
   PATH_ENTITLEMENT,
   PATH_TURN_CONFIG,
-  profileComplete,
+  pathState,
   toMessageView,
 } from '@/lib/path-conversation';
-import { choiceContent, validateChoiceIds, type ChatChoiceSet } from '@/lib/chat-choices';
+import { choiceContent, validateChoiceAnswer, type ChatChoiceSet } from '@/lib/chat-choices';
 
-// #168 step 3: the Path conversation, owned by the server. The browser sends
-// only the conversation id and the new message (or the tapped choice).
+// #168: the Path conversation, owned by the server. The browser sends only
+// the conversation id and the new message, or the tapped choices plus an
+// optional note. Typing is accepted only in the conversation phase and only
+// when the latest message has no choices; in the summary phase only the
+// card's choices and its one clarifying answer are accepted; once the summary
+// is confirmed, nothing is.
 // Start = seeding call + opening turn, so it needs more than a single reply.
 export const maxDuration = 120;
 
@@ -37,9 +42,8 @@ async function conversationView(supabase: SupabaseClient, conversation: Conversa
     getProfileRow(supabase, conversation.id),
   ]);
   return {
-    conversation: { id: conversation.id, phase: profileRow?.phase ?? 'seeding' },
+    conversation: { id: conversation.id, ...pathState(profileRow) },
     messages: messages.map(toMessageView),
-    profile_complete: profileComplete(profileRow),
   };
 }
 
@@ -61,7 +65,7 @@ export async function GET() {
 type PostBody =
   | { action: 'start' }
   | { action: 'message'; conversation_id: string; text: string }
-  | { action: 'choice'; conversation_id: string; message_id: string; choice_ids: string[] };
+  | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string };
 
 export async function POST(req: NextRequest) {
   let body: PostBody;
@@ -81,7 +85,7 @@ export async function POST(req: NextRequest) {
       const result = await handleChatTurn(PATH_TURN_CONFIG, body.conversation_id, (supabase, conversation) =>
         body.action === 'message'
           ? prepareMessage(supabase, conversation, body.text)
-          : prepareChoice(supabase, conversation, body.message_id, body.choice_ids),
+          : prepareChoice(supabase, conversation, body.message_id, body.choice_ids, body.note),
       );
       return await turnResponse(result, body.conversation_id);
     }
@@ -98,7 +102,7 @@ async function turnResponse(result: TurnResult, conversationId: string) {
   const supabase = createServiceClient();
   return NextResponse.json({
     messages: result.messages.map(toMessageView),
-    profile_complete: profileComplete(await getProfileRow(supabase, conversationId)),
+    ...pathState(await getProfileRow(supabase, conversationId)),
   });
 }
 
@@ -131,40 +135,52 @@ async function start() {
   return NextResponse.json(await conversationView(supabase, conversation));
 }
 
-async function requireConversationPhase(supabase: SupabaseClient, conversation: ConversationRow): Promise<TurnFailure | null> {
-  const row = await getProfileRow(supabase, conversation.id);
-  return row?.phase === 'conversation' ? null : { ok: false, status: 409, error: 'not_in_conversation' };
-}
+const refuse = (status: number, error: string): TurnFailure => ({ ok: false, status, error });
 
+// Typed text: conversation phase only, and only when the latest message asks
+// an open question (a message with choices is answered with them and a note).
 async function prepareMessage(
   supabase: SupabaseClient,
   conversation: ConversationRow,
   text: unknown,
 ): Promise<NewUserMessage | TurnFailure> {
   const content = typeof text === 'string' ? text.trim() : '';
-  if (!content) return { ok: false, status: 400, error: 'Empty message' };
-  return (await requireConversationPhase(supabase, conversation)) ?? { content, selected_choice_ids: null };
+  if (!content) return refuse(400, 'Empty message');
+  if (content.length > MESSAGE_MAX_CHARS) return refuse(400, 'message_too_long');
+  const row = await getProfileRow(supabase, conversation.id);
+  if (row?.phase !== 'conversation') return refuse(409, 'not_in_conversation');
+  const [latest] = await listConversationMessages(supabase, conversation.id, 1);
+  if (latest?.role === 'assistant' && latest.choices) return refuse(409, 'choices_expected');
+  return { content, selected_choice_ids: null, note: null };
 }
 
-// A tap answers the latest assistant message only, with ids from its choices.
+// A tap (plus optional note) answers the latest assistant message only, with
+// ids from its choices. In the summary phase, only the card or its clarifying
+// question can be answered, and nothing once the summary is confirmed.
 async function prepareChoice(
   supabase: SupabaseClient,
   conversation: ConversationRow,
   messageId: unknown,
   choiceIds: unknown,
+  note: unknown,
 ): Promise<NewUserMessage | TurnFailure> {
-  const phaseError = await requireConversationPhase(supabase, conversation);
-  if (phaseError) return phaseError;
+  const row = await getProfileRow(supabase, conversation.id);
+  if (!row || (row.phase !== 'conversation' && row.phase !== 'summary') || row.summary_confirmed_at) {
+    return refuse(409, 'not_in_conversation');
+  }
 
   const [latest] = await listConversationMessages(supabase, conversation.id, 1);
   const choices = latest?.choices as ChatChoiceSet | null | undefined;
-  if (!latest || latest.id !== messageId || latest.role !== 'assistant' || !choices) {
-    return { ok: false, status: 409, error: 'stale_choice' };
-  }
+  if (!latest || latest.id !== messageId || latest.role !== 'assistant' || !choices) return refuse(409, 'stale_choice');
+  const summaryChoices = choices.purpose === 'summary' || choices.purpose === 'summary_clarify';
+  if ((row.phase === 'summary') !== summaryChoices) return refuse(409, 'not_in_conversation');
 
-  // Single: one id. Multi: up to max. Matrix (the signature grid): every row once.
-  const ids = validateChoiceIds(choices, choiceIds);
-  if (!ids) return { ok: false, status: 400, error: 'invalid_choice' };
+  const answer = validateChoiceAnswer(choices, choiceIds, note);
+  if (!answer.ok) return refuse(400, answer.error);
 
-  return { content: choiceContent(choices, ids), selected_choice_ids: ids };
+  return {
+    content: choiceContent(choices, answer.ids, answer.note),
+    selected_choice_ids: answer.ids,
+    note: answer.note,
+  };
 }
