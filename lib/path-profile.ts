@@ -5,6 +5,8 @@
 // coerce functions below, so a malformed update is dropped rather than stored.
 // Taps on code-owned choices are applied by code, never by the model.
 
+import { namesTiming } from './path-text-checks';
+
 export const ITEM_KEYS = [
   'opening_read',
   'pushing_now',
@@ -74,7 +76,13 @@ export type ItemValues = {
   // added_context: their note sent with "That's right": something added, not a
   // correction (brief 168-direction-and-card, Part B item 1).
   opening_read: { text: string; verdict: ReadVerdict | null; correction: string | null; added_context: string | null };
-  pushing_now: { pressure: string; urgency: Urgency | null; deadline: string | null };
+  // A deadline needs its source and a quote naming the timing, checked in code
+  // (brief 168-card-fixes, fix 4); urgency_tapped: the user tapped "Yes,
+  // there's a deadline" themselves, which stands without a quote.
+  pushing_now: {
+    pressure: string; urgency: Urgency | null; deadline: string | null;
+    deadline_ref?: string | null; deadline_quote?: string | null; urgency_tapped?: boolean;
+  };
   // Attempts the 13 answers already describe, each quote-checked; quiet context
   // for the options, never asked and never on the card.
   tried_before: { attempts: Attempt[] };
@@ -82,7 +90,10 @@ export type ItemValues = {
   // named that belongs to their free time rather than where their life and work
   // are heading; recorded, but not the direction. specific_enough: call A's
   // judgement of whether the description can carry options (null: not given).
-  direction: { kind: DirectionKind; description: string | null; aside: string | null; specific_enough: boolean | null };
+  // answer_refs: the user's messages that answer the direction question (its
+  // note and the follow-up), the source of the card's direction line (brief
+  // 168-card-fixes, fix 2). Absent on profiles from before that brief.
+  direction: { kind: DirectionKind; description: string | null; aside: string | null; specific_enough: boolean | null; answer_refs?: string[] };
   risk_time: {
     readiness: Readiness | null;
     at_stake: AtStake[];
@@ -182,16 +193,26 @@ function theirWords(v: unknown, check: EvidenceCheck, label: string): string | n
 // Values the model may set. risk_time: only the facts that qualify a line; the
 // tapped parts come from code and are kept as they are.
 const COERCE: { [K in ModelItem]: (v: unknown, check: EvidenceCheck) => Record<string, unknown> | null } = {
-  pushing_now(v) {
+  pushing_now(v, check) {
     const o = obj(v);
     const pressure = str(o?.pressure);
     if (!o || !pressure) return null;
-    // A decision recorded with its term or date is a deadline (follow-up
-    // brief, item 3): in a live run the seed wrote the renewal as the deadline
-    // but labelled it "soon", so the card showed no deadline.
+    // A deadline is a decision they are putting off with a term, renewal,
+    // review or date attached (design doc). Code checks it: the quote is in
+    // the source it cites and names the timing. Anything else is pressure,
+    // not a deadline (brief 168-card-fixes, fix 4).
     const deadline = str(o.deadline);
-    const urgency = deadline ? 'deadline' : oneOf(o.urgency, ['no_rush', 'soon', 'deadline'] as const);
-    return { pressure, urgency, deadline };
+    const ref = str(o.deadline_ref);
+    const quote = str(o.deadline_quote);
+    const evidenced = !!deadline && !!ref && !!quote && check.quote(ref, quote) && namesTiming(quote);
+    if (deadline && !evidenced) {
+      console.warn(`[path profile] deadline not evidenced, kept as pressure: "${deadline}" (ref ${ref ?? 'none'}, quote "${quote ?? ''}")`);
+    }
+    const said = oneOf(o.urgency, ['no_rush', 'soon', 'deadline'] as const);
+    const urgency = evidenced ? 'deadline' : said === 'deadline' ? 'soon' : said;
+    return evidenced
+      ? { pressure, urgency, deadline, deadline_ref: ref, deadline_quote: quote }
+      : { pressure, urgency, deadline: null, deadline_ref: null, deadline_quote: null };
   },
   direction(v, check) {
     const o = obj(v);
@@ -379,7 +400,17 @@ export function applyProfileUpdates(
     if (status !== 'not_known' && u.value !== undefined && u.value !== null) {
       const coerced = COERCE[item](u.value, check);
       if (!coerced) continue; // malformed value: drop this update
-      if (item === 'risk_time') {
+      if (item === 'pushing_now') {
+        // A deadline the user tapped themselves stands, with or without a quote.
+        const cur = current.value as ItemValues['pushing_now'] | null;
+        value = cur?.urgency_tapped && cur.urgency === 'deadline'
+          ? { ...coerced, urgency: 'deadline', urgency_tapped: true, deadline: (coerced.deadline as string | null) ?? cur.deadline }
+          : coerced;
+      } else if (item === 'direction') {
+        // The messages that answered the direction question are code's to keep.
+        const cur = current.value as ItemValues['direction'] | null;
+        value = { ...coerced, answer_refs: cur?.answer_refs ?? [] };
+      } else if (item === 'risk_time') {
         const base = { ...emptyRiskTime(), ...((current.value as ItemValues['risk_time'] | null) ?? {}) };
         const facts: Record<string, QuotedFact | null> = { ...(base.line_facts ?? {}), ...(coerced.line_facts as Record<string, QuotedFact | null>) };
         for (const k of Object.keys(facts)) if (!facts[k]) delete facts[k];
@@ -447,7 +478,7 @@ export function applyOpeningReadTap(profile: PathProfile, ids: string[], note: s
   if (urgency && p.pushing_now.value) {
     p.pushing_now = {
       ...p.pushing_now,
-      value: { ...p.pushing_now.value, urgency },
+      value: { ...p.pushing_now.value, urgency, urgency_tapped: urgency === 'deadline' },
       source: 'conversation',
     };
   }
@@ -497,7 +528,10 @@ export function applyDirectionTap(profile: PathProfile, ids: string[], note: str
   const kind = DIRECTION_TAPS[pickedIn(ids, 'direction')[0] as keyof typeof DIRECTION_TAPS];
   if (!kind) return p;
   const prev = p.direction.value;
-  const value = { kind, description: note ?? prev?.description ?? null, aside: prev?.aside ?? null, specific_enough: null };
+  // The note's message is a source of the card's direction line (m:latest
+  // until the message is saved).
+  const answer_refs = [...(prev?.answer_refs ?? []), ...(note ? ['m:latest'] : [])];
+  const value = { kind, description: note ?? prev?.description ?? null, aside: prev?.aside ?? null, specific_enough: null, answer_refs };
   p.direction = { ...p.direction, value, source: 'conversation', status: valueSettles('direction', value) ? 'confirmed' : 'inferred' };
   return p;
 }
@@ -520,6 +554,7 @@ export function keepDirectionKind(profile: PathProfile, before: PathProfile, mod
         description: m.description ?? (m.aside ? null : prev.description),
         aside: m.aside ?? prev.aside,
         specific_enough: directionTurn ? m.specific_enough : prev.specific_enough,
+        answer_refs: prev.answer_refs ?? [],
       }
     : prev;
   return {

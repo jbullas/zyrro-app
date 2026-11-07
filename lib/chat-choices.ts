@@ -41,6 +41,9 @@ export type RiskLine = 'readiness' | 'at_stake' | 'limits' | 'hours' | 'deadline
 
 export type SummaryCard = {
   round: number;
+  // Every card after the first opens with one code-owned line above it
+  // (brief 168-card-fixes, fix 1). Absent on the first card.
+  intro?: string | null;
   seen_as: string;
   wants: string;
   // Brief 168-direction-and-card, Part C: the level and, when the user gave

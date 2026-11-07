@@ -16,9 +16,10 @@ A JSON object with:
 
 PROFILE
 Return an entry for each of these four items. Each entry: { "status": "known" | "inferred" | "missing", "value": the shape below or null, "source": "questionnaire" | "report" | null, "refs": [pointers], "in_their_words": a short phrase copied exactly from one answer, or null }.
-1. pushing_now: what is pushing them to change now and whether anything forces a decision. Value: { "pressure": string, "urgency": "no_rush" | "soon" | "deadline" | null, "deadline": string | null }.
+1. pushing_now: what is pushing them to change now and whether anything forces a decision. Value: { "pressure": string, "urgency": "no_rush" | "soon" | "deadline" | null, "deadline": string | null, "deadline_ref": string | null, "deadline_quote": string | null }.
    - A decision the user says they are putting off or postponing, with a term, renewal, review or date attached to it, is a deadline: urgency "deadline", and deadline names that decision and its timing in a few plain words, without inventing a date the user did not give.
    - Otherwise set urgency only when an answer says it plainly; when nothing says it, null.
+   - With a deadline, also "deadline_ref": the answer that says it, and "deadline_quote": words from that answer, copied exactly, at least three words, that name the timing (the term, renewal, review or date). A wish to decide, a goal, or a pressure with no term, renewal, review or date attached is not a deadline.
    - pressure and deadline are plain phrases about the user, never in the first person.
 2. tried_before: what they have already done to change their situation, as the answers describe it. Value: { "attempts": [ { "what": string, "why_it_stalled": string, "ref": string, "quote": string, "why_quote": string } ] }, up to 4, or null when the answers describe none.
    - An attempt is something they did on purpose to change or escape what was wrong for them, which did not fix it or did not last. That includes a change they made to their work, hours or role, even when an answer mentions it in passing while talking about something else; read every answer for these.
@@ -32,7 +33,7 @@ Return an entry for each of these four items. Each entry: { "status": "known" | 
 
 MUST-HAVES AND MUST-AVOIDS
 What a good direction has to include for this person, and what it has to avoid, taken from what they wrote in their answers, not from the report's lists. Up to 5 of each. Each { "text", "ref", "quote", "basis" }:
-- text: a short plain phrase, at most 240 characters, never in the first person. Keep any qualifier the user attached: if they value something only in one form, or dislike it only in one setting, the item says so.
+- text: a short plain phrase, at most 240 characters, never in the first person, and never about the user in the third person: speak to them as you, or use no pronoun for them. Keep any qualifier the user attached: if they value something only in one form, or dislike it only in one setting, the item says so.
 - A must-avoid names what the user actually objects to, in their terms and at the scope they gave it. When they object to one form, frequency or framing of something they otherwise value or accept, the must-avoid names that form, never the thing as a whole.
 - ref: the one answer it comes from, written as Q followed by the number.
 - quote: the words from that answer that support it, copied exactly, at least three words. An item whose quote is not in that answer is discarded.

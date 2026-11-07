@@ -22,7 +22,6 @@ import {
   DIRECTION_QUESTION,
   emptyProfile,
   HOURS_BANDS,
-  inUserWordsAsYou,
   isItemComplete,
   isPathProfile,
   ITEM_KEYS,
@@ -45,6 +44,19 @@ import {
   type EvidencedItem,
   type PathProfile,
 } from '@/lib/path-profile';
+import {
+  cleanConfirmedRead,
+  confirmedReadProblem,
+  DIRECTION_LINE_MAX_CHARS,
+  DIRECTION_LINE_MAX_SENTENCES,
+  directionLineProblem,
+  fallbackDirectionLine,
+  hasFirstPerson,
+  mechanicalSecondPerson,
+  swapToSecondPerson,
+  thirdPersonWord,
+} from '@/lib/path-text-checks';
+import { PATH_ITEM_VOICE_PROMPT } from '@/lib/prompts/path-item-voice';
 import { PATH_PROFILE_SEED_PROMPT } from '@/lib/prompts/path-profile-seed';
 import { PATH_REPLY_PROMPT } from '@/lib/prompts/path-reply';
 import { PATH_UPDATE_PROMPT } from '@/lib/prompts/path-update';
@@ -266,6 +278,46 @@ function evidenceCheck(ownIndex: RefIndex): EvidenceCheck {
   };
 }
 
+function firstNameOf(digest: ContextDigest): string {
+  return digest.report.prepared_for.split(/\s+/)[0] ?? '';
+}
+
+type MustLists = { must_haves: EvidencedItem[]; must_avoids: EvidencedItem[] };
+
+/**
+ * Must-haves and must-avoids speak in the second person or without pronouns,
+ * never in the third person (brief 168-card-fixes, fix 3). Code finds the
+ * items that don't; those get one small rewrite call (only when there are
+ * any); an item that still fails has its pronouns swapped by code.
+ */
+async function inSecondPerson(lists: MustLists, firstName: string, conversationId?: string): Promise<{ lists: MustLists; tokens: number }> {
+  const all = [...lists.must_haves, ...lists.must_avoids];
+  // First person counts too: an item copied close to the user's quote came
+  // through as "…leave me unmoved" in a live run.
+  const wrongVoice = (t: string) => thirdPersonWord(t, firstName) ?? (hasFirstPerson(t) ? 'first person' : null);
+  const flagged = all.filter(i => wrongVoice(i.text));
+  if (!flagged.length) return { lists, tokens: 0 };
+  console.warn(`[path items] not second person: ${flagged.map(i => `${i.id} (${wrongVoice(i.text)}) "${i.text}"`).join('; ')}`);
+  const { parsed, tokens } = await chatJson([
+    { role: 'system', content: PATH_ITEM_VOICE_PROMPT },
+    { role: 'user', content: JSON.stringify({ items: flagged.map(({ id, text }) => ({ id, text })) }) },
+  ], 0.2, 'path item voice', undefined, conversationId);
+  const rewritten = new Map<string, string>();
+  for (const r of Array.isArray(parsed?.items) ? parsed.items : []) {
+    const o = r && typeof r === 'object' ? (r as Record<string, unknown>) : null;
+    if (typeof o?.id === 'string' && typeof o.text === 'string' && o.text.trim()) rewritten.set(o.id, o.text.trim());
+  }
+  const fix = (items: EvidencedItem[]) => items.map(i => {
+    if (!flagged.includes(i)) return i;
+    const r = rewritten.get(i.id);
+    if (r && r.length <= SUMMARY_CAPS.entry_chars && !wrongVoice(r)) return { ...i, text: r };
+    const swapped = swapToSecondPerson(mechanicalSecondPerson(i.text));
+    console.warn(`[path items] rewrite unusable for ${i.id} (${JSON.stringify(r ?? null)}); pronouns swapped by code: "${swapped}"`);
+    return { ...i, text: swapped };
+  });
+  return { lists: { must_haves: fix(lists.must_haves), must_avoids: fix(lists.must_avoids) }, tokens };
+}
+
 // temperature undefined: the model's default (the newer models only accept that).
 // Logs one usage line per call (tokens, cache hits, reasoning, latency).
 async function chatJson(
@@ -357,10 +409,12 @@ export async function seedPath(digest: ContextDigest, conversationId?: string): 
       const avoids = validateEvidenced(parsed.must_avoids, ownIndex, 'a', []);
       const dropped = [...haves.dropped, ...avoids.dropped];
       if (dropped.length) console.warn(`[path seed] must items dropped: ${dropped.join('; ')}`);
+      const voiced = await inSecondPerson({ must_haves: haves.items, must_avoids: avoids.items }, firstNameOf(digest), conversationId);
+      tokens += voiced.tokens;
       profile.must_haves_avoids = {
         ...profile.must_haves_avoids,
         status: 'inferred',
-        value: { must_haves: haves.items, must_avoids: avoids.items },
+        value: voiced.lists,
         source: 'questionnaire',
       };
       const validated = validateSummary(parsed.summary, { index, confirmedRefs: [], previous: null });
@@ -659,30 +713,30 @@ function riskFacts(profile: PathProfile) {
   };
 }
 
-// What call B gets for the card's direction line.
-function directionFacts(profile: PathProfile) {
+/**
+ * What the user wrote in answer to the direction question: the note with
+ * their tap and the follow-up (and a card correction of the direction), in
+ * order. Profiles from before brief 168-card-fixes fall back to the recorded
+ * description.
+ */
+function directionSources(profile: PathProfile, ownIndex: RefIndex): string[] {
   const v = profile.direction.value;
-  return v ? { level: DIRECTION_CARD_LABELS[v.kind], their_words: v.kind === 'no_idea' ? null : v.description } : null;
+  if (!v || v.kind === 'no_idea') return [];
+  const texts = (v.answer_refs ?? []).map(ref => ownIndex.get(ref)).filter((t): t is string => !!t?.trim());
+  return texts.length ? texts : v.description ? [v.description] : [];
+}
+
+// What call B gets for the card's direction line: their own answers, all of them.
+function directionFacts(profile: PathProfile, ownIndex: RefIndex) {
+  const v = profile.direction.value;
+  if (!v) return null;
+  return { level: DIRECTION_CARD_LABELS[v.kind], their_words: v.kind === 'no_idea' ? null : directionSources(profile, ownIndex) };
 }
 
 type CardProse = { seen_as: string; wants: string; direction: string | null; notes: Partial<Record<RiskLine, string>> };
 
-/**
- * The card's direction line (brief 168-direction-and-card, Part C item 1): the
- * level, and their direction as call B put it in the second person when that
- * is still their words; otherwise their recorded words as they are. After
- * "Not yet", the code-owned line.
- */
-function cardDirection(profile: PathProfile, proseText: string | null, userText: string): SummaryCard['direction'] {
-  const v = profile.direction.value;
-  if (!v) return { level: 'Not known yet', text: null };
-  if (v.kind === 'no_idea') return { level: DIRECTION_CARD_LABELS.no_idea, text: NOT_YET_LINE };
-  const level = DIRECTION_CARD_LABELS[v.kind];
-  if (!v.description) return { level, text: null };
-  if (proseText && inUserWordsAsYou(proseText, userText)) return { level, text: proseText };
-  if (proseText) console.warn(`[path card] direction line not in the user's words, using their recorded words: "${proseText}"`);
-  return { level, text: fixDashes(v.description) };
-}
+// Fix 1: every card after the first opens with this line (code-owned).
+export const CARD_INTRO = 'Here’s the updated summary with your changes. Your earlier answers are already filled in, so just check it and confirm, or change anything that’s still off.';
 
 // ── Risk notes: right line only, nothing repeated (Part B items 3 and 4) ──
 
@@ -754,13 +808,14 @@ function gateRiskNotes(
   return kept;
 }
 
-function buildCard(round: number, prose: CardProse, profile: PathProfile, userText: string): SummaryCard {
+function buildCard(round: number, prose: CardProse, profile: PathProfile, direction: SummaryCard['direction']): SummaryCard {
   const toItems = (items: EvidencedItem[] = []) => items.map(i => ({ id: i.id, text: fixDashes(i.text), inferred: i.basis === 'inferred' }));
   const base = {
     round,
+    intro: round > 1 ? CARD_INTRO : null,
     seen_as: prose.seen_as,
     wants: prose.wants,
-    direction: cardDirection(profile, prose.direction, userText),
+    direction,
     must_haves: toItems(profile.must_haves_avoids.value?.must_haves),
     must_avoids: toItems(profile.must_haves_avoids.value?.must_avoids),
   };
@@ -821,6 +876,7 @@ function cardMarkdown(card: SummaryCard): string {
   const line = (label: string, value: string, key: RiskLine) => `- ${label}: ${value}${r.notes?.[key] ? `. ${r.notes[key]}` : ''}`;
   const d = card.direction;
   return [
+    ...(card.intro ? [card.intro] : []),
     '**How Zyrro sees you**', card.seen_as,
     '**What you want**', card.wants,
     ...(d ? ['**Your direction**', d.text ? `${d.level}. ${d.text}` : d.level] : []),
@@ -933,6 +989,10 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
             : { text: input.latest.content }),
         },
         asked: input.asked,
+        // The user has answered Zyrro's first message but no acceptable
+        // confirmed read is stored yet (fix 5): write one.
+        confirmed_read_missing: !!s.profile.opening_read.value?.verdict
+          && (!s.summary.confirmed_read || !!confirmedReadProblem(s.summary.confirmed_read.text, s.profile.opening_read.value?.text ?? null, firstNameOf(s.digest))),
         pending_reflection: pending ? { text: pending.text } : null,
         removed_items: s.profile.meta.removed_items,
         ...(input.correction && {
@@ -992,16 +1052,19 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   // what they said. Items from the questionnaire keep the model's call.
   const statedIfTheirs = (items: EvidencedItem[]) =>
     items.map(i => (i.ref.startsWith('m:') && i.basis !== 'stated' ? { ...i, basis: 'stated' as const } : i));
+  // Second person on every item, enforced by code (fix 3).
+  const voiced = await inSecondPerson(
+    { must_haves: statedIfTheirs(withRequested('must_haves', 'h')), must_avoids: statedIfTheirs(withRequested('must_avoids', 'a')) },
+    firstNameOf(s.digest),
+    conversationId,
+  );
   profile = {
     ...profile,
     must_haves_avoids: {
       ...profile.must_haves_avoids,
       status: 'inferred',
       source: 'conversation',
-      value: {
-        must_haves: statedIfTheirs(withRequested('must_haves', 'h')),
-        must_avoids: statedIfTheirs(withRequested('must_avoids', 'a')),
-      },
+      value: voiced.lists,
     },
   };
 
@@ -1019,7 +1082,23 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   if (!merged) {
     console.warn(`[path update] no usable summary_changes (got ${JSON.stringify(out.summary_changes)?.slice(0, 120)}; keys ${Object.keys(out).join(',')}); keeping the summary`);
   }
-  const summary = syncFromProfile(validated?.summary ?? s.summary, profile);
+  // The confirmed read says how the user now stands (fix 5): code takes out a
+  // greeting and every sentence copied from Zyrro's first message. If nothing
+  // of its own is left, or Zyrro speaks in it, it falls back to the previous
+  // read if that one passes, else stays empty for call A to write again.
+  let base = validated?.summary ?? s.summary;
+  const opening = s.profile.opening_read.value?.text ?? null;
+  const name = firstNameOf(s.digest);
+  const read = base.confirmed_read;
+  const readProblem = read ? confirmedReadProblem(read.text, opening, name) : null;
+  if (read && readProblem) {
+    const cleaned = cleanConfirmedRead(read.text, opening, name);
+    const prev = s.summary.confirmed_read;
+    const prevOk = !!prev && !confirmedReadProblem(prev.text, opening, name);
+    console.warn(`[path update] confirmed_read rejected (${readProblem}); ${cleaned ? `kept without the copied lines: ${JSON.stringify(cleaned)}` : prevOk ? 'keeping the previous one' : 'left empty'}`);
+    base = { ...base, confirmed_read: cleaned ? { ...read, text: cleaned } : prevOk ? prev : null };
+  }
+  const summary = syncFromProfile(base, profile);
 
   let contradiction: { item: AskedItem; text: string; refs: string[] } | null = null;
   const c = out.contradiction && typeof out.contradiction === 'object' ? (out.contradiction as Record<string, unknown>) : null;
@@ -1030,7 +1109,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
 
   return {
     ok: true as const,
-    tokens: update.tokens,
+    tokens: update.tokens + voiced.tokens,
     profile,
     changed: applied.changed,
     summary,
@@ -1051,6 +1130,13 @@ const REPEAT_EXEMPT = new Set<ReplyNext['kind']>(['card', 'card_clarify']);
  * or if it rests only on sources already used without anything new (no
  * repetition, tracked by source refs); a second miss is logged and kept.
  * Returns the user sources the message rests on, for meta.used_refs.
+ *
+ * One interpretation per conversation (brief 168-card-fixes, fix 6): Zyrro's
+ * own reading of the user (the turn's insights, the summary's tensions and
+ * connections, the report) reaches call B only on the turn that carries the
+ * one reflection, and on the opening read and the card. Every other reply
+ * sees the user's own words only, so it can acknowledge and link in their
+ * terms but has no reading of its own to attach.
  */
 async function runReply(
   s: TurnState,
@@ -1059,15 +1145,19 @@ async function runReply(
   insights: Insight[],
   latestText: string | null,
   conversationId: string,
+  retryNote?: string,
 ) {
   const reflection = next.kind === 'item' ? next.reflection : undefined;
+  const interpretive = next.kind === 'open_read' || next.kind === 'card' || next.kind === 'card_clarify' || !!reflection;
+  const summary = interpretive ? s.summary : { ...s.summary, tensions: [], connections: [] };
+  const replyInsights = interpretive ? insights : [];
   const used = new Set(s.profile.meta.used_refs);
   const excerpts = resolveExcerpts([
-    ...summaryRefs(s.summary),
-    ...insights.flatMap(i => i.refs),
+    ...summaryRefs(summary),
+    ...replyInsights.flatMap(i => i.refs),
     ...(reflection?.refs ?? []),
     ...(next.kind === 'clarify' ? next.contradiction.refs : []),
-  ], s.index);
+  ].filter(ref => interpretive || !ref.startsWith('report.')), s.index);
   const evidence = Object.fromEntries(Object.entries(excerpts).map(([ref, text]) => [ref, { text, used: used.has(ref) }]));
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: PATH_REPLY_PROMPT },
@@ -1080,14 +1170,15 @@ async function runReply(
         // depends on the summary keeping it (Part B item 1).
         added_to_read: next.kind === 'open_read' ? null : s.profile.opening_read.value?.added_context ?? null,
         fixed_choices: fixed ? { ...fixed, card: undefined, preselected: undefined } : null,
-        summary: s.summary,
-        turn_insights: insights,
+        summary,
+        turn_insights: replyInsights,
         evidence,
-        ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile), direction: directionFacts(s.profile) }),
+        ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile), direction: directionFacts(s.profile, s.ownIndex) }),
         recent_messages: s.all.slice(-REPLY_RECENT_MESSAGES).map(({ role, content }) => ({ role, content })),
         latest_message: latestText !== null ? { ref: LATEST_REF, content: latestText } : null,
       }),
     },
+    ...(retryNote ? [{ role: 'system' as const, content: retryNote }] : []),
   ];
 
   let tokens = 0;
@@ -1126,7 +1217,10 @@ function addUsedRefs(profile: PathProfile, refs: string[]): PathProfile {
 const CARD_SEEN_AS_MAX = 900;
 const CARD_WANTS_MAX = 600;
 const CARD_NOTE_MAX = 240;
-const CARD_DIRECTION_MAX = 400;
+// Only a runaway guard: the direction line's real limits are checked by
+// directionLineProblem, which retries and then falls back (fix 2). A hard cap
+// here once threw away a faithful line and pasted the user's raw words instead.
+const CARD_DIRECTION_RAW_MAX = 2000;
 
 function cardProse(parsed: Record<string, unknown> | null): CardProse | null {
   const seen = typeof parsed?.seen_as === 'string' ? fixDashes(parsed.seen_as.trim()) : '';
@@ -1142,7 +1236,45 @@ function cardProse(parsed: Record<string, unknown> | null): CardProse | null {
     if (n && n.length <= CARD_NOTE_MAX) notes[line] = n;
   }
   const d = typeof parsed?.direction === 'string' ? fixDashes(parsed.direction.trim()) : '';
-  return { seen_as: seen, wants, direction: d && d.length <= CARD_DIRECTION_MAX ? d : null, notes };
+  return { seen_as: seen, wants, direction: d && d.length <= CARD_DIRECTION_RAW_MAX ? d : null, notes };
+}
+
+/**
+ * The card's direction line (brief 168-card-fixes, fix 2): the level, then one
+ * or two sentences in the second person built from everything they wrote in
+ * answer to the direction question, checked by code. A line that fails the
+ * check gets one retry from call B; if that fails too, code builds the line
+ * from their first sentences with only the pronouns swapped. Their raw first
+ * person never reaches the card. After "Not yet", the code-owned line.
+ */
+async function cardDirectionLine(
+  s: TurnState,
+  proseText: string | null,
+  latestText: string | null,
+  conversationId: string,
+): Promise<{ direction: SummaryCard['direction']; tokens: number }> {
+  const v = s.profile.direction.value;
+  if (!v) return { direction: { level: 'Not known yet', text: null }, tokens: 0 };
+  if (v.kind === 'no_idea') return { direction: { level: DIRECTION_CARD_LABELS.no_idea, text: NOT_YET_LINE }, tokens: 0 };
+  const level = DIRECTION_CARD_LABELS[v.kind];
+  const sources = directionSources(s.profile, s.ownIndex);
+  if (!sources.length) return { direction: { level, text: null }, tokens: 0 };
+
+  let tokens = 0;
+  let problem = proseText ? directionLineProblem(proseText, sources) : 'no line written';
+  if (!problem) return { direction: { level, text: proseText }, tokens };
+  console.warn(`[path card] direction line rejected (${problem}); retrying: ${JSON.stringify(proseText)}`);
+
+  const retry = await runReply(s, { kind: 'card' }, null, [], latestText, conversationId,
+    `The direction line was not usable: ${problem}. Write all the card fields again; the direction must be at most ${DIRECTION_LINE_MAX_SENTENCES} sentences and ${DIRECTION_LINE_MAX_CHARS} characters, in the second person, built from their_words with their own words for the substance.`);
+  tokens += retry.tokens;
+  const second = typeof retry.parsed?.direction === 'string' ? fixDashes(retry.parsed.direction.trim()) : null;
+  problem = second ? directionLineProblem(second, sources) : 'no line written';
+  if (!problem) return { direction: { level, text: second }, tokens };
+
+  const fallback = fallbackDirectionLine(sources);
+  console.warn(`[path card] direction line rejected again (${problem}): ${JSON.stringify(second)}; code-built line: ${JSON.stringify(fallback)}`);
+  return { direction: { level, text: fallback ? fixDashes(fallback) : null }, tokens };
 }
 
 async function loadTurnState(ctx: TurnContext, row: PathProfileRow) {
@@ -1215,6 +1347,12 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       // follow-up) can settle or reopen it.
       const directionTurn = answeredChoices?.purpose === 'direction' || (asked?.kind === 'follow_up' && asked.item === 'direction');
       s.profile = keepDirectionKind(a.profile, tapped, a.changed.includes('direction'), directionTurn);
+      // The typed answer to the direction follow-up is a source of the card's
+      // direction line too (fix 2); the tap's note was recorded with the tap.
+      if (!ids && asked?.kind === 'follow_up' && asked.item === 'direction' && latestOwn?.trim() && s.profile.direction.value) {
+        const v = s.profile.direction.value;
+        s.profile = { ...s.profile, direction: { ...s.profile.direction, value: { ...v, answer_refs: [...(v.answer_refs ?? []), LATEST_REF] } } };
+      }
       s.summary = a.summary;
       s.reflections = a.reflections;
       insights = a.insights;
@@ -1246,7 +1384,9 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       tokens += b.tokens;
       const prose = cardProse(b.parsed);
       if (!prose) return { ok: false, status: 502, error: 'no_usable_card', tokens };
-      const card = buildCard(1, prose, s.profile, userTextOf(s.ownIndex));
+      const dir = await cardDirectionLine(s, prose.direction, latestOwn, conversation.id);
+      tokens += dir.tokens;
+      const card = buildCard(1, prose, s.profile, dir.direction);
       cardState = { round: 1, card, correction: null, clarify_pending: false, confirmed: false };
       assistant = { content: cardMarkdown(card), choices: cardChoices(card, s.profile, false) };
     } else {
@@ -1361,6 +1501,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     const fresh: SummaryCard = {
       ...card,
       round,
+      intro: CARD_INTRO,
       must_haves: card.must_haves,
       must_avoids: card.must_avoids,
     };
@@ -1401,6 +1542,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       // clarifying question comes first, decided by code.
       if (!note) return await clarify(correction);
 
+      const directionBefore = directionKey(s.profile);
       const a = await runUpdate(s, {
         mode: 'summary_correction',
         latest: { content: userMessage.content, own: latestOwn ?? '', tapped: { offered: answeredChoices, picked: ids } },
@@ -1412,14 +1554,16 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       if (!a.ok) return { ok: false, status: 502, error: 'no_usable_update', tokens };
       s.profile = a.profile;
       s.summary = a.summary;
+      const directionChanged = noteChangesDirection(parts, directionBefore);
 
       // One clarifying question per correction, only when Zyrro can't tell what to change.
       if (a.needsClarification) return await clarify(correction);
-      return await newCard(cardState.round + 1, parts.includes('risk') && !offeredRisk(answeredChoices));
+      return await newCard(cardState.round + 1, parts.includes('risk') && !offeredRisk(answeredChoices), parts, directionChanged);
     }
 
     if (answeredChoices?.purpose === 'summary_clarify' && cardState.clarify_pending) {
       const prior = cardState.correction;
+      const directionBefore = directionKey(s.profile);
       const a = await runUpdate(s, {
         mode: 'summary_correction',
         latest: { content: userMessage.content, own: latestOwn ?? '' },
@@ -1431,7 +1575,8 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       if (!a.ok) return { ok: false, status: 502, error: 'no_usable_update', tokens };
       s.profile = a.profile;
       s.summary = a.summary;
-      return await newCard(cardState.round + 1, !!prior?.parts.includes('risk'));
+      const priorParts = prior?.parts ?? [];
+      return await newCard(cardState.round + 1, priorParts.includes('risk'), priorParts, noteChangesDirection(priorParts, directionBefore));
     }
 
     return { ok: false, status: 409, error: 'stale_choice', tokens };
@@ -1454,11 +1599,50 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     };
   }
 
-  async function newCard(round: number, offerRisk: boolean): Promise<TurnRun> {
+  /** The direction as the user put it (kind and words), to tell whether a correction changed it. */
+  function directionKey(p: PathProfile): string {
+    const v = p.direction.value;
+    return JSON.stringify(v ? { kind: v.kind, description: v.description } : null);
+  }
+
+  /**
+   * Whether this correction changes the direction: marked off, or call A
+   * changed it. Then the user's note is one of the direction line's sources.
+   */
+  function noteChangesDirection(parts: string[], before: string): boolean {
+    const changed = parts.includes('direction') || directionKey(s.profile) !== before;
+    const v = s.profile.direction.value;
+    if (changed && v && v.kind !== 'no_idea' && latestOwn?.trim()) {
+      s.profile = { ...s.profile, direction: { ...s.profile.direction, value: { ...v, answer_refs: [...(v.answer_refs ?? []), LATEST_REF] } } };
+    }
+    return changed;
+  }
+
+  /**
+   * A corrected card (fix 2). Sections the user didn't mark as off keep the
+   * previous card's text: the read, what they want, and the direction line
+   * (unless the direction itself changed). With a note but nothing marked,
+   * the read and what they want are written again; the direction still stands
+   * unless the correction changed it.
+   */
+  async function newCard(round: number, offerRisk: boolean, parts: string[], directionChanged: boolean): Promise<TurnRun> {
     const b = await runReply(s, { kind: 'card' }, null, [], latestOwn, conversation.id);
     tokens += b.tokens;
-    const prose = cardProse(b.parsed);
-    if (!prose) return { ok: false, status: 502, error: 'no_usable_card', tokens };
+    const written = cardProse(b.parsed);
+    if (!written) return { ok: false, status: 502, error: 'no_usable_card', tokens };
+    const marked = parts.length > 0;
+    const prose: CardProse = {
+      ...written,
+      seen_as: marked && !parts.includes('read') ? card.seen_as : written.seen_as,
+      wants: marked && !parts.includes('wants') ? card.wants : written.wants,
+    };
+    const keepDirection = !!card.direction && !directionChanged;
+    let direction: SummaryCard['direction'] = card.direction ?? null;
+    if (!keepDirection) {
+      const dir = await cardDirectionLine(s, written.direction, latestOwn, conversation.id);
+      tokens += dir.tokens;
+      direction = dir.direction ?? null;
+    }
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
     // A line whose value didn't change keeps its note unless the new card
     // writes one (a regenerated card once dropped qualifiers the user never touched).
@@ -1469,7 +1653,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       const same = l === 'deadline' ? previous.deadline === unchanged.deadline : previous[l] === unchanged[l];
       if (same && previous.notes?.[l]) keptNotes[l] = previous.notes[l];
     }
-    const fresh = buildCard(round, { ...prose, notes: { ...keptNotes, ...prose.notes } }, s.profile, userTextOf(s.ownIndex));
+    const fresh = buildCard(round, { ...prose, notes: { ...keptNotes, ...prose.notes } }, s.profile, direction);
     return {
       ok: true,
       assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },
