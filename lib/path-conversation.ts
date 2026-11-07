@@ -964,7 +964,8 @@ function updateContext(digest: ContextDigest) {
  */
 async function runUpdate(s: TurnState, input: CallAInput, conversationId: string) {
   const pending = s.reflections.find(r => r.status === 'offered');
-  const update = await chatJson([
+  const callLabel = input.mode === 'conversation' ? 'path update' : 'path card correction';
+  const callAMessages: ChatCompletionMessageParam[] = [
     { role: 'system', content: PATH_UPDATE_PROMPT },
     { role: 'system', content: `USER CONTEXT\n${JSON.stringify(updateContext(s.digest))}` },
     {
@@ -999,14 +1000,13 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
           card: input.correction.card,
           parts_marked_off: input.correction.parts,
           correction_note: input.correction.note,
-          // A marked list must come back in full: in a live run it came back
-          // null ("unchanged"), so a reworded item the user asked for was lost.
-          lists_to_return: (['must_haves', 'must_avoids'] as const).filter(l => input.correction!.parts.includes(l)),
         }),
       }),
     },
-  ], 0.2, input.mode === 'conversation' ? 'path update' : 'path card correction', undefined, conversationId);
+  ];
+  const update = await chatJson(callAMessages, 0.2, callLabel, undefined, conversationId);
   if (!update.parsed) return { ok: false as const, tokens: update.tokens };
+  let extraTokens = 0;
   const out = update.parsed;
 
   const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex));
@@ -1037,6 +1037,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     }
   }
   const withRequested = (key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a') => {
+    if (input.mode === 'summary_correction') return correctedList(key, prefix);
     const base = pick(key, prefix);
     if (!requested[key].length) return base;
     const checked = validateEvidenced(requested[key], s.ownIndex, prefix, []);
@@ -1046,6 +1047,44 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     const merged = [...base.slice(0, Math.max(0, SUMMARY_CAPS.must_items - added.length)), ...added];
     return merged.map((item, i) => ({ ...item, id: `${prefix}${i + 1}` }));
   };
+  /**
+   * A correction never drops an item the user didn't remove (step 1b): code
+   * starts from the card's items (removals with the control are already
+   * applied) and changes them only as the note asks: an item added from the
+   * note, or one that replaces a named card item with a reworded version.
+   * Call A's full lists are not used here; in a live run a corrected list
+   * silently lost an item the user never touched.
+   */
+  function correctedList(key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a'): EvidencedItem[] {
+    const base = current?.[key] ?? [];
+    const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    let list = [...base];
+    // An item the note asked for sometimes comes back only inside call A's
+    // full list (live run): a new item there resting on the note counts as an
+    // addition too. Nothing in that list removes anything.
+    const fromList = (Array.isArray(out[key]) ? (out[key] as unknown[]) : []).filter(raw => {
+      const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+      return o?.ref === LATEST_REF && typeof o.text === 'string' && !base.some(b => norm(b.text) === norm(o.text as string));
+    });
+    for (const raw of [...requested[key], ...fromList]) {
+      const checked = validateEvidenced([raw], s.ownIndex, prefix, []);
+      if (checked.dropped.length) { console.warn(`[path update] added_from_note ${key} dropped: ${checked.dropped.join('; ')}`); continue; }
+      const item = checked.items[0];
+      const replaces = typeof (raw as Record<string, unknown>).replaces === 'string' ? (raw as Record<string, string>).replaces : null;
+      const target = replaces ? list.find(b => b.id === replaces) : undefined;
+      if (target) {
+        console.info(`[path update] correction: ${key} ${target.id} "${target.text}" replaced by "${item.text}"`);
+        list = list.map(b => (b === target ? { ...item, id: b.id } : b));
+      } else if (!list.some(b => norm(b.text) === norm(item.text))) {
+        if (list.length >= SUMMARY_CAPS.must_items) { console.warn(`[path update] correction: ${key} full, not added: "${item.text}"`); continue; }
+        list.push(item);
+      }
+    }
+    const returned = Array.isArray(out[key]) ? (out[key] as Array<{ text?: unknown }>).map(i => (typeof i?.text === 'string' ? norm(i.text) : '')) : null;
+    const leftOut = returned ? base.filter(b => !returned.includes(norm(b.text)) && list.includes(b)) : [];
+    if (leftOut.length) console.info(`[path update] correction: kept ${key} call A's list left out: ${leftOut.map(b => `"${b.text}"`).join(', ')}`);
+    return list.map((item, i) => ({ ...item, id: `${prefix}${i + 1}` }));
+  }
   // "Zyrro's guess" is decided in code (brief 168-direction-and-card, Part B
   // item 2): an item resting on one of the user's messages in this
   // conversation, which includes everything added from a correction note, is
@@ -1089,8 +1128,32 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   let base = validated?.summary ?? s.summary;
   const opening = s.profile.opening_read.value?.text ?? null;
   const name = firstNameOf(s.digest);
-  const read = base.confirmed_read;
-  const readProblem = read ? confirmedReadProblem(read.text, opening, name) : null;
+  let read = base.confirmed_read;
+  let readProblem = read ? confirmedReadProblem(read.text, opening, name) : null;
+  // One retry from call A with the reason (step 1b), before the cleaned version.
+  if (read && readProblem) {
+    console.warn(`[path update] confirmed_read rejected (${readProblem}); asking call A once more: ${JSON.stringify(read.text)}`);
+    const retry = await chatJson([
+      ...callAMessages,
+      { role: 'system', content: `Your confirmed_read was not usable: it ${readProblem.replace(/^copies/, 'copied').replace(/^says/, 'said').replace(/^starts/, 'started')}. Return the same JSON object again. Only summary_changes.confirmed_read will be used: how the user now stands, in your own words as a record about them, never taken from Zyrro's message, with no greeting and nothing about what is not known.` },
+    ], 0.2, `${callLabel} (read retry)`, undefined, conversationId);
+    extraTokens += retry.tokens;
+    const changes = retry.parsed?.summary_changes && typeof retry.parsed.summary_changes === 'object' ? (retry.parsed.summary_changes as Record<string, unknown>) : null;
+    const again = changes?.confirmed_read
+      ? validateSummary(mergeSummaryChanges(base, { confirmed_read: changes.confirmed_read }), { index: s.index, confirmedRefs, previous: base })?.summary.confirmed_read ?? null
+      : null;
+    const againProblem = again ? confirmedReadProblem(again.text, opening, name) : 'no read returned';
+    if (again && !againProblem) {
+      console.info(`[path update] confirmed_read retry accepted: ${JSON.stringify(again.text)}`);
+      base = { ...base, confirmed_read: again };
+      read = again;
+      readProblem = null;
+    } else {
+      console.warn(`[path update] confirmed_read retry rejected too (${againProblem}): ${JSON.stringify(again?.text ?? null)}`);
+      if (again) read = again;
+      readProblem = againProblem;
+    }
+  }
   if (read && readProblem) {
     const cleaned = cleanConfirmedRead(read.text, opening, name);
     const prev = s.summary.confirmed_read;
@@ -1109,7 +1172,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
 
   return {
     ok: true as const,
-    tokens: update.tokens + voiced.tokens,
+    tokens: update.tokens + voiced.tokens + extraTokens,
     profile,
     changed: applied.changed,
     summary,
@@ -1151,9 +1214,15 @@ async function runReply(
   const interpretive = next.kind === 'open_read' || next.kind === 'card' || next.kind === 'card_clarify' || !!reflection;
   const summary = interpretive ? s.summary : { ...s.summary, tensions: [], connections: [] };
   const replyInsights = interpretive ? insights : [];
+  // Step 1b: on other turns call B still gets the user's own earlier words the
+  // latest answer touches (the sources call A linked it to, without call A's
+  // reading), so it can say what the answer adds compared with them.
+  const earlierRefs = interpretive ? [] : sourceRefs(insights.flatMap(i => i.refs)).filter(r => r !== LATEST_REF);
+  const earlier = resolveExcerpts(earlierRefs, s.index);
   const used = new Set(s.profile.meta.used_refs);
   const excerpts = resolveExcerpts([
     ...summaryRefs(summary),
+    ...earlierRefs,
     ...replyInsights.flatMap(i => i.refs),
     ...(reflection?.refs ?? []),
     ...(next.kind === 'clarify' ? next.contradiction.refs : []),
@@ -1172,6 +1241,7 @@ async function runReply(
         fixed_choices: fixed ? { ...fixed, card: undefined, preselected: undefined } : null,
         summary,
         turn_insights: replyInsights,
+        earlier_answers: Object.entries(earlier).map(([ref, text]) => ({ ref, text })),
         evidence,
         ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile), direction: directionFacts(s.profile, s.ownIndex) }),
         recent_messages: s.all.slice(-REPLY_RECENT_MESSAGES).map(({ role, content }) => ({ role, content })),
