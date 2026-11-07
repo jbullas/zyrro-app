@@ -33,7 +33,7 @@ Return "must_haves" and "must_avoids" only when a list changes; otherwise null. 
 - A must-avoid names what the user actually objects to, in their terms and at the scope they gave it. When they object to one form, frequency or framing of something they otherwise value or accept, it names that form, never the thing as a whole.
 - ref: the one questionnaire answer (Q followed by the number) or user message (m: followed by its id, or m:latest) it comes from. quote: the words from that source that support it, copied exactly, at least three words; an item whose quote is not found there is discarded. basis: "stated" when the user said it plainly, "inferred" when it is your reading.
 - A removed item stays out in that exact form. When the user's correction asks for a reworded, narrower or different version of it, add that version.
-- In summary_correction mode, return must_haves and must_avoids as null: code keeps every item on the card that the user did not remove. Put every item the note asks to add, or to reword, in added_from_note, as they put it, close to their own words. Do not swap in a related item from elsewhere instead.
+- In summary_correction mode, return must_haves and must_avoids as null: code keeps every item on the card that the user did not remove, and another step adds or rewords what their note asks for.
 - Drop an item the user has contradicted.
 
 3. SUMMARY CHANGES
@@ -57,11 +57,10 @@ If the latest message contradicts something the user said earlier about pushing_
 Only with a PENDING REFLECTION: { "status": "confirmed" | "corrected" | "rejected" | "no_reaction" }. Otherwise null.
 
 7. SUMMARY CORRECTION (summary_correction mode only)
-Apply the user's correction to the profile, the must-haves and must-avoids and the summary. When they correct their direction, return direction with the kind and description as they now put it. "needs_clarification": true only when the note and the marked parts do not tell you what to change; false when you could apply it. Otherwise null.
-"added_from_note": every must-have or must-avoid the user's note asks to add, or asks for in a reworded form, each { "list": "must_haves" | "must_avoids", "text", "quote", "basis", "replaces" }. replaces: the id of the card item this one rewords or takes the place of, when the note asks to change that item into this one; null when it is a new item and every card item stays. text: close to how they put it, never in the first person, and never about the user in the third person: speak to them as you, or use no pronoun for them; quote copied exactly from their note, at least three words. An empty list when the note asks for none; null outside summary_correction mode.
+Apply the user's correction to the profile and the summary; the must-haves and must-avoids are handled by code and another step. When they correct their direction, return direction with the kind and description as they now put it. "needs_clarification": true only when the note and the marked parts do not tell you what to change; false when you could apply it. Otherwise null.
 
 AVOID
 Insights or connections that only restate what the user said; links the evidence does not support; generic personality language; words the user did not write recorded as theirs; signature names or report labels in any text.
 
 OUTPUT
-A JSON object only, with exactly these keys: "profile_updates" (array), "must_haves" (array or null), "must_avoids" (array or null), "summary_changes" (object), "turn_insights" (array), "contradiction" (object or null), "reflection_result" (object or null), "needs_clarification" (boolean or null), "added_from_note" (array or null).`;
+A JSON object only, with exactly these keys: "profile_updates" (array), "must_haves" (array or null), "must_avoids" (array or null), "summary_changes" (object), "turn_insights" (array), "contradiction" (object or null), "reflection_result" (object or null), "needs_clarification" (boolean or null).`;

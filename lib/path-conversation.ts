@@ -53,9 +53,12 @@ import {
   fallbackDirectionLine,
   hasFirstPerson,
   mechanicalSecondPerson,
+  personCutFrom,
+  secondPersonFromSource,
   swapToSecondPerson,
   thirdPersonWord,
 } from '@/lib/path-text-checks';
+import { PATH_CORRECTION_ITEMS_PROMPT } from '@/lib/prompts/path-correction-items';
 import { PATH_ITEM_VOICE_PROMPT } from '@/lib/prompts/path-item-voice';
 import { PATH_PROFILE_SEED_PROMPT } from '@/lib/prompts/path-profile-seed';
 import { PATH_REPLY_PROMPT } from '@/lib/prompts/path-reply';
@@ -290,7 +293,18 @@ type MustLists = { must_haves: EvidencedItem[]; must_avoids: EvidencedItem[] };
  * items that don't; those get one small rewrite call (only when there are
  * any); an item that still fails has its pronouns swapped by code.
  */
-async function inSecondPerson(lists: MustLists, firstName: string, conversationId?: string): Promise<{ lists: MustLists; tokens: number }> {
+async function inSecondPerson(input: MustLists, firstName: string, conversationId?: string): Promise<{ lists: MustLists; tokens: number }> {
+  // Step 3: an item that dodged its quote's pronoun by cutting it out is
+  // broken ("…but personally unmoved"); code rebuilds it from the quote with
+  // only the pronouns turned to "you".
+  const uncut = (items: EvidencedItem[]) => items.map(i => {
+    const stretch = personCutFrom(i.text, i.quote);
+    if (!stretch) return i;
+    const text = secondPersonFromSource(stretch);
+    console.warn(`[path items] ${i.id} cut the person out of its quote: "${i.text}"; rebuilt from the quote: "${text}"`);
+    return { ...i, text };
+  });
+  const lists = { must_haves: uncut(input.must_haves), must_avoids: uncut(input.must_avoids) };
   const all = [...lists.must_haves, ...lists.must_avoids];
   // First person counts too: an item copied close to the user's quote came
   // through as "…leave me unmoved" in a live run.
@@ -310,8 +324,9 @@ async function inSecondPerson(lists: MustLists, firstName: string, conversationI
   const fix = (items: EvidencedItem[]) => items.map(i => {
     if (!flagged.includes(i)) return i;
     const r = rewritten.get(i.id);
-    if (r && r.length <= SUMMARY_CAPS.entry_chars && !wrongVoice(r)) return { ...i, text: r };
-    const swapped = swapToSecondPerson(mechanicalSecondPerson(i.text));
+    // A rewrite that cut the person out instead of turning it into "you" is broken too.
+    if (r && r.length <= SUMMARY_CAPS.entry_chars && !wrongVoice(r) && !personCutFrom(r, i.text)) return { ...i, text: r };
+    const swapped = swapToSecondPerson(mechanicalSecondPerson(i.text), false);
     console.warn(`[path items] rewrite unusable for ${i.id} (${JSON.stringify(r ?? null)}); pronouns swapped by code: "${swapped}"`);
     return { ...i, text: swapped };
   });
@@ -1004,9 +1019,29 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
       }),
     },
   ];
-  const update = await chatJson(callAMessages, 0.2, callLabel, undefined, conversationId);
-  if (!update.parsed) return { ok: false as const, tokens: update.tokens };
-  let extraTokens = 0;
+  // Step 3: what the correction note asks to add or reword comes from its own
+  // small call, which sees only the note and the card's items (call A
+  // returned none in a live run, so a requested item waited a whole round).
+  // It runs alongside call A, so it adds no waiting.
+  const correctionNote = input.mode === 'summary_correction' ? input.correction?.note ?? null : null;
+  const [update, noteCall] = await Promise.all([
+    chatJson(callAMessages, 0.2, callLabel, undefined, conversationId),
+    correctionNote && input.correction
+      ? chatJson([
+          { role: 'system', content: PATH_CORRECTION_ITEMS_PROMPT },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              note: correctionNote,
+              must_haves: input.correction.card.must_haves.map(({ id, text }) => ({ id, text })),
+              must_avoids: input.correction.card.must_avoids.map(({ id, text }) => ({ id, text })),
+            }),
+          },
+        ], 0.2, 'path correction items', undefined, conversationId)
+      : Promise.resolve(null),
+  ]);
+  if (!update.parsed) return { ok: false as const, tokens: update.tokens + (noteCall?.tokens ?? 0) };
+  let extraTokens = noteCall?.tokens ?? 0;
   const out = update.parsed;
 
   const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex));
@@ -1030,18 +1065,21 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   // check (ref fixed to the note): in live runs a full list sometimes came back
   // without the reworded item the user had asked for.
   const requested = { must_haves: [] as unknown[], must_avoids: [] as unknown[] };
-  if (input.mode === 'summary_correction' && Array.isArray(out.added_from_note)) {
-    for (const a of out.added_from_note) {
+  const noteItems = noteCall?.parsed?.items;
+  if (input.mode === 'summary_correction' && Array.isArray(noteItems)) {
+    for (const a of noteItems) {
       const o = a && typeof a === 'object' ? (a as Record<string, unknown>) : null;
-      if (o?.list === 'must_haves' || o?.list === 'must_avoids') requested[o.list].push({ ...o, ref: LATEST_REF });
+      // Each quote is checked against the note itself (ref m:latest).
+      if (o?.list === 'must_haves' || o?.list === 'must_avoids') requested[o.list].push({ ...o, ref: LATEST_REF, basis: 'stated' });
     }
+    console.info(`[path update] correction items asked for by the note: ${JSON.stringify(noteItems)}`);
   }
   const withRequested = (key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a') => {
     if (input.mode === 'summary_correction') return correctedList(key, prefix);
     const base = pick(key, prefix);
     if (!requested[key].length) return base;
     const checked = validateEvidenced(requested[key], s.ownIndex, prefix, []);
-    if (checked.dropped.length) console.warn(`[path update] added_from_note ${key} dropped: ${checked.dropped.join('; ')}`);
+    if (checked.dropped.length) console.warn(`[path update] note item ${key} dropped: ${checked.dropped.join('; ')}`);
     const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
     const added = checked.items.filter(i => !base.some(b => norm(b.text) === norm(i.text)));
     const merged = [...base.slice(0, Math.max(0, SUMMARY_CAPS.must_items - added.length)), ...added];
@@ -1059,16 +1097,9 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     const base = current?.[key] ?? [];
     const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
     let list = [...base];
-    // An item the note asked for sometimes comes back only inside call A's
-    // full list (live run): a new item there resting on the note counts as an
-    // addition too. Nothing in that list removes anything.
-    const fromList = (Array.isArray(out[key]) ? (out[key] as unknown[]) : []).filter(raw => {
-      const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
-      return o?.ref === LATEST_REF && typeof o.text === 'string' && !base.some(b => norm(b.text) === norm(o.text as string));
-    });
-    for (const raw of [...requested[key], ...fromList]) {
+    for (const raw of requested[key]) {
       const checked = validateEvidenced([raw], s.ownIndex, prefix, []);
-      if (checked.dropped.length) { console.warn(`[path update] added_from_note ${key} dropped: ${checked.dropped.join('; ')}`); continue; }
+      if (checked.dropped.length) { console.warn(`[path update] note item ${key} dropped: ${checked.dropped.join('; ')}`); continue; }
       const item = checked.items[0];
       const replaces = typeof (raw as Record<string, unknown>).replaces === 'string' ? (raw as Record<string, string>).replaces : null;
       const target = replaces ? list.find(b => b.id === replaces) : undefined;
@@ -1527,6 +1558,9 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
   const ids = userMessage.selected_choice_ids ?? [];
   const note = userMessage.note ?? null;
   let tokens = 0;
+  // What the user had said about each risk line before this turn, so a
+  // corrected card knows which lines are unchanged (step 3).
+  const factsBefore = JSON.parse(JSON.stringify(s.profile.risk_time.value?.line_facts ?? {})) as Record<string, unknown>;
 
   // Removals on the card are applied by code, exactly. Only that exact item is
   // blocked from coming back; a reworded version the user asks for may be added.
@@ -1714,16 +1748,21 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       direction = dir.direction ?? null;
     }
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
-    // A line whose value didn't change keeps its note unless the new card
-    // writes one (a regenerated card once dropped qualifiers the user never touched).
+    // Step 3: a line whose value and whose fact didn't change keeps exactly the
+    // note it had (or none); only a changed line gets the new card's note. A
+    // regenerated note once carried a doubt from another section onto a line
+    // the correction never touched.
     const previous = card.risk;
-    const unchanged = cardRisk(s.profile);
-    const keptNotes: Partial<Record<RiskLine, string>> = {};
+    const now = cardRisk(s.profile);
+    const factsNow = s.profile.risk_time.value?.line_facts ?? {};
+    const notes: Partial<Record<RiskLine, string>> = {};
     for (const l of RISK_LINES) {
-      const same = l === 'deadline' ? previous.deadline === unchanged.deadline : previous[l] === unchanged[l];
-      if (same && previous.notes?.[l]) keptNotes[l] = previous.notes[l];
+      const sameValue = l === 'deadline' ? previous.deadline === now.deadline : previous[l] === now[l];
+      const sameFact = JSON.stringify(factsBefore[l] ?? null) === JSON.stringify(factsNow[l] ?? null);
+      const lineNote = sameValue && sameFact ? previous.notes?.[l] : prose.notes[l];
+      if (lineNote) notes[l] = lineNote;
     }
-    const fresh = buildCard(round, { ...prose, notes: { ...keptNotes, ...prose.notes } }, s.profile, direction);
+    const fresh = buildCard(round, { ...prose, notes }, s.profile, direction);
     return {
       ok: true,
       assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },

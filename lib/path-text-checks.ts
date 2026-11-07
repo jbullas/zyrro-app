@@ -71,7 +71,7 @@ export function directionLineProblem(line: string, sources: string[]): string | 
 }
 
 /** "I'd like…" as "You'd like…": pronouns swapped, nothing else changed. */
-export function swapToSecondPerson(text: string): string {
+export function swapToSecondPerson(text: string, capitalize = true): string {
   const swapped = text
     .replace(/[‘’]/g, "'")
     .replace(/\bI am\b/g, 'you are')
@@ -86,7 +86,8 @@ export function swapToSecondPerson(text: string): string {
     .replace(/\bmy\b/gi, 'your')
     .replace(/\bme\b/gi, 'you')
     .replace(/'/g, '’');
-  // "you" opening any sentence takes a capital.
+  // "you" opening any sentence takes a capital (not for card items, which are phrases).
+  if (!capitalize) return swapped;
   return swapped.replace(/(^|[.!?]\s+)([a-z])/g, (_, lead: string, c: string) => lead + c.toUpperCase());
 }
 
@@ -124,6 +125,47 @@ export function thirdPersonWord(item: string, firstName: string | null): string 
   const p = t.match(PLURAL_THEY);
   if (p && !OTHER_PEOPLE.test(t)) return p[2];
   return null;
+}
+
+// Words that refer to a person; cutting one out of a phrase leaves it broken.
+const PERSON_WORDS = new Set([
+  'i', "i'm", "i'd", "i've", "i'll", 'me', 'my', 'mine', 'myself',
+  'she', 'he', 'her', 'him', 'his', 'hers', 'herself', 'himself',
+  'they', 'them', 'their', 'theirs', 'themselves', "they're", "they've",
+]);
+
+const bare = (w: string) => normalize(w).replace(/[^\p{L}\p{N}']/gu, '');
+
+/**
+ * Brief 168-card-fixes, step 3: a rewrite that dodged a pronoun by cutting it
+ * out ("…but leave me personally unmoved" → "…but personally unmoved"). The
+ * item's words appear in order in the source, and the words left out between
+ * them include a word for a person. Returns the matching stretch of the
+ * source, so the caller can swap its pronouns instead; null when the item
+ * is not such a cut.
+ */
+export function personCutFrom(item: string, source: string): string | null {
+  const src = source.replace(/[‘’]/g, "'").split(/\s+/).filter(Boolean);
+  const words = item.split(/\s+/).map(bare).filter(Boolean);
+  if (words.length < 3) return null;
+  const matched: number[] = [];
+  let at = 0;
+  for (const w of words) {
+    while (at < src.length && bare(src[at]) !== w) at++;
+    if (at >= src.length) return null;
+    matched.push(at++);
+  }
+  const first = matched[0];
+  const last = matched[matched.length - 1];
+  const cut = [];
+  for (let i = first; i <= last; i++) if (!matched.includes(i)) cut.push(bare(src[i]));
+  if (!cut.some(w => PERSON_WORDS.has(w))) return null;
+  return src.slice(first, last + 1).join(' ').replace(/[.,;:!?]+$/, '');
+}
+
+/** An item rebuilt from its source stretch with only the pronouns turned to the second person. */
+export function secondPersonFromSource(stretch: string): string {
+  return swapToSecondPerson(mechanicalSecondPerson(stretch), false);
 }
 
 const VERB_AGREEMENT: Record<string, string> = { is: 'are', was: 'were', has: 'have', does: 'do', "isn't": "aren't", "wasn't": "weren't", "doesn't": "don't", "hasn't": "haven't" };
