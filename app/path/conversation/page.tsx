@@ -294,12 +294,22 @@ export default function PathConversationPage() {
         hideComposer={!showComposer}
         renderAssistant={message =>
           message.choices?.card ? (
-            <PathSummaryCard
-              card={message.choices.card}
-              choices={answerable(message) ? message.choices : null}
-              disabled={sending}
-              onSubmit={(ids, note) => handleChoice(message, ids, note)}
-            />
+            // Every card after the first opens with its code-owned context line,
+            // as an ordinary assistant bubble above the card in the same message
+            // (brief 168-card-fixes, fix 1).
+            <div className="flex flex-col gap-8 w-full">
+              {message.choices.card.intro && (
+                <div className="mentor-bubble mentor-bubble--assistant self-start">
+                  <p className="mentor-md-p">{message.choices.card.intro}</p>
+                </div>
+              )}
+              <PathSummaryCard
+                card={message.choices.card}
+                choices={answerable(message) ? message.choices : null}
+                disabled={sending}
+                onSubmit={(ids, note) => handleChoice(message, ids, note)}
+              />
+            </div>
           ) : null
         }
         renderInBubble={message =>
