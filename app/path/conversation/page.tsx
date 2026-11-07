@@ -9,7 +9,7 @@ import ChatThread from '@/components/ChatThread';
 import ChatChoices from '@/components/ChatChoices';
 import PathSummaryCard from '@/components/PathSummaryCard';
 import PathStart from '@/components/PathStart';
-import { choiceContent, type ChatChoiceSet } from '@/lib/chat-choices';
+import { choiceAnswerRows, choiceContent, noteFromContent, type ChatChoiceSet } from '@/lib/chat-choices';
 
 // #168: the new Path conversation, built alongside the current /path flow
 // (which stays untouched until the switchover). Temporary route, reachable
@@ -42,6 +42,36 @@ function currentStep(phase: PathPhase, confirmed: boolean, messages: PathMessage
   if (confirmed || phase === 'options' || phase === 'chosen') return 3;
   if (phase === 'summary') return 2;
   return messages.some(m => m.role === 'user') ? 1 : 0;
+}
+
+/**
+ * A tapped answer in the user's bubble (brief 168-direction-and-card, Part B
+ * item 5): each question muted with the answer under it in normal text, then
+ * the note. Rebuilt from the tapped ids and the choices on the message they
+ * answered, so the saved thread reads the same on reload. Null for a typed
+ * message, so ChatThread shows it as it is (a plain function, not a
+ * component: a component element is never null, and would blank the bubble).
+ */
+function tappedAnswer(messages: PathMessage[], index: number) {
+  const message = messages[index];
+  if (!message.selected_choice_ids) return null;
+  const answered = messages.slice(0, index).reverse().find(m => m.role === 'assistant');
+  const choices = answered?.choices;
+  if (!choices) return null;
+  const rows = choiceAnswerRows(choices, message.selected_choice_ids);
+  const note = noteFromContent(choices, message.selected_choice_ids, message.content);
+  if (!rows.length && !note) return null;
+  return (
+    <span className="flex flex-col gap-8">
+      {rows.map(row => (
+        <span key={`${row.question ?? ''}:${row.answer}`} className="flex flex-col">
+          {row.question && <span className="path-tap-question">{row.question}</span>}
+          <span>{row.answer}</span>
+        </span>
+      ))}
+      {note && <span className="whitespace-pre-wrap">{note}</span>}
+    </span>
+  );
 }
 
 function PathHeader({ step }: { step: number }) {
@@ -260,6 +290,7 @@ export default function PathConversationPage() {
         inputRef={inputRef}
         header={<PathHeader step={currentStep(phase, confirmed, messages)} />}
         preserveUserLineBreaks
+        renderUser={(_, i) => tappedAnswer(messages, i)}
         hideComposer={!showComposer}
         renderAssistant={message =>
           message.choices?.card ? (

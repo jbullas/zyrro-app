@@ -31,6 +31,9 @@ type ChatThreadProps<M extends ChatThreadMessage> = {
   renderAssistant?: (message: M, index: number) => ReactNode;
   // preserveUserLineBreaks: a tapped answer is several lines (one per question).
   preserveUserLineBreaks?: boolean;
+  // renderUser: replaces the user bubble's content when it returns something
+  // (Path's tapped answers: the question muted, the answer in normal text).
+  renderUser?: (message: M, index: number) => ReactNode;
   // statusText: the typing indicator's line (default "Thinking...").
   statusText?: string;
   // hideComposer: one input at a time; Path hides the free-text box on turns with choices.
@@ -53,6 +56,7 @@ export default function ChatThread<M extends ChatThreadMessage>({
   renderInBubble,
   renderAssistant,
   preserveUserLineBreaks,
+  renderUser,
   statusText,
   hideComposer,
 }: ChatThreadProps<M>) {
@@ -88,6 +92,7 @@ export default function ChatThread<M extends ChatThreadMessage>({
             </ReactMarkdown>
           );
           const inBubble = msg.role === 'assistant' ? renderInBubble?.(msg, i) : null;
+          const userContent = msg.role === 'user' ? renderUser?.(msg, i) : null;
           return (
             <Fragment key={i}>
               {replaced ? (
@@ -102,6 +107,8 @@ export default function ChatThread<M extends ChatThreadMessage>({
                           <div>{inBubble}</div>
                         </div>
                       ) : markdown
+                    ) : userContent ? (
+                      userContent
                     ) : preserveUserLineBreaks ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (

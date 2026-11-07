@@ -141,6 +141,24 @@ export function choiceLabels(choices: ChatChoiceSet, ids: string[]): string {
   return choices.options.filter(o => ids.includes(o.id)).map(o => o.label).join('; ');
 }
 
+/**
+ * What the user picked, as rows for their bubble (brief 168-direction-and-card,
+ * Part B item 5): each group's question (shown muted) with the answer they
+ * tapped. A single list of options has no question of its own (Zyrro's
+ * message asked it), so its row has the answer only.
+ */
+export function choiceAnswerRows(choices: ChatChoiceSet, ids: string[]): Array<{ question: string | null; answer: string }> {
+  if (choices.mode === 'note') return [];
+  if (choices.mode === 'groups') {
+    return choices.groups.flatMap(group => {
+      const labels = group.options.filter(o => ids.includes(`${group.id}:${o.id}`)).map(o => o.label);
+      return labels.length ? [{ question: group.label, answer: labels.join(', ') }] : [];
+    });
+  }
+  const answer = choices.options.filter(o => ids.includes(o.id)).map(o => o.label).join('; ');
+  return answer ? [{ question: null, answer }] : [];
+}
+
 /** The text of the user's message for a tap: what they picked, then their note. */
 export function choiceContent(choices: ChatChoiceSet, ids: string[], note?: string | null): string {
   return [choiceLabels(choices, ids), note?.trim() || ''].filter(Boolean).join('\n\n');

@@ -80,6 +80,15 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
           <p className="card-sub-label">What you want</p>
           <p className="mentor-md-p">{card.wants}</p>
         </div>
+        {card.direction && (
+          <div>
+            <p className="card-sub-label">Your direction</p>
+            <p className="mentor-md-p">
+              <strong>{card.direction.level}.</strong>
+              {card.direction.text && <> {card.direction.text}</>}
+            </p>
+          </div>
+        )}
         <div>
           <p className="card-sub-label">Must-haves</p>
           {items(card.must_haves, 'energiser-bullets', '+')}

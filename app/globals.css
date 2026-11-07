@@ -2420,3 +2420,10 @@ p {
 .path-question + .path-question-hint {
   margin-top: 2px;
 }
+
+/* A tapped answer in the user's bubble: the question it answers, muted, above
+   the answer in normal text (brief 168-direction-and-card, Part B item 5). */
+.path-tap-question {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
