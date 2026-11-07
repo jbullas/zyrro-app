@@ -1,6 +1,6 @@
 # Zyrro Path and Plan Redesign (draft)
 
-Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
+Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
 
 ## Goal
 
@@ -20,8 +20,8 @@ Behind the conversation sits a profile that fills in as the user talks. Six item
 
 1. **Opening read:** the user has confirmed or corrected Zyrro's plain-language read of them.
 2. **What's pushing them now,** and any deadline.
-3. **What they've tried before** to change things, and why it didn't stick.
-4. **Clarity of direction:** a specific idea, a rough leaning, or no idea.
+3. **What they've tried before** to change things, and why it didn't stick. Context from the 13 answers only, never asked: each attempt needs an answer reference and an exact quote, checked in code like must-haves, and anything that fails the check is dropped. Kept so the options don't re-offer what already failed; not shown on the card.
+4. **Clarity of direction:** a clear direction, a rough sense, or not yet, plus the user's own words when they have one. Something the user names that belongs to their free time rather than to where their life and work are heading is recorded in their words, but it is not the direction.
 5. **Risk, constraints and time:** the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; or not sure yet); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
 6. **Must-haves and must-avoids:** what a good direction has to include and what it has to avoid, taken from what the user said.
 
@@ -35,20 +35,19 @@ Zyrro never asks what the user has already told it. Before the conversation, one
 | --- | --- | --- |
 | Opening read | Questionnaire first, report as support | Always shown, always confirmed or corrected |
 | Pushing them now | Q6 to Q10, Q13 | Usually known. Not asked separately; folded into the opening read |
-| Tried before | Q3, Q5, Q10 partly | Usually partial. Ask |
-| Direction | Q13 says what to change, not where to go | Missing. Ask |
+| Tried before | Q3, Q5, Q10 partly | Context only. Never asked |
+| Direction | Q13 says what to change, not where to go | Missing. Ask: a clear one, a rough sense or not yet, plus their words |
 | Risk, constraints, time | Hints only: Q1, Q2, Q3, Q10 | Missing. Ask, as one turn |
 | Must-haves and must-avoids | Q4, Q7, Q9, Q11, Q12 and the conversation | Derived by Zyrro, confirmed in the summary |
 
 ## Conversation order
 
-About five exchanges, then the summary. Five is a target, not a cap: a vague answer, a contradiction or a rejected read can justify an extra question, but only one whose answer would change the options. If the user gives something away early, Zyrro records it and skips the question later.
+About four exchanges, then the summary. Four is a target, not a cap: a vague answer, a contradiction or a rejected read can justify an extra question, but only one whose answer would change the options. If the user gives something away early, Zyrro records it and skips the question later.
 
-1. **Opening read.** Two or three plain sentences on how Zyrro sees the user and what's pressing on them now, including any deadline and what's still unknown about it. No signature names. Tap choices (that's right, partly, not quite) plus room to say what's off. The user's corrections here feed everything after.
-2. **What they've tried before.** What they tried, and what got in the way.
-3. **Where they want to go.** Zyrro adapts to a specific idea, a rough leaning, or no idea. If it has noticed a connection the user hasn't made, it offers it in the same message as this question, not as a separate turn.
-4. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. Tap choices for the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; not sure yet) and for what they'd put at risk (including "not sure yet"), a choice of hours per week, and a direct question about hard limits, with "nothing off the table" as a choice.
-5. **Summary.** The one explicit confirmation before options (see Summary before options).
+1. **Opening read.** Two or three plain sentences on how Zyrro sees the user and what's pressing on them now, including any deadline and what's still unknown about it. No signature names. Tap choices (that's right, partly, not quite) plus room to add something or correct the read. What the user adds or corrects here feeds everything after; a note sent with "that's right" is added context, not a correction.
+2. **Where they want to go.** One turn. The message makes clear the question is about where their life and work go from here, not how they spend their free time. Tap choices for whether they have a sense of the direction they want to move in (a clear one, a rough sense, not yet), worded so as not to assume they have one; "not yet" is a full answer. An optional note in the same turn asks what it is, if they have one, so they can put it in their own words before Zyrro replies. If they have a clear or rough direction and what they wrote is missing or too broad to build options on, Zyrro asks one question to sharpen it, which may include whether they have tried it and what got in the way. At most one follow-up, and none after "not yet". If Zyrro has noticed a connection the user hasn't made, it offers it in the same message as the direction question, not as a separate turn.
+3. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. Tap choices for the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; not sure yet) and for what they'd put at risk (including "not sure yet"), a choice of hours per week, and a direct question about hard limits, with "nothing off the table" as a choice.
+4. **Summary.** The one explicit confirmation before options (see Summary before options).
 
 ## When Zyrro has enough
 
@@ -56,16 +55,15 @@ An item is needed only if its answer would change the options. Each needed item 
 
 - Opening read: confirmed or corrected.
 - Pushing them: the main pressure is known, plus whether there's a deadline ("no rush" counts).
-- Tried before: at least one past attempt and why it stalled, or a clear "never tried".
-- Direction: specific idea, rough leaning, or no idea.
+- Direction: a clear direction, a rough sense, or not yet, plus their words when they have one.
 - Risk, constraints, time: the change they're ready for now (or not sure yet), what they'd put at risk (or not sure yet), hard limits (or none), hours per week now.
 
 ## Summary before options
 
-When the needed items are filled, the conversation phase ends and the summary card appears in the same turn. No message announces it. The card shows how Zyrro sees the user (not a list of their answers), what they want, their must-haves and must-avoids, and their risk, limits and hours.
+When the needed items are filled, the conversation phase ends and the summary card appears in the same turn. No message announces it. The card shows how Zyrro sees the user (not a list of their answers), what they want, their direction (the level and, when they have one, their direction in their own words; after "not yet", a line saying the options will start from their strengths), their must-haves and must-avoids, and their risk, limits and hours.
 
 - Choices: that's right, mostly (with changes), that's not it, plus an optional note.
-- "Mostly" or "that's not it" needs a note or a pick of which part is off (the read, what they want, must-haves, must-avoids, risk and limits). Zyrro may ask one clarifying question, then updates the summary and shows it again. Each must-have and must-avoid can also be removed on its own.
+- "Mostly" or "that's not it" needs a note or a pick of which part is off (the read, what they want, direction, must-haves, must-avoids, risk and limits). Zyrro may ask one clarifying question, then updates the summary and shows it again. Each must-have and must-avoid can also be removed on its own.
 - Only after confirmation are options generated.
 - The free-text box is not shown once the conversation phase has ended.
 
