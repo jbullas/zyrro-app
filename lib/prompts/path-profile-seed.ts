@@ -20,7 +20,12 @@ Return an entry for each of these four items. Each entry: { "status": "known" | 
    - A decision the user says they are putting off or postponing, with a term, renewal, review or date attached to it, is a deadline: urgency "deadline", and deadline names that decision and its timing in a few plain words, without inventing a date the user did not give.
    - Otherwise set urgency only when an answer says it plainly; when nothing says it, null.
    - pressure and deadline are plain phrases about the user, never in the first person.
-2. tried_before: value null. refs: the answers that hint at what they have tried.
+2. tried_before: what they have already done to change their situation, as the answers describe it. Value: { "attempts": [ { "what": string, "why_it_stalled": string, "ref": string, "quote": string, "why_quote": string } ] }, up to 4, or null when the answers describe none.
+   - An attempt is something they did on purpose to change or escape what was wrong for them, which did not fix it or did not last. That includes a change they made to their work, hours or role, even when an answer mentions it in passing while talking about something else; read every answer for these.
+   - Not attempts: experiences they enjoyed, roles or projects that went well, things that happened to them, a wish, or a plan they never acted on.
+   - what and why_it_stalled: plain phrases about the user, never in the first person. why_it_stalled says how it fell short, as the answer says it; when the answers do not say how it fell short, it is not an attempt.
+   - ref: the one answer it comes from, written as Q followed by the number. quote: the words from that answer that show what they did; why_quote: the words from the same answer that say how it fell short. Both copied exactly, at least three words each. An attempt whose quotes are not both in that answer is discarded.
+   This item is never asked about; it is kept so the options do not offer again what already failed.
 3. direction: value null. refs: the answers that hint at where they might want to go. A wish to change something is not a direction.
 4. risk_time: value null. refs: the answers that hint at what they can risk, their limits, or their time.
 "known" means stated directly in an answer; "inferred" means only suggested. Never invent: when unsure, choose missing.
@@ -38,7 +43,7 @@ The first version of Zyrro's living summary of this user. It is rewritten during
 - confirmed_read: null. It is written once the user has responded to Zyrro's first message.
 - tensions: up to 3, { "text", "refs", "confirmed_by_user": false }. Pulls in different directions within this person.
 - connections: up to 4, same shape. Links between answers, or between an answer and the report, that the user has not spelled out.
-- tried: an empty list. It is filled from the conversation.
+- tried: an empty list. Code fills it from the checked attempts.
 - pushing: { "text", "urgency", "deadline", "refs" } or null, following the deadline rule above.
 - direction: { "kind": null, "text": null, "refs": [] }.
 - open_questions: up to 3 short questions Zyrro has about this person.

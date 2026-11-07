@@ -16,9 +16,13 @@ import {
   ASKED_ITEMS,
   AT_STAKE_CARD_LABELS,
   AT_STAKE_LABELS,
+  DIRECTION_CARD_LABELS,
   DIRECTION_LABELS,
+  DIRECTION_NOTE_PLACEHOLDER,
+  DIRECTION_QUESTION,
   emptyProfile,
   HOURS_BANDS,
+  inUserWordsAsYou,
   isItemComplete,
   isPathProfile,
   ITEM_KEYS,
@@ -26,6 +30,8 @@ import {
   LIMIT_CARD_LABELS,
   LIMIT_LABELS,
   MODEL_ITEMS,
+  NOT_YET_LINE,
+  openingNoteIsContext,
   openItems,
   READINESS_CARD_LABELS,
   READINESS_LABELS,
@@ -35,6 +41,7 @@ import {
   withMetaDefaults,
   type Asked,
   type AskedItem,
+  type EvidenceCheck,
   type EvidencedItem,
   type PathProfile,
 } from '@/lib/path-profile';
@@ -47,10 +54,11 @@ import {
   isCurrentSummary,
   loadUserSummary,
   mergeSummaryChanges,
+  quoteFound,
   resolveExcerpts,
   sourceRefs,
   summaryRefs,
-  syncMustItems,
+  syncFromProfile,
   validateEvidenced,
   validateSummary,
   writeUserSummary,
@@ -237,6 +245,27 @@ function ownIndexFor(digest: ContextDigest, messages: OwnMessage[]): RefIndex {
   return buildRefIndex({ answers: digest.answers, reportFields: {}, userMessages: messages });
 }
 
+/** Everything the user has typed in this conversation (their messages and notes). */
+function userTextOf(ownIndex: RefIndex): string {
+  return [...ownIndex].filter(([ref]) => ref.startsWith('m:')).map(([, text]) => text).join('\n');
+}
+
+/**
+ * The checks on what the model records as the user's words: a quote must be
+ * found in the questionnaire answer or user message it cites, and a phrase in
+ * their own words must be mostly what they typed.
+ */
+function evidenceCheck(ownIndex: RefIndex): EvidenceCheck {
+  return {
+    quote: (ref, quote) => {
+      if (!/^Q\d+$/.test(ref) && !ref.startsWith('m:')) return false;
+      const source = ownIndex.get(ref);
+      return !!source && quoteFound(quote, source);
+    },
+    userText: userTextOf(ownIndex),
+  };
+}
+
 // temperature undefined: the model's default (the newer models only accept that).
 // Logs one usage line per call (tokens, cache hits, reasoning, latency).
 async function chatJson(
@@ -323,7 +352,7 @@ export async function seedPath(digest: ContextDigest, conversationId?: string): 
       && Array.isArray(parsed.must_haves) && Array.isArray(parsed.must_avoids)
       && !!parsed.summary && typeof parsed.summary === 'object';
     if (parsed && complete) {
-      const profile = seedProfile(parsed.profile);
+      const profile = seedProfile(parsed.profile, evidenceCheck(ownIndex));
       const haves = validateEvidenced(parsed.must_haves, ownIndex, 'h', []);
       const avoids = validateEvidenced(parsed.must_avoids, ownIndex, 'a', []);
       const dropped = [...haves.dropped, ...avoids.dropped];
@@ -335,9 +364,10 @@ export async function seedPath(digest: ContextDigest, conversationId?: string): 
         source: 'questionnaire',
       };
       const validated = validateSummary(parsed.summary, { index, confirmedRefs: [], previous: null });
-      // Nothing is confirmed, and nothing counts as tried, before the user has spoken.
-      const summary = { ...(validated?.summary ?? emptySummary()), confirmed_read: null, tried: [] };
-      return { profile, summary: syncMustItems(summary, profile), tokens, fromModel: true };
+      // Nothing is confirmed before the user has spoken; what they've tried
+      // comes only from the checked attempts (syncFromProfile).
+      const summary = { ...(validated?.summary ?? emptySummary()), confirmed_read: null };
+      return { profile, summary: syncFromProfile(summary, profile), tokens, fromModel: true };
     }
     console.warn(`[path seed] unusable output (attempt ${attempt + 1})`);
   }
@@ -504,16 +534,19 @@ function openingReadChoices(profile: PathProfile): ChatChoiceSet {
       ],
     });
   }
-  return { mode: 'groups', purpose: 'opening_read', groups, note: { placeholder: 'Anything I got wrong? (optional)' } };
+  // Added context or a correction, whichever it is (brief 168-direction-and-card, Part B item 1).
+  return { mode: 'groups', purpose: 'opening_read', groups, note: { placeholder: 'Anything you’d like to add or correct? (Optional)' } };
 }
 
+// Brief 168-direction-and-card, Part A item 2: worded so as not to assume they
+// have a direction; the optional note lets them say what it is.
 function directionChoices(): ChatChoiceSet {
   return {
     mode: 'groups',
     purpose: 'direction',
-    note: { placeholder: 'What is it? (optional)' },
+    note: { placeholder: DIRECTION_NOTE_PLACEHOLDER },
     groups: [{
-      id: 'direction', label: 'Do you already have something in mind?', mode: 'single', required: true,
+      id: 'direction', label: DIRECTION_QUESTION, mode: 'single', required: true,
       options: (Object.keys(DIRECTION_LABELS) as Array<keyof typeof DIRECTION_LABELS>).map(id => ({ id, label: DIRECTION_LABELS[id] })),
     }],
   };
@@ -586,6 +619,7 @@ export function normalizeChoices(raw: unknown): ChatChoiceSet | null {
 const CARD_PARTS = [
   { id: 'read', label: 'How Zyrro sees you' },
   { id: 'wants', label: 'What you want' },
+  { id: 'direction', label: 'Your direction' },
   { id: 'must_haves', label: 'Must-haves' },
   { id: 'must_avoids', label: 'Must-avoids' },
   { id: 'risk', label: 'Risk, limits and time' },
@@ -615,27 +649,123 @@ function cardRisk(profile: PathProfile, notes: Partial<Record<RiskLine, string>>
   };
 }
 
-// The facts behind the risk lines, for call B to write the second-person notes from.
+// The facts behind the risk lines, for call B to write the second-person
+// notes from: only what the user said that qualifies each line, per line.
 function riskFacts(profile: PathProfile) {
-  const v = profile.risk_time.value;
+  const facts = profile.risk_time.value?.line_facts ?? {};
   return {
     lines: cardRisk(profile),
-    what_they_said: { limits: v?.limits_detail ?? null, qualifier: v?.qualifier ?? null, deadline: profile.pushing_now.value?.deadline ?? null },
+    what_they_said: Object.fromEntries(RISK_LINES.map(l => [l, facts[l]?.text ?? null])),
   };
 }
 
-type CardProse = { seen_as: string; wants: string; notes: Partial<Record<RiskLine, string>> };
+// What call B gets for the card's direction line.
+function directionFacts(profile: PathProfile) {
+  const v = profile.direction.value;
+  return v ? { level: DIRECTION_CARD_LABELS[v.kind], their_words: v.kind === 'no_idea' ? null : v.description } : null;
+}
 
-function buildCard(round: number, prose: CardProse, profile: PathProfile): SummaryCard {
+type CardProse = { seen_as: string; wants: string; direction: string | null; notes: Partial<Record<RiskLine, string>> };
+
+/**
+ * The card's direction line (brief 168-direction-and-card, Part C item 1): the
+ * level, and their direction as call B put it in the second person when that
+ * is still their words; otherwise their recorded words as they are. After
+ * "Not yet", the code-owned line.
+ */
+function cardDirection(profile: PathProfile, proseText: string | null, userText: string): SummaryCard['direction'] {
+  const v = profile.direction.value;
+  if (!v) return { level: 'Not known yet', text: null };
+  if (v.kind === 'no_idea') return { level: DIRECTION_CARD_LABELS.no_idea, text: NOT_YET_LINE };
+  const level = DIRECTION_CARD_LABELS[v.kind];
+  if (!v.description) return { level, text: null };
+  if (proseText && inUserWordsAsYou(proseText, userText)) return { level, text: proseText };
+  if (proseText) console.warn(`[path card] direction line not in the user's words, using their recorded words: "${proseText}"`);
+  return { level, text: fixDashes(v.description) };
+}
+
+// ── Risk notes: right line only, nothing repeated (Part B items 3 and 4) ──
+
+// A note whose main words are mostly found in another part of the card
+// repeats it. Tuned in live verification; every drop is logged.
+const NOTE_OVERLAP_MAX = 0.6;
+// Short function words carry no content, so they don't count either way.
+const FUNCTION_WORDS = new Set([
+  'your', 'yours', 'with', 'that', 'this', 'from', 'have', 'they', 'them', 'their', 'what', 'when', 'which',
+  'would', 'about', 'into', 'than', 'then', 'there', 'will', 'been', 'more', 'some', 'only', 'just', 'also',
+  'still', 'want', 'wants', 'were', 'it\'s', 'you\'re', 'you\'ve', 'yourself',
+]);
+
+function contentWords(s: string): string[] {
+  return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[^\p{L}\p{N}\s']/gu, ' ')
+    .split(/\s+/).filter(w => w.length > 3 && !FUNCTION_WORDS.has(w));
+}
+
+function overlapShare(note: string, other: string): number {
+  const ws = contentWords(note);
+  if (!ws.length) return 0;
+  const o = new Set(contentWords(other));
+  return ws.filter(w => o.has(w)).length / ws.length;
+}
+
+const LINE_LABELS: Record<RiskLine, string> = {
+  readiness: 'Ready to', at_stake: 'Would put at risk', limits: 'Off the table', hours: 'Time', deadline: 'Deadline',
+};
+
+/**
+ * Code's rule for the risk notes: a line takes a note only when the user said
+ * something that qualifies that line (a checked fact), and a note that mostly
+ * repeats its own line or another part of the card is dropped. Each drop is
+ * logged with the line and the part it matched.
+ */
+function gateRiskNotes(
+  notes: Partial<Record<RiskLine, string>>,
+  profile: PathProfile,
+  card: Pick<SummaryCard, 'wants' | 'direction' | 'must_haves' | 'must_avoids'> & { risk: SummaryCard['risk'] },
+): Partial<Record<RiskLine, string>> {
+  const facts = profile.risk_time.value?.line_facts ?? {};
+  const kept: Partial<Record<RiskLine, string>> = {};
+  for (const line of RISK_LINES) {
+    const note = notes[line];
+    if (!note) continue;
+    if (!facts[line]) {
+      console.info(`[path card note] dropped: line=${line} reason=no_fact note=${JSON.stringify(note)}`);
+      continue;
+    }
+    const lineValue = (l: RiskLine) => (l === 'deadline' ? card.risk.deadline ?? '' : card.risk[l]);
+    const others: Array<[string, string]> = [
+      [`its own line (${LINE_LABELS[line]})`, lineValue(line)],
+      ['What you want', card.wants],
+      ...(card.direction?.text ? [['Your direction', card.direction.text] as [string, string]] : []),
+      ...card.must_haves.map(i => [`Must-have "${i.text}"`, i.text] as [string, string]),
+      ...card.must_avoids.map(i => [`Must-avoid "${i.text}"`, i.text] as [string, string]),
+      ...RISK_LINES.filter(l => l !== line).map(l => [`line ${LINE_LABELS[l]}`, lineValue(l)] as [string, string]),
+      ...Object.entries(kept).map(([l, n]) => [`note on ${LINE_LABELS[l as RiskLine]}`, n] as [string, string]),
+    ];
+    const worst = others
+      .map(([section, text]) => ({ section, share: overlapShare(note, text) }))
+      .sort((a, b) => b.share - a.share)[0];
+    if (worst && worst.share >= NOTE_OVERLAP_MAX) {
+      console.info(`[path card note] dropped: line=${line} reason=overlap matches=${JSON.stringify(worst.section)} share=${worst.share.toFixed(2)} note=${JSON.stringify(note)}`);
+      continue;
+    }
+    kept[line] = note;
+  }
+  return kept;
+}
+
+function buildCard(round: number, prose: CardProse, profile: PathProfile, userText: string): SummaryCard {
   const toItems = (items: EvidencedItem[] = []) => items.map(i => ({ id: i.id, text: fixDashes(i.text), inferred: i.basis === 'inferred' }));
-  return {
+  const base = {
     round,
     seen_as: prose.seen_as,
     wants: prose.wants,
+    direction: cardDirection(profile, prose.direction, userText),
     must_haves: toItems(profile.must_haves_avoids.value?.must_haves),
     must_avoids: toItems(profile.must_haves_avoids.value?.must_avoids),
-    risk: cardRisk(profile, prose.notes),
   };
+  const lines = cardRisk(profile);
+  return { ...base, risk: cardRisk(profile, gateRiskNotes(prose.notes, profile, { ...base, risk: lines })) };
 }
 
 const RISK_KEYS = ['readiness', 'at_stake', 'limits', 'hours'] as const;
@@ -689,9 +819,11 @@ function cardMarkdown(card: SummaryCard): string {
     items.length ? items.map(i => `- ${i.text}${i.inferred ? ' (Zyrro’s guess)' : ''}`).join('\n') : '- None recorded';
   const r = card.risk;
   const line = (label: string, value: string, key: RiskLine) => `- ${label}: ${value}${r.notes?.[key] ? `. ${r.notes[key]}` : ''}`;
+  const d = card.direction;
   return [
     '**How Zyrro sees you**', card.seen_as,
     '**What you want**', card.wants,
+    ...(d ? ['**Your direction**', d.text ? `${d.level}. ${d.text}` : d.level] : []),
     '**Must-haves**', list(card.must_haves),
     '**Must-avoids**', list(card.must_avoids),
     '**Risk, limits and time**',
@@ -790,7 +922,14 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
         latest_message: {
           ref: LATEST_REF,
           ...(input.latest.tapped
-            ? { tapped: { offered: { ...input.latest.tapped.offered, card: undefined, preselected: undefined }, picked: input.latest.tapped.picked }, note: input.latest.own || null }
+            ? {
+                tapped: { offered: { ...input.latest.tapped.offered, card: undefined, preselected: undefined }, picked: input.latest.tapped.picked },
+                note: input.latest.own || null,
+                // The opening read's note: added context or a correction, decided by code.
+                ...(input.latest.tapped.offered.purpose === 'opening_read' && input.latest.own && {
+                  note_is: openingNoteIsContext(input.latest.tapped.picked) ? 'added_context' : 'correction',
+                }),
+              }
             : { text: input.latest.content }),
         },
         asked: input.asked,
@@ -810,7 +949,8 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   if (!update.parsed) return { ok: false as const, tokens: update.tokens };
   const out = update.parsed;
 
-  let profile = applyProfileUpdates(s.profile, out.profile_updates, input.answered).profile;
+  const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex));
+  let profile = applied.profile;
 
   // null (or missing) means unchanged. A returned list that is empty or wholly
   // invalid also keeps what was there: removals are the user's, on the card.
@@ -846,13 +986,22 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     const merged = [...base.slice(0, Math.max(0, SUMMARY_CAPS.must_items - added.length)), ...added];
     return merged.map((item, i) => ({ ...item, id: `${prefix}${i + 1}` }));
   };
+  // "Zyrro's guess" is decided in code (brief 168-direction-and-card, Part B
+  // item 2): an item resting on one of the user's messages in this
+  // conversation, which includes everything added from a correction note, is
+  // what they said. Items from the questionnaire keep the model's call.
+  const statedIfTheirs = (items: EvidencedItem[]) =>
+    items.map(i => (i.ref.startsWith('m:') && i.basis !== 'stated' ? { ...i, basis: 'stated' as const } : i));
   profile = {
     ...profile,
     must_haves_avoids: {
       ...profile.must_haves_avoids,
       status: 'inferred',
       source: 'conversation',
-      value: { must_haves: withRequested('must_haves', 'h'), must_avoids: withRequested('must_avoids', 'a') },
+      value: {
+        must_haves: statedIfTheirs(withRequested('must_haves', 'h')),
+        must_avoids: statedIfTheirs(withRequested('must_avoids', 'a')),
+      },
     },
   };
 
@@ -870,7 +1019,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   if (!merged) {
     console.warn(`[path update] no usable summary_changes (got ${JSON.stringify(out.summary_changes)?.slice(0, 120)}; keys ${Object.keys(out).join(',')}); keeping the summary`);
   }
-  const summary = syncMustItems(validated?.summary ?? s.summary, profile);
+  const summary = syncFromProfile(validated?.summary ?? s.summary, profile);
 
   let contradiction: { item: AskedItem; text: string; refs: string[] } | null = null;
   const c = out.contradiction && typeof out.contradiction === 'object' ? (out.contradiction as Record<string, unknown>) : null;
@@ -883,6 +1032,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     ok: true as const,
     tokens: update.tokens,
     profile,
+    changed: applied.changed,
     summary,
     reflections,
     insights: validInsights(out.turn_insights, s.index),
@@ -926,11 +1076,14 @@ async function runReply(
       content: JSON.stringify({
         first_name: s.digest.report.prepared_for.split(/\s+/)[0] ?? '',
         next,
+        // Added context from the opening read, handed over by code so it never
+        // depends on the summary keeping it (Part B item 1).
+        added_to_read: next.kind === 'open_read' ? null : s.profile.opening_read.value?.added_context ?? null,
         fixed_choices: fixed ? { ...fixed, card: undefined, preselected: undefined } : null,
         summary: s.summary,
         turn_insights: insights,
         evidence,
-        ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile) }),
+        ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile), direction: directionFacts(s.profile) }),
         recent_messages: s.all.slice(-REPLY_RECENT_MESSAGES).map(({ role, content }) => ({ role, content })),
         latest_message: latestText !== null ? { ref: LATEST_REF, content: latestText } : null,
       }),
@@ -945,7 +1098,7 @@ async function runReply(
     tokens += reply.tokens;
     parsed = reply.parsed;
     const notes = parsed?.risk_notes && typeof parsed.risk_notes === 'object' ? Object.values(parsed.risk_notes as Record<string, unknown>) : [];
-    const text = [parsed?.reply, parsed?.seen_as, parsed?.wants, ...notes].filter(t => typeof t === 'string').join(' ');
+    const text = [parsed?.reply, parsed?.seen_as, parsed?.wants, parsed?.direction, ...notes].filter(t => typeof t === 'string').join(' ');
     refsUsed = sourceRefs((Array.isArray(parsed?.refs_used) ? parsed.refs_used : [])
       .filter((r): r is string => typeof r === 'string' && (r === LATEST_REF || r in excerpts)));
     const hit = text ? mentionsSignature(text, s.digest) : null;
@@ -973,6 +1126,7 @@ function addUsedRefs(profile: PathProfile, refs: string[]): PathProfile {
 const CARD_SEEN_AS_MAX = 900;
 const CARD_WANTS_MAX = 600;
 const CARD_NOTE_MAX = 240;
+const CARD_DIRECTION_MAX = 400;
 
 function cardProse(parsed: Record<string, unknown> | null): CardProse | null {
   const seen = typeof parsed?.seen_as === 'string' ? fixDashes(parsed.seen_as.trim()) : '';
@@ -987,7 +1141,8 @@ function cardProse(parsed: Record<string, unknown> | null): CardProse | null {
     const n = typeof raw[line] === 'string' ? fixDashes((raw[line] as string).trim()) : '';
     if (n && n.length <= CARD_NOTE_MAX) notes[line] = n;
   }
-  return { seen_as: seen, wants, notes };
+  const d = typeof parsed?.direction === 'string' ? fixDashes(parsed.direction.trim()) : '';
+  return { seen_as: seen, wants, direction: d && d.length <= CARD_DIRECTION_MAX ? d : null, notes };
 }
 
 async function loadTurnState(ctx: TurnContext, row: PathProfileRow) {
@@ -1056,7 +1211,10 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       }, conversation.id);
       tokens += a.tokens;
       if (!a.ok) return { ok: false, status: 502, error: 'no_usable_update', tokens };
-      s.profile = answeredChoices?.purpose === 'direction' ? keepDirectionKind(a.profile, tapped) : a.profile;
+      // The tapped level stands; only the direction turn (its tap or its one
+      // follow-up) can settle or reopen it.
+      const directionTurn = answeredChoices?.purpose === 'direction' || (asked?.kind === 'follow_up' && asked.item === 'direction');
+      s.profile = keepDirectionKind(a.profile, tapped, a.changed.includes('direction'), directionTurn);
       s.summary = a.summary;
       s.reflections = a.reflections;
       insights = a.insights;
@@ -1088,7 +1246,7 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       tokens += b.tokens;
       const prose = cardProse(b.parsed);
       if (!prose) return { ok: false, status: 502, error: 'no_usable_card', tokens };
-      const card = buildCard(1, prose, s.profile);
+      const card = buildCard(1, prose, s.profile, userTextOf(s.ownIndex));
       cardState = { round: 1, card, correction: null, clarify_pending: false, confirmed: false };
       assistant = { content: cardMarkdown(card), choices: cardChoices(card, s.profile, false) };
     } else {
@@ -1099,7 +1257,7 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       if (!text) return { ok: false, status: 502, error: 'no_usable_reply', tokens };
       s.profile = addUsedRefs(s.profile, [...b.refsUsed, ...(next.kind === 'item' && next.reflection ? next.reflection.refs : [])]);
       if (next.kind === 'open_read') {
-        s.profile = { ...s.profile, opening_read: { ...s.profile.opening_read, value: { text, verdict: null, correction: null } } };
+        s.profile = { ...s.profile, opening_read: { ...s.profile.opening_read, value: { text, verdict: null, correction: null, added_context: null } } };
       }
       if (next.kind === 'item' && next.reflection) {
         s.reflections = [...s.reflections, { id: 'r1', status: 'offered', message_id: null, text: next.reflection.text, refs: next.reflection.refs }];
@@ -1183,7 +1341,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     s.profile = applyRiskTimeTap(s.profile, ids);
     ({ card, changed: riskChanged } = refreshRisk(card, s.profile));
   }
-  s.summary = syncMustItems(s.summary, s.profile);
+  s.summary = syncFromProfile(s.summary, s.profile);
 
   const commitWith = (next: CardState, extra: Record<string, unknown> = {}) => async (saved: StoredMessage[]) => {
     const userId = saved[0]?.id ?? null;
@@ -1311,7 +1469,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       const same = l === 'deadline' ? previous.deadline === unchanged.deadline : previous[l] === unchanged[l];
       if (same && previous.notes?.[l]) keptNotes[l] = previous.notes[l];
     }
-    const fresh = buildCard(round, { ...prose, notes: { ...keptNotes, ...prose.notes } }, s.profile);
+    const fresh = buildCard(round, { ...prose, notes: { ...keptNotes, ...prose.notes } }, s.profile, userTextOf(s.ownIndex));
     return {
       ok: true,
       assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },

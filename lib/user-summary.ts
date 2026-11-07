@@ -183,11 +183,16 @@ export function validateEvidenced(
   };
 }
 
-/** The summary's must-haves and must-avoids always mirror the profile's. */
-export function syncMustItems(summary: UserSummary, profile: PathProfile): UserSummary {
+/**
+ * The summary's must-haves and must-avoids, and what they've tried, always
+ * mirror the profile's. Tried comes only from quote-checked attempts in the
+ * 13 answers (brief 168-direction-and-card, Part A item 1).
+ */
+export function syncFromProfile(summary: UserSummary, profile: PathProfile): UserSummary {
   const v = profile.must_haves_avoids.value;
   const strip = (items: EvidencedItem[] = []) => items.map(({ text, basis }) => ({ text, basis }));
-  return { ...summary, must_haves: strip(v?.must_haves), must_avoids: strip(v?.must_avoids) };
+  const tried = (profile.tried_before.value?.attempts ?? []).map(a => ({ what: a.what, why_it_stalled: a.why_it_stalled, refs: [a.ref] }));
+  return { ...summary, tried, must_haves: strip(v?.must_haves), must_avoids: strip(v?.must_avoids) };
 }
 
 // ── Validation ──────────────────────────────────────────────────────────────
@@ -227,9 +232,22 @@ export type SummaryValidationContext = {
 /**
  * The model's summary, cleaned: refs that don't exist removed, entries without
  * evidence or over length dropped (and logged), lists capped. Must-haves and
- * must-avoids are left for syncMustItems. Null if still over the total cap, so
+ * must-avoids (and what they've tried) are left for syncFromProfile. Null if still over the total cap, so
  * the caller keeps the previous version.
  */
+/** Text over max cut back to the whole sentences that fit; null if not even the first one does. */
+function sentencesWithin(text: string | null, max: number, log: string[]): string | null {
+  if (!text || text.length <= max) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+(\s+|$)/g) ?? [];
+  let out = '';
+  for (const s of sentences) {
+    if ((out + s).trim().length > max) break;
+    out += s;
+  }
+  log.push(`confirmed_read: over ${max} chars, cut to ${out.trim().length}`);
+  return out.trim() || null;
+}
+
 export function validateSummary(raw: unknown, ctx: SummaryValidationContext): { summary: UserSummary; dropped: string[] } | null {
   const o = obj(raw);
   if (!o) return null;
@@ -241,8 +259,11 @@ export function validateSummary(raw: unknown, ctx: SummaryValidationContext): { 
     return false;
   };
 
+  // An over-long confirmed read is cut back to whole sentences rather than
+  // lost: live runs kept writing it over the cap, so the confirmed read (and
+  // what the user added to it, written first) never reached the summary.
   const ro = obj(o.confirmed_read);
-  const readText = str(ro?.text);
+  const readText = sentencesWithin(str(ro?.text), SUMMARY_CAPS.read_chars, dropped);
   const confirmed_read = readText && fits(readText, SUMMARY_CAPS.read_chars, 'confirmed_read')
     ? { text: readText, refs: refsOf(ro?.refs) }
     : ctx.previous?.confirmed_read ?? null;

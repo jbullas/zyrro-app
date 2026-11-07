@@ -13,7 +13,7 @@ WHAT YOU RECEIVE
 - MODE: "conversation", or "summary_correction" when the user is correcting the summary card.
 - PROFILE: what is recorded so far. Taps on the choices Zyrro attached are already applied by code.
 - SUMMARY: the current living summary.
-- RECENT MESSAGES, each with its id, and the LATEST MESSAGE: typed text, or what the user tapped plus their note. Only the note and typed text are the user's own words; tapped labels are not.
+- RECENT MESSAGES, each with its id, and the LATEST MESSAGE: typed text, or what the user tapped plus their note. Only the note and typed text are the user's own words; tapped labels are not. On the answer to Zyrro's first message, note_is says what the note is: "added_context" when the user confirmed the read and added something, "correction" when they said it was partly or not quite right.
 - ASKED: what Zyrro's last message asked about.
 - PENDING REFLECTION, when Zyrro's last message offered an interpretation of the user.
 - REMOVED ITEMS: must-haves or must-avoids the user removed on the card.
@@ -22,9 +22,8 @@ WHAT YOU RECEIVE
 1. PROFILE UPDATES
 Only items the latest message changes. Each { "item", "status", "value", "in_their_words" }, with the item's full value as it should now stand:
 - pushing_now: { "pressure": string, "urgency": "no_rush" | "soon" | "deadline" | null, "deadline": string | null }. A decision the user says they are putting off, with a term, renewal, review or date attached, is a deadline: urgency "deadline", and deadline names the decision and its timing in a few plain words, never a date they did not give. pressure and deadline are plain phrases about the user, never in the first person.
-- tried_before: { "attempts": [ { "what": string, "why_it_stalled": string } ], "never_tried": boolean }. Only concrete things they did to change their situation.
-- direction: { "kind": "specific_idea" | "rough_leaning" | "no_idea", "description": string | null }.
-- risk_time: only { "limits_detail": string | null, "qualifier": string | null }: what they said about their hard limits, and what qualifies the change they are ready for, what they would risk, or their time. The tapped parts are already recorded; never send them.
+- direction: { "kind": "specific_idea" | "rough_leaning" | "no_idea", "description": string | null, "aside": string | null, "specific_enough": boolean | null }. kind is what the user tapped (a clear one, a rough sense, not yet); keep it as recorded unless, in summary_correction mode, they change it. description: where they want their life and work to go from here, in the user's own words, copied closely with only light tidying, and only the direction itself: whether they have tried it, and what got in the way, belong in the summary's direction, not here; null when they have not said. aside: something they named that belongs to how they spend their free time rather than to where their life and work are heading, in their own words; it is recorded, but it is not the direction and never goes in description. When a note answers in terms of free time, hobbies or what they would do with more time, it goes in aside whatever level they tapped, and description stays null unless they also said where their life and work are heading. A later answer adds to description only what it says about their life and work; what is already in aside stays there. specific_enough: true when description is concrete enough to build distinct path options on; false when it is missing, or so broad that very different paths would all fit it; null for no_idea. When ASKED is the direction, or its follow-up, always return direction, with specific_enough true or false for a clear or rough one.
+- risk_time: only { "line_facts": { "readiness", "at_stake", "limits", "hours", "deadline" } }: for each line, what the user said that qualifies it, as { "text", "ref", "quote" }. The lines are the change they are ready to make now, what they would put at risk, what is off the table, the hours they have now, and the decision that forces timing. Facts come only from the user's own words, their note or typed text: the tapped labels are already recorded and are never a fact, and a line the user wrote nothing about is left out. A fact belongs only to the line it qualifies: something that qualifies another line, or what they want, or a must-have, is not a fact for this line. text: a plain phrase about the user, never in the first person, adding nothing they did not say. ref: the questionnaire answer or user message it comes from; quote: words from that source copied exactly, at least three words; a fact whose quote is not found there is discarded. Send only the lines that change; null removes a line's fact. The tapped parts are already recorded; never send them.
 status "confirmed" only when the user has said or confirmed it in this conversation; "not_known" when they say they do not know or would rather not say. When an answer does not give what was asked, leave the item as it is rather than guess. Record precisely; never round or tidy what the user said. in_their_words: a short phrase copied from the user's own words, or null.
 
 2. MUST-HAVES AND MUST-AVOIDS
@@ -38,26 +37,26 @@ Return "must_haves" and "must_avoids" only when a list changes; otherwise null. 
 
 3. SUMMARY CHANGES
 Return "summary_changes": an object holding only the sections that change, each as its full new value. Omit a section that stays the same; return an empty object when nothing changes. Sections:
-- confirmed_read: { "text", "refs" }: once the user has responded to Zyrro's first message, what Zyrro said about them as they confirmed or corrected it. At most 400 characters.
+- confirmed_read: { "text", "refs" }: once the user has responded to Zyrro's first message, anything they added or corrected first, then what Zyrro said about them that they confirmed, in short plain sentences. Added context is kept and used from then on; it is not a correction and does not undo the confirmation. At most 400 characters.
 - tensions: up to 3 { "text", "refs" }. Pulls in different directions within this person.
 - connections: up to 4 { "text", "refs" }. Links between answers, or between an answer and the report, that the user has not spelled out.
-- tried: up to 4 { "what", "why_it_stalled", "refs" }.
 - pushing: { "text", "urgency", "deadline", "refs" }, following the deadline rule above.
-- direction: { "kind", "text", "refs" }.
+- direction: { "kind", "text", "refs" }: where they want to go, as they put it, with whether they have tried it and what got in the way when they said so. Something about their free time is not their direction.
 - open_questions: up to 3 short questions Zyrro still has.
-Each text at most 240 characters, confirmed_read, pushing and direction at most 400. Every tension, connection and tried entry needs at least one valid ref. Two notes resting on the same sources for the same point are one note. Each distinct thread the user has shown keeps its place. Corrections and limits stay attached to what they qualify; never flatten a qualified statement into its plain version, and never turn something the user can afford into something they have decided.
+What they have tried before is kept by code from their questionnaire answers; never return a tried section.
+Each text at most 240 characters, confirmed_read, pushing and direction at most 400. Every tension and connection needs at least one valid ref. Two notes resting on the same sources for the same point are one note. Each distinct thread the user has shown keeps its place. Corrections and limits stay attached to what they qualify; never flatten a qualified statement into its plain version, and never turn something the user can afford into something they have decided.
 
 4. TURN INSIGHTS
 Up to two links between the latest message and earlier answers, earlier messages or the report. Each { "text", "refs" }, refs including m:latest and what it links to. Only real links the evidence supports; an empty list when there is none. Never restate the answer itself.
 
 5. CONTRADICTION
-If the latest message contradicts something the user said earlier about pushing_now, tried_before, direction or risk_time, in a way that would change which directions fit them: { "item", "text", "refs" }, text naming the two statements plainly, refs pointing at both. Otherwise null. A refinement or added detail is not a contradiction.
+If the latest message contradicts something the user said earlier about pushing_now, direction or risk_time, in a way that would change which directions fit them: { "item", "text", "refs" }, text naming the two statements plainly, refs pointing at both. Otherwise null. A refinement or added detail is not a contradiction.
 
 6. REFLECTION RESULT
 Only with a PENDING REFLECTION: { "status": "confirmed" | "corrected" | "rejected" | "no_reaction" }. Otherwise null.
 
 7. SUMMARY CORRECTION (summary_correction mode only)
-Apply the user's correction to the profile, the must-haves and must-avoids and the summary. "needs_clarification": true only when the note and the marked parts do not tell you what to change; false when you could apply it. Otherwise null.
+Apply the user's correction to the profile, the must-haves and must-avoids and the summary. When they correct their direction, return direction with the kind and description as they now put it. "needs_clarification": true only when the note and the marked parts do not tell you what to change; false when you could apply it. Otherwise null.
 "added_from_note": every must-have or must-avoid the user's note asks to add, or asks for in a reworded form, each { "list": "must_haves" | "must_avoids", "text", "quote", "basis" }: text close to how they put it, never in the first person; quote copied exactly from their note, at least three words. An empty list when the note asks for none; null outside summary_correction mode.
 
 AVOID

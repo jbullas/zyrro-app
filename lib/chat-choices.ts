@@ -43,6 +43,10 @@ export type SummaryCard = {
   round: number;
   seen_as: string;
   wants: string;
+  // Brief 168-direction-and-card, Part C: the level and, when the user gave
+  // one, their direction in their own words (after "Not yet", a code-owned
+  // line). Absent on cards from before that brief.
+  direction?: { level: string; text: string | null } | null;
   must_haves: SummaryCardItem[];
   must_avoids: SummaryCardItem[];
   risk: {
