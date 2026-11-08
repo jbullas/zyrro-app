@@ -37,12 +37,15 @@ export type NoteRule = {
 // what feels off about them; naming: names for the chosen path.
 export type ChoicePurpose = 'opening_read' | 'direction' | 'risk_time' | 'summary' | 'summary_clarify' | 'options' | 'options_feedback' | 'naming';
 
-// One path option as the user sees it (its kind and evidence stay server-side).
+// One path option as the user sees it, in the design doc's order (its kind,
+// form and evidence stay server-side). what_it_is: absent on rounds generated
+// before it existed.
 export type PathOptionView = {
   id: string;
   name: string;
-  why_it_fits: string;
+  what_it_is?: string;
   what_it_looks_like: string;
+  why_it_fits: string;
   starting_point: string;
   what_it_costs: string;
 };

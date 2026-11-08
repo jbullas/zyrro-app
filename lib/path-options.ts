@@ -77,18 +77,39 @@ export const MAX_OPTIONS_ROUNDS = 3;
 // Section lengths (design doc, "What each option contains", approved 2026-11-08).
 const LIMITS = {
   name: { words: 6, chars: 50 },
+  what_it_is: { sentences: 1, chars: 200 },
+  what_it_looks_like: { sentences: 3, chars: 450 },
   why_it_fits: { sentences: 2, chars: 280 },
-  what_it_looks_like: { sentences: 2, chars: 300 },
   starting_point: { sentences: 1, chars: 160 },
   what_it_costs: { sentences: 2, chars: 240 },
   why_strongest: { sentences: 1, chars: 200 },
 } as const;
 
-const PART_KEYS = ['name', 'why_it_fits', 'what_it_looks_like', 'starting_point', 'what_it_costs'] as const;
+// The parts in the design doc's order.
+const PART_KEYS = ['name', 'what_it_is', 'what_it_looks_like', 'why_it_fits', 'starting_point', 'what_it_costs'] as const;
 type PartKey = typeof PART_KEYS[number];
 
 export const OPTION_KINDS = ['develops_direction', 'new_path', 'rebalance'] as const;
 export type OptionKind = typeof OPTION_KINDS[number];
+
+// The form of the path ("what it is"): who the user would work for, or as.
+export const OPTION_FORMS = ['current_employer', 'new_employer', 'freelance', 'business', 'portfolio'] as const;
+export type OptionForm = typeof OPTION_FORMS[number];
+
+// Their weekly hours now shape only the starting point (design doc, "What it
+// would look like"): any other part that mentions the user's current hours is
+// flagged: a number of hours from their band, or the hours they have now. A
+// full working week on the path itself is not their current hours.
+const HOURS_MENTION = /\b(\d+)\s*(?:to|-|–|or|and)?\s*(\d+)?[\s-]*hours?\b/gi;
+const HOURS_NOW = /\b(hours (?:you have|available)|available hours|spare hours|hours (?:a|per|each) week (?:you have )?now)\b/i;
+
+function mentionsCurrentHours(text: string, bandNumbers: string[]): boolean {
+  if (HOURS_NOW.test(text)) return true;
+  for (const m of text.matchAll(HOURS_MENTION)) {
+    if ([m[1], m[2]].some(n => n && bandNumbers.includes(n))) return true;
+  }
+  return false;
+}
 
 // Report labels that must never reach option text (signature names and the
 // named identity are checked against the user's own report).
@@ -103,6 +124,10 @@ const INTERNAL_TERMS = /(develops_direction|new_path|\bq\d{1,2}\b|\bm:[\w-]+|\b[
 
 export type StoredOption = PathOptionView & {
   kind: OptionKind;
+  // The form and who pays the user, which "what it is" must name (absent on
+  // rounds generated before them).
+  form?: OptionForm;
+  who_pays?: string;
   refs: Array<{ ref: string; quote: string }>;
   must_haves_met: string[];
   must_avoids_touched: Array<{ id: string; fully_avoidable: boolean }>;
@@ -271,7 +296,16 @@ export async function ensureOptionsGeneration(
 
 // ── The generation ──────────────────────────────────────────────────────────
 
-type DirectionLevel = 'clear' | 'rough' | 'none';
+// rough_specific: a rough sense specific enough to build on (call A's
+// specific_enough, after the follow-up if one was asked); rough: still vague.
+type DirectionLevel = 'clear' | 'rough_specific' | 'rough' | 'none';
+
+const LEVEL_FOR_OPTIONS: Record<DirectionLevel, string> = {
+  clear: 'clear',
+  rough_specific: 'rough, specific enough to build on',
+  rough: 'rough, still vague',
+  none: 'none yet',
+};
 
 type GenContext = {
   digest: ContextDigest;
@@ -281,11 +315,15 @@ type GenContext = {
   ownIndex: RefIndex;
   notForMe: string[];
   conversationId: string;
+  // The numbers in their hours band (the card's Time line), for the hours check.
+  hoursNumbers: string[];
 };
 
 function directionLevel(profile: PathProfile): DirectionLevel {
-  const kind = profile.direction.value?.kind;
-  return kind === 'specific_idea' ? 'clear' : kind === 'rough_leaning' ? 'rough' : 'none';
+  const v = profile.direction.value;
+  if (v?.kind === 'specific_idea') return 'clear';
+  if (v?.kind === 'rough_leaning') return v.specific_enough === true ? 'rough_specific' : 'rough';
+  return 'none';
 }
 
 const REPORT_EXCERPT_CHARS = 400;
@@ -322,6 +360,7 @@ function buildInputs(
     },
     direction: {
       level: d ? DIRECTION_CARD_LABELS[d.kind] : 'Not known',
+      level_for_options: LEVEL_FOR_OPTIONS[directionLevel(profile)],
       their_words: d && d.kind !== 'no_idea' ? directionSources(profile, ownIndex) : [],
       aside: d?.aside ?? null,
     },
@@ -340,7 +379,7 @@ function buildInputs(
     ...(previous.length && {
       previous_rounds: previous.map(p => ({
         round: p.round,
-        options: p.options.map(o => ({ id: o.id, name: o.name, kind: o.kind, why_it_fits: o.why_it_fits, what_it_looks_like: o.what_it_looks_like, starting_point: o.starting_point, mark: p.marks[o.id] ?? null })),
+        options: p.options.map(o => ({ id: o.id, name: o.name, kind: o.kind, form: o.form ?? null, what_it_is: o.what_it_is ?? null, what_it_looks_like: o.what_it_looks_like, why_it_fits: o.why_it_fits, starting_point: o.starting_point, mark: p.marks[o.id] ?? null })),
       })),
     }),
     ...(adjustment && { feedback: { note: adjustment.note } }),
@@ -355,8 +394,10 @@ function parseOption(raw: unknown, id: string, card: SummaryCard): StoredOption 
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   if (!o) return null;
   const kind = OPTION_KINDS.find(k => k === o.kind);
+  const form = OPTION_FORMS.find(f => f === o.form);
+  const whoPays = str(o.who_pays);
   const parts = Object.fromEntries(PART_KEYS.map(k => [k, str(o[k])])) as Record<PartKey, string>;
-  if (!kind || PART_KEYS.some(k => !parts[k])) return null;
+  if (!kind || !form || !whoPays || PART_KEYS.some(k => !parts[k])) return null;
   const haveIds = new Set(card.must_haves.map(i => i.id));
   const avoidIds = new Set(card.must_avoids.map(i => i.id));
   const refs = (Array.isArray(o.refs) ? o.refs : []).flatMap(r => {
@@ -371,6 +412,8 @@ function parseOption(raw: unknown, id: string, card: SummaryCard): StoredOption 
     id,
     ...parts,
     kind,
+    form,
+    who_pays: whoPays,
     refs,
     must_haves_met: (Array.isArray(o.must_haves_met) ? o.must_haves_met : []).filter((h): h is string => typeof h === 'string' && haveIds.has(h)),
     must_avoids_touched: touched,
@@ -385,7 +428,7 @@ function parseSet(raw: Record<string, unknown> | null, card: SummaryCard): { set
   const options: StoredOption[] = [];
   for (let i = 0; i < 3; i++) {
     const opt = parseOption(list[i], `o${i + 1}`, card);
-    if (!opt) return { set: null, problem: `option ${i + 1} is missing a part or has no valid kind` };
+    if (!opt) return { set: null, problem: `option ${i + 1} is missing a part, or has no valid kind, form or who_pays` };
     options.push(opt);
   }
   const at = givenIds.findIndex(id => id === raw?.strongest_fit_id);
@@ -418,20 +461,33 @@ function voiceProblem(field: string, text: string, ctx: GenContext): string | nu
   return null;
 }
 
-/** Lengths and voice for one option (and why_strongest when it is the strongest fit). */
+/**
+ * Lengths, voice, weekly hours outside the starting point, and "what it is"
+ * naming who pays, for one option (and why_strongest when it is the strongest fit).
+ */
 function optionProblems(o: StoredOption, ctx: GenContext, whyStrongest: string | null): string[] {
-  const fields: Array<[string, string]> = PART_KEYS.map(k => [k, o[k]]);
+  const fields: Array<[string, string]> = PART_KEYS.map(k => [k, o[k] ?? '']);
   if (whyStrongest !== null) fields.push(['why_strongest', whyStrongest]);
-  return fields.flatMap(([field, text]) => {
-    const p = lengthProblem(field, text) ?? voiceProblem(field, text, ctx);
+  const problems = fields.flatMap(([field, text]) => {
+    const p = lengthProblem(field, text) ?? voiceProblem(field, text, ctx)
+      ?? (field !== 'starting_point' && mentionsCurrentHours(text, ctx.hoursNumbers) ? `${field} mentions their current weekly hours, which belong only in the starting point` : null);
     return p ? [`${o.id}: ${p}`] : [];
   });
+  if (o.who_pays && !norm(o.what_it_is ?? '').includes(norm(o.who_pays))) {
+    problems.push(`${o.id}: what_it_is does not name who pays ("${o.who_pays}")`);
+  }
+  return problems;
 }
 
 function kindProblem(options: StoredOption[], level: DirectionLevel): string | null {
   const count = (k: OptionKind) => options.filter(o => o.kind === k).length;
   const got = options.map(o => o.kind).join(', ');
   if (level === 'clear') return count('develops_direction') === 3 ? null : `the user has a clear direction, so all three must be develops_direction (got ${got})`;
+  if (level === 'rough_specific') {
+    return count('develops_direction') >= 1 && count('new_path') >= 1 && count('rebalance') === 0
+      ? null
+      : `the user's rough direction is specific enough to build on, so the options develop it in different forms and at least one is new_path, with no rebalance (got ${got})`;
+  }
   if (count('new_path') < 2) return `at least two options must be new_path (got ${got})`;
   if (count('rebalance') > 1) return `at most one option may be rebalance (got ${got})`;
   if (level === 'none' && count('develops_direction') > 0) return `the user has no direction yet, so no option can be develops_direction (got ${got})`;
@@ -513,7 +569,7 @@ async function generateSet(
   let current: ParsedSet = { ...set, options: withRefs };
   if (failing.length) {
     const results = await Promise.all(failing.map(async f => {
-      const keep = current.options.filter(o => o.id !== f.id).map(({ id, name, kind, why_it_fits, what_it_looks_like, starting_point, what_it_costs }) => ({ id, name, kind, why_it_fits, what_it_looks_like, starting_point, what_it_costs }));
+      const keep = current.options.filter(o => o.id !== f.id).map(({ id, name, kind, form, what_it_is, what_it_looks_like, why_it_fits, starting_point, what_it_costs }) => ({ id, name, kind, form, what_it_is, what_it_looks_like, why_it_fits, starting_point, what_it_costs }));
       const r = await chatJson([
         ...base,
         { role: 'system', content: PATH_OPTION_REPLACE_NOTE },
@@ -530,6 +586,7 @@ async function generateSet(
         ? [
             ...optionProblems(candidate, ctx, why),
             ...(candidate.kind !== f.kind ? [`kind changed from ${f.kind} to ${candidate.kind}`] : []),
+            ...(candidate.form !== f.form ? [`form changed from ${f.form} to ${candidate.form}`] : []),
             ...(ctx.notForMe.includes(norm(candidate.name)) ? ['a not for me option returned'] : []),
           ]
         : ['unusable output'];
@@ -583,7 +640,10 @@ export async function runOptionsGeneration(artifactId: string): Promise<void> {
       .map(r => ({ round: r.content.round, options: r.content.options!, marks: marksFor.get(r.id) ?? {} }));
     const notForMe = previous.flatMap(p => p.options.filter(o => p.marks[o.id] === 'not_for_me').map(o => norm(o.name)));
 
-    const ctx: GenContext = { digest, card, level: directionLevel(profile), firstName: firstNameOf(digest), ownIndex, notForMe, conversationId };
+    const ctx: GenContext = {
+      digest, card, level: directionLevel(profile), firstName: firstNameOf(digest), ownIndex, notForMe, conversationId,
+      hoursNumbers: card.risk.hours.match(/\d+/g) ?? [],
+    };
     const inputs = buildInputs(digest, profile, card, summary, ownIndex, content.round, previous, content.adjustment);
     const result = await generateSet(inputs, ctx);
     if (!result) throw new Error('no usable options after the retry');
@@ -620,8 +680,8 @@ const LAST_ROUND_TEXT = 'These are the last options in this session, so choose t
 const PLAN_NEXT_TEXT = 'Your plan for this path comes next.';
 
 function toView(o: StoredOption): PathOptionView {
-  const { id, name, why_it_fits, what_it_looks_like, starting_point, what_it_costs } = o;
-  return { id, name, why_it_fits, what_it_looks_like, starting_point, what_it_costs };
+  const { id, name, what_it_is, what_it_looks_like, why_it_fits, starting_point, what_it_costs } = o;
+  return { id, name, ...(what_it_is && { what_it_is }), what_it_looks_like, why_it_fits, starting_point, what_it_costs };
 }
 
 function roundView(artifactId: string, c: OptionsContent): OptionsRoundView {
@@ -643,8 +703,9 @@ function optionsMarkdown(view: OptionsRoundView): string {
   ];
   const blocks = view.options.map(o => [
     `**${o.name}**${o.id === view.strongest_fit_id ? ' (Zyrro’s strongest fit)' : ''}`,
-    `**Why it fits you:** ${o.why_it_fits}`,
+    ...(o.what_it_is ? [o.what_it_is] : []),
     `**What it would look like:** ${o.what_it_looks_like}`,
+    `**Why it fits you:** ${o.why_it_fits}`,
     `**Starting point:** ${o.starting_point}`,
     `**What it would cost you:** ${o.what_it_costs}`,
     ...(o.id === view.strongest_fit_id ? [`**Why this one:** ${view.why_strongest}`] : []),
