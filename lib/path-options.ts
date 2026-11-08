@@ -71,6 +71,9 @@ import { isCurrentSummary, loadUserSummary, quoteFound, resolveExcerpts, type Re
 export const PATH_OPTIONS_MODEL = process.env.PATH_OPTIONS_MODEL || 'gpt-6.1-sol';
 const OPTIONS_TEMPERATURE = /^gpt-4/.test(PATH_OPTIONS_MODEL) ? 0.7 : undefined;
 
+// Names for the chosen path in this flow (the current /path naming route keeps its own model).
+const PATH_NAMES_MODEL = 'gpt-6.1-sol';
+
 // The first set plus two adjustment rounds (design doc, "If nothing lands").
 export const MAX_OPTIONS_ROUNDS = 3;
 
@@ -801,7 +804,8 @@ async function suggestNames(option: StoredOption, conversationId: string): Promi
   ];
   let tokens = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await chatJson(messages, 0.7, 'path names', undefined, conversationId);
+    // The newer models only accept their default temperature.
+    const r = await chatJson(messages, undefined, 'path names', PATH_NAMES_MODEL, conversationId);
     tokens += r.tokens;
     const list = Array.isArray(r.parsed?.options) ? r.parsed.options : [];
     const names = list.flatMap((o, i) => {
