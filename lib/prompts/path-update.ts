@@ -16,8 +16,7 @@ WHAT YOU RECEIVE
 - PROFILE: what is recorded so far. Taps on the choices Zyrro attached are already applied by code.
 - SUMMARY: the current living summary.
 - RECENT MESSAGES, each with its id, and the LATEST MESSAGE: typed text, or what the user tapped plus their note. Only the note and typed text are the user's own words; tapped labels are not. On the answer to Zyrro's first message, note_is says what the note is: "added_context" when the user confirmed the read and added something, "correction" when they said it was partly or not quite right.
-- ASKED: what Zyrro's last message asked about.
-- PENDING REFLECTION, when Zyrro's last message offered an interpretation of the user.
+- ASKED: what Zyrro's last message asked about. "deepen" means it asked an open question to understand the user's tension or pattern better: read the answer for what it shows about those, and record any practical fact it also gives.
 - CONFIRMED READ MISSING: true when the user has answered Zyrro's first message and no usable confirmed_read is stored yet.
 - REMOVED ITEMS: must-haves or must-avoids the user removed on the card.
 - In summary_correction mode: the CARD the user is correcting, the PARTS they marked as off, and their note.
@@ -55,17 +54,14 @@ Up to two links between the latest message and earlier answers, earlier messages
 5. CONTRADICTION
 If the latest message contradicts something the user said earlier about pushing_now, direction or risk_time, in a way that would change which directions fit them: { "item", "text", "refs" }, text naming the two statements plainly, refs pointing at both. Otherwise null. A refinement or added detail is not a contradiction.
 
-6. REFLECTION RESULT
-Only with a PENDING REFLECTION: { "status": "confirmed" | "corrected" | "rejected" | "no_reaction" }. Otherwise null.
-
-7. SUMMARY CORRECTION (summary_correction mode only)
+6. SUMMARY CORRECTION (summary_correction mode only)
 Apply the user's correction to the profile and the summary; the must-haves and must-avoids are handled by code and another step. When they correct their direction, return direction with the kind and description as they now put it. "needs_clarification": true only when the note and the marked parts do not tell you what to change; false when you could apply it. Otherwise null.
 
-8. UNDERSTANDING
+7. UNDERSTANDING
 "understanding": { "ready": boolean, "still_unclear": string or null }. ready is true when Zyrro could now describe the user's tension, the pattern behind it and their constraints well enough that they would recognise themselves in it on a summary card: grounded in what they wrote and said, not only in the report. still_unclear: when not ready, what Zyrro still does not understand about the tension or the pattern, in a few plain words; null when ready. Judge the understanding, not the number of messages: a long conversation can still be unclear, a short one can be enough.
 
 AVOID
 Insights or connections that only restate what the user said; links the evidence does not support; generic personality language; words the user did not write recorded as theirs; a signature name without what it means for this user in plain words; report section labels in any text.
 
 OUTPUT
-A JSON object only, with exactly these keys: "profile_updates" (array), "must_haves" (array or null), "must_avoids" (array or null), "summary_changes" (object), "turn_insights" (array), "contradiction" (object or null), "reflection_result" (object or null), "needs_clarification" (boolean or null), "understanding" (object).`;
+A JSON object only, with exactly these keys: "profile_updates" (array), "must_haves" (array or null), "must_avoids" (array or null), "summary_changes" (object), "turn_insights" (array), "contradiction" (object or null), "needs_clarification" (boolean or null), "understanding" (object).`;

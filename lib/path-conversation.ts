@@ -543,42 +543,42 @@ export async function ensureSeeded(supabase: SupabaseClient, conversation: Conve
 
 // ── What the next message must do ───────────────────────────────────────────
 
+// deepen: an open question with no taps that takes Zyrro's understanding of
+// the user's tension and pattern further (brief 168-conversation-purpose);
+// still_unclear is what call A said Zyrro does not yet understand.
 type Next =
   | { kind: 'open_read'; deadline: string | null; urgency_unknown: boolean }
   | { kind: 'follow_up'; item: AskedItem; still_needed: string }
   | { kind: 'clarify'; item: AskedItem; contradiction: { text: string; refs: string[] } }
-  | { kind: 'item'; item: AskedItem; still_needed: string; reflection?: { text: string; refs: string[] } }
+  | { kind: 'item'; item: AskedItem; still_needed: string }
+  | { kind: 'deepen'; still_unclear: string | null }
   | { kind: 'card' };
 
 function asAsked(next: Next): Asked {
   switch (next.kind) {
     case 'open_read': return { kind: 'open_read' };
     case 'card': return { kind: 'card' };
+    case 'deepen': return { kind: 'deepen' };
     default: return { kind: next.kind, item: next.item };
   }
 }
 
-/**
- * The one reflection: a note the user hasn't confirmed that rests on at least
- * one of their own sources Zyrro hasn't used yet (so it isn't a restatement).
- */
-function reflectionCandidate(summary: UserSummary, usedRefs: string[]) {
-  const used = new Set(usedRefs);
-  return [...summary.connections, ...summary.tensions]
-    .find(n => !n.confirmed_by_user && sourceRefs(n.refs).some(r => !used.has(r))) ?? null;
-}
+// Deepen turns in a row before the next practical question is asked anyway,
+// so the facts the options need are never crowded out.
+const MAX_DEEPEN_STREAK = 2;
 
 /**
- * Code decides what comes next (design doc, "Conversation order" and "When
- * Zyrro has enough"): the opening message, then a pending clarification, then
- * the summary card if the conversation has stalled or hit the cap, then the
- * first open item in order (its one follow-up if it needs one). The one
- * reflection goes with the direction question.
+ * Code decides what comes next (design doc, "How the conversation runs" and
+ * "When Zyrro has enough"): the opening view, then a pending clarification,
+ * then the card if the conversation has stalled or hit the cap. While call A
+ * says the understanding isn't ready, a deepen turn comes first (at most
+ * MAX_DEEPEN_STREAK in a row), then the next practical question (its one
+ * follow-up if it needs one). With every practical fact in, the card comes
+ * once call A says ready; until then, deepen turns, which the stall rule and
+ * the cap still end.
  */
 function computeNext(
   profile: PathProfile,
-  summary: UserSummary,
-  reflections: Reflection[],
   state: { opening: boolean; turns: number; turnsSinceProgress: number },
 ): Next {
   if (state.opening) {
@@ -589,13 +589,13 @@ function computeNext(
   if (clarify) return { kind: 'clarify', item: clarify.item, contradiction: { text: clarify.text, refs: clarify.refs } };
   if (state.turns >= MAX_USER_TURNS || state.turnsSinceProgress >= STALL_TURNS) return { kind: 'card' };
 
+  const understanding = profile.meta.understanding;
+  const ready = understanding?.ready === true;
+  const deepen: Next = { kind: 'deepen', still_unclear: understanding?.still_unclear ?? null };
   const item = openItems(profile)[0];
-  if (!item) return { kind: 'card' };
+  if (!item) return ready ? { kind: 'card' } : deepen;
   if (profile[item].follow_ups >= 1) return { kind: 'follow_up', item, still_needed: stillNeeded(profile, item) };
-  if (item === 'direction' && reflections.length === 0) {
-    const r = reflectionCandidate(summary, profile.meta.used_refs);
-    if (r) return { kind: 'item', item, still_needed: stillNeeded(profile, item), reflection: { text: r.text, refs: r.refs } };
-  }
+  if (!ready && (profile.meta.deepen_streak ?? 0) < MAX_DEEPEN_STREAK) return deepen;
   return { kind: 'item', item, still_needed: stillNeeded(profile, item) };
 }
 
@@ -962,6 +962,12 @@ function itemsSnapshot(p: PathProfile): string {
   return JSON.stringify(ITEM_KEYS.map(k => p[k]));
 }
 
+// The summary's understanding of the user, for progress: the read, tensions,
+// connections and direction (texts only).
+function understandingSnapshot(s: UserSummary): string {
+  return JSON.stringify([s.confirmed_read?.text ?? null, s.tensions.map(n => n.text), s.connections.map(n => n.text), s.direction.text]);
+}
+
 function withLatestRef<T>(value: T, userMessageId: string | null): T {
   if (!userMessageId) return value;
   return JSON.parse(JSON.stringify(value).split(`"${LATEST_REF}"`).join(`"m:${userMessageId}"`)) as T;
@@ -1034,7 +1040,6 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
         // confirmed read is stored yet (fix 5): write one.
         confirmed_read_missing: !!s.profile.opening_read.value?.verdict
           && (!s.summary.confirmed_read || !!confirmedReadProblem(s.summary.confirmed_read.text, s.profile.opening_read.value?.text ?? null, firstNameOf(s.digest))),
-        pending_reflection: pending ? { text: pending.text } : null,
         removed_items: s.profile.meta.removed_items,
         ...(input.correction && {
           card: input.correction.card,
@@ -1266,17 +1271,33 @@ type ReplyNext = Next | { kind: 'card_clarify'; parts: string[]; note: string | 
 const REPEAT_EXEMPT = new Set<ReplyNext['kind']>(['card', 'card_clarify']);
 
 /**
- * Call B. Retries once if the output names a signature or the named identity,
- * or if it rests only on sources already used without anything new (no
- * repetition, tracked by source refs); a second miss is logged and kept.
- * Returns the user sources the message rests on, for meta.used_refs.
+ * The parts of the report where it names the user's tension and pattern, for
+ * call B on every turn (brief 168-conversation-purpose). Fixed for the
+ * conversation, so it sits right after the prompt and is cached.
+ */
+function reportCore(digest: ContextDigest) {
+  const r = digest.report;
+  return {
+    named_identity: r.named_identity,
+    signatures: r.primary_signatures.map(sig => ({ name: sig.name, core_statement: sig.core_statement, tension: sig.tension })),
+    secondary_signatures: r.secondary_signatures,
+    friction_points: r.friction_points,
+    ...(r.pattern_to_notice && { pattern_to_notice: r.pattern_to_notice }),
+    ...(r.distinctive_pattern && { distinctive_pattern: r.distinctive_pattern }),
+  };
+}
+
+/**
+ * Call B. Retries once if it rests only on sources already used without
+ * anything new (no repetition, tracked by source refs); a second miss is
+ * logged and kept. Returns the user sources the message rests on, for
+ * meta.used_refs.
  *
- * One interpretation per conversation (brief 168-card-fixes, fix 6): Zyrro's
- * own reading of the user (the turn's insights, the summary's tensions and
- * connections, the report) reaches call B only on the turn that carries the
- * one reflection, and on the opening read and the card. Every other reply
- * sees the user's own words only, so it can acknowledge and link in their
- * terms but has no reading of its own to attach.
+ * Understanding on every turn (brief 168-conversation-purpose): every reply
+ * sees the summary's tensions and connections, this turn's insights, the
+ * report text they cite, the user's earlier words the latest answer touches,
+ * and the report's tension material (reportCore). A signature may be named
+ * when it is explained in plain words; code no longer retries on a name.
  */
 async function runReply(
   s: TurnState,
@@ -1287,26 +1308,20 @@ async function runReply(
   conversationId: string,
   retryNote?: string,
 ) {
-  const reflection = next.kind === 'item' ? next.reflection : undefined;
-  const interpretive = next.kind === 'open_read' || next.kind === 'card' || next.kind === 'card_clarify' || !!reflection;
-  const summary = interpretive ? s.summary : { ...s.summary, tensions: [], connections: [] };
-  const replyInsights = interpretive ? insights : [];
-  // Step 1b: on other turns call B still gets the user's own earlier words the
-  // latest answer touches (the sources call A linked it to, without call A's
-  // reading), so it can say what the answer adds compared with them.
-  const earlierRefs = interpretive ? [] : sourceRefs(insights.flatMap(i => i.refs)).filter(r => r !== LATEST_REF);
+  const summary = s.summary;
+  const earlierRefs = sourceRefs(insights.flatMap(i => i.refs)).filter(r => r !== LATEST_REF);
   const earlier = resolveExcerpts(earlierRefs, s.index);
   const used = new Set(s.profile.meta.used_refs);
   const excerpts = resolveExcerpts([
     ...summaryRefs(summary),
     ...earlierRefs,
-    ...replyInsights.flatMap(i => i.refs),
-    ...(reflection?.refs ?? []),
+    ...insights.flatMap(i => i.refs),
     ...(next.kind === 'clarify' ? next.contradiction.refs : []),
-  ].filter(ref => interpretive || !ref.startsWith('report.')), s.index);
+  ], s.index);
   const evidence = Object.fromEntries(Object.entries(excerpts).map(([ref, text]) => [ref, { text, used: used.has(ref) }]));
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: PATH_REPLY_PROMPT },
+    { role: 'system', content: `REPORT\n${JSON.stringify(reportCore(s.digest))}` },
     {
       role: 'user',
       content: JSON.stringify({
@@ -1317,7 +1332,7 @@ async function runReply(
         added_to_read: next.kind === 'open_read' ? null : s.profile.opening_read.value?.added_context ?? null,
         fixed_choices: fixed ? { ...fixed, card: undefined, preselected: undefined } : null,
         summary,
-        turn_insights: replyInsights,
+        turn_insights: insights,
         earlier_answers: Object.entries(earlier).map(([ref, text]) => ({ ref, text })),
         evidence,
         ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile), direction: directionFacts(s.profile, s.ownIndex) }),
@@ -1339,13 +1354,14 @@ async function runReply(
     const text = [parsed?.reply, parsed?.seen_as, parsed?.wants, parsed?.direction, ...notes].filter(t => typeof t === 'string').join(' ');
     refsUsed = sourceRefs((Array.isArray(parsed?.refs_used) ? parsed.refs_used : [])
       .filter((r): r is string => typeof r === 'string' && (r === LATEST_REF || r in excerpts)));
-    const hit = text ? mentionsSignature(text, s.digest) : null;
+    // Logged only: a signature named in the reply, for the verification judge.
+    const named = text ? mentionsSignature(text, s.digest) : null;
+    if (named) console.info(`[path reply] names "${named}" (${next.kind})`);
     const restated = !REPEAT_EXEMPT.has(next.kind) && refsUsed.length > 0
       && !refsUsed.includes(LATEST_REF) && refsUsed.every(r => used.has(r));
-    if (!hit && !restated) break;
-    const why = hit ? `named "${hit}"` : `rested only on used sources ${refsUsed.join(', ')}`;
-    console.warn(`[path reply] ${why} (attempt ${attempt + 1})${attempt === 1 ? '; kept' : '; retrying'}`);
-    if (attempt === 0 && restated) {
+    if (!restated) break;
+    console.warn(`[path reply] rested only on used sources ${refsUsed.join(', ')} (attempt ${attempt + 1})${attempt === 1 ? '; kept' : '; retrying'}`);
+    if (attempt === 0) {
       messages.push({ role: 'system', content: 'Your draft rested only on sources marked used, with nothing new. Write it again: build on the latest message or a source not yet used.' });
     }
   }
@@ -1462,6 +1478,7 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
   let tokens = 0;
   let insights: Insight[] = [];
   const turns = row.turns + (userMessage ? 1 : 0);
+  const understandingBefore = understandingSnapshot(s.summary);
 
   try {
     if (userMessage) {
@@ -1478,7 +1495,7 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       if (!ids && asked?.kind === 'follow_up' && asked.item === 'opening_read') s.profile = applyOpeningReadFollowUp(s.profile, userMessage.content);
       const tapped = s.profile;
 
-      const answered: AskedItem[] = !asked || asked.kind === 'card' || asked.kind === 'card_clarify' ? []
+      const answered: AskedItem[] = !asked || asked.kind === 'card' || asked.kind === 'card_clarify' || asked.kind === 'deepen' ? []
         : asked.kind === 'open_read' ? ['opening_read', 'pushing_now']
           : [asked.item];
 
@@ -1529,9 +1546,15 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       }
     }
 
-    const progress = itemsSnapshot(s.profile) !== itemsSnapshot(withMetaDefaults(row.profile as PathProfile));
+    // Progress is a filled practical fact or a deepened understanding: a change
+    // to the profile items, or to the summary's read, tensions, connections or
+    // direction (brief 168-conversation-purpose; before, only the profile counted).
+    const progress = itemsSnapshot(s.profile) !== itemsSnapshot(withMetaDefaults(row.profile as PathProfile))
+      || understandingSnapshot(s.summary) !== understandingBefore;
     const turnsSinceProgress = userMessage ? (progress ? 0 : row.turns_since_progress + 1) : row.turns_since_progress;
-    const next = computeNext(s.profile, s.summary, s.reflections, { opening: !userMessage, turns, turnsSinceProgress });
+    const next = computeNext(s.profile, { opening: !userMessage, turns, turnsSinceProgress });
+    // Deepen turns in a row; a practical question or the card resets it.
+    s.profile = { ...s.profile, meta: { ...s.profile.meta, deepen_streak: next.kind === 'deepen' ? (s.profile.meta.deepen_streak ?? 0) + 1 : 0 } };
 
     let assistant: { content: string; choices: ChatChoiceSet | null };
     let cardState: CardState | null = null;
@@ -1551,16 +1574,13 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       tokens += b.tokens;
       const text = typeof b.parsed?.reply === 'string' ? fixDashes(b.parsed.reply.trim()) : '';
       if (!text) return { ok: false, status: 502, error: 'no_usable_reply', tokens };
-      s.profile = addUsedRefs(s.profile, [...b.refsUsed, ...(next.kind === 'item' && next.reflection ? next.reflection.refs : [])]);
+      s.profile = addUsedRefs(s.profile, b.refsUsed);
       if (next.kind === 'open_read') {
         s.profile = { ...s.profile, opening_read: { ...s.profile.opening_read, value: { text, verdict: null, correction: null, added_context: null } } };
       }
-      if (next.kind === 'item' && next.reflection) {
-        s.reflections = [...s.reflections, { id: 'r1', status: 'offered', message_id: null, text: next.reflection.text, refs: next.reflection.refs }];
-      }
       // The model may offer its own choices on an open question only: never
-      // where code attaches choices, and never on a follow-up that asks for
-      // something only the user can put in words.
+      // where code attaches choices, never on a follow-up that asks for
+      // something only the user can put in words, and never on a deepen turn.
       const modelChoicesAllowed = next.kind === 'item' || (next.kind === 'follow_up' && next.item !== 'opening_read' && next.item !== 'direction');
       assistant = { content: text, choices: fixed ?? (modelChoicesAllowed ? normalizeChoices(b.parsed?.choices) : null) };
     }

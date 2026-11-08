@@ -130,7 +130,9 @@ export type Asked =
   | { kind: 'follow_up'; item: AskedItem }
   | { kind: 'clarify'; item: AskedItem }
   | { kind: 'card' }
-  | { kind: 'card_clarify' };
+  | { kind: 'card_clarify' }
+  // An open question that takes the understanding of the tension further.
+  | { kind: 'deepen' };
 
 export type ProfileMeta = {
   // Sources (Q<n> answers, m:<id> user messages) Zyrro's messages have already
