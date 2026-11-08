@@ -223,6 +223,11 @@ Amplifier:
 
 Tension increases recognition.
 
+It also carries forward: the tension the report names is where the Path
+conversation starts (`docs/framework/path-plan-redesign.md`, "What the
+conversation is for"), so it has to be specific to this user and grounded in
+their answers.
+
 ---
 
 # The Frustration Inversion Rule

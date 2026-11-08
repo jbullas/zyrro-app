@@ -56,6 +56,12 @@ This stage must now create a second reaction:
 
 Recognition -> Direction.
 
+Between the two now sits the Path conversation. Its purpose is defined in
+`docs/framework/path-plan-redesign.md` ("What the conversation is for"):
+understand the tension that brought the user, starting from the tension and
+pattern this report names and tied to their answers. The path options grow
+out of the tension and pattern the user confirms there.
+
 ---
 
 ## The Directional Inversion

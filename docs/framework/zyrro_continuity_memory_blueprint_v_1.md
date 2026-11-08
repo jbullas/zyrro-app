@@ -11,6 +11,11 @@ Give the mentor and the Dashboard an accurate, current picture of the
 user without rebuilding it from scratch every time, and without needing
 background infrastructure.
 
+The living user summary from the Path conversation
+(`docs/framework/path-plan-redesign.md`) carries Zyrro's understanding of the
+user's tension and pattern; when the mentor reads that summary (a later
+ticket), it starts from it.
+
 ---
 
 ## Two-Tier Bundle Model
