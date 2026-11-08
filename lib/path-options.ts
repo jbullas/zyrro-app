@@ -30,7 +30,6 @@ import {
   firstNameOf,
   fixDashes,
   getProfileRow,
-  mentionsSignature,
   ownIndexFor,
   ownMessages,
   PATH_TURN_CONFIG,
@@ -115,14 +114,17 @@ function mentionsCurrentHours(text: string, bandNumbers: string[]): boolean {
   return false;
 }
 
-// Report labels that must never reach option text (signature names and the
-// named identity are checked against the user's own report).
+// The report's section labels, which never reach option text. Signature names
+// and the named identity may (design doc, "Signatures in context only"): the
+// prompt asks for each to be explained in the same sentence, and the
+// verification judge checks it; code doesn't ban them in options any more
+// (the conversation still does).
 const REPORT_LABELS = [
   'identity report', 'pattern to notice', 'energiser', 'friction point', 'how you operate',
-  'distinctive pattern', 'forward frame', 'constellation', 'named identity', 'signature',
+  'distinctive pattern', 'forward frame', 'constellation',
 ];
 // How Zyrro works, never shown to the user.
-const INTERNAL_TERMS = /(develops_direction|new_path|\bq\d{1,2}\b|\bm:[\w-]+|\b[ha]\d\b|questionnaire|summary card|\bthe card\b|\brefs?\b)/i;
+const INTERNAL_TERMS = /(develops_direction|new_path|\bq\d{1,2}\b|\bm:[\w-]+|\b[ha]\d\b|\breport\.[\w.]+|questionnaire|summary card|\bthe card\b|\brefs?\b)/i;
 
 // ── Stored shapes (artifacts.content, jsonb; no migration) ─────────────────
 
@@ -341,7 +343,9 @@ function directionLevel(profile: PathProfile): DirectionLevel {
   return 'none';
 }
 
-const REPORT_EXCERPT_CHARS = 400;
+// The report is now evidence the options build on and cite (design doc,
+// "Built on the Identity report"), so each field gets more room than before.
+const REPORT_EXCERPT_CHARS = 700;
 
 /** Everything the options read (brief Part B item 2), every ref resolved to an excerpt. */
 function buildInputs(
@@ -358,9 +362,10 @@ function buildInputs(
   const messageRefs = [...ownIndex.keys()].filter(r => r.startsWith('m:'));
   const evidence: Record<string, string> = resolveExcerpts([...answerRefs, ...messageRefs], ownIndex);
   for (const i of [...card.must_haves, ...card.must_avoids]) evidence[i.id] = i.text;
+  // Keyed by the ref an option cites (report.<field>); a quote must come from the text shown.
   const report: Record<string, string> = {};
   for (const [key, text] of Object.entries(reportFields(digest))) {
-    report[key] = text.length > REPORT_EXCERPT_CHARS ? `${text.slice(0, REPORT_EXCERPT_CHARS)}…` : text;
+    report[`report.${key}`] = text.length > REPORT_EXCERPT_CHARS ? `${text.slice(0, REPORT_EXCERPT_CHARS)}…` : text;
   }
   const d = profile.direction.value;
   return {
@@ -463,8 +468,6 @@ function lengthProblem(field: string, text: string): string | null {
 }
 
 function voiceProblem(field: string, text: string, ctx: GenContext): string | null {
-  const sig = mentionsSignature(text, ctx.digest);
-  if (sig) return `${field} names "${sig}" from the report`;
   const lower = text.toLowerCase();
   const label = REPORT_LABELS.find(l => lower.includes(l));
   if (label) return `${field} uses the report label "${label}"`;
@@ -578,14 +581,25 @@ function setProblems(set: ParsedSet, ctx: GenContext): string[] {
   return problems;
 }
 
-/** The option's refs that hold: a Q or m: source (or a card item) that contains the quote. */
+const ownRef = (ref: string) => /^Q\d+$/.test(ref) || ref.startsWith('m:');
+
+/**
+ * The option's refs that hold: a Q or m: source, a card item or a report
+ * field (report.<key>) that contains the quote.
+ */
 function validRefs(o: StoredOption, ctx: GenContext): StoredOption['refs'] {
   const items = new Map([...ctx.card.must_haves, ...ctx.card.must_avoids].map(i => [i.id, i.text]));
+  const report = reportFields(ctx.digest);
   return o.refs.filter(r => {
-    const source = /^Q\d+$/.test(r.ref) || r.ref.startsWith('m:') ? ctx.ownIndex.get(r.ref) : items.get(r.ref);
+    const source = ownRef(r.ref) ? ctx.ownIndex.get(r.ref)
+      : r.ref.startsWith('report.') ? report[r.ref.slice('report.'.length)]
+        : items.get(r.ref);
     return !!source && quoteFound(r.quote, source);
   });
 }
+
+/** Evidence holds when the valid refs include at least one from the user's own words (design doc). */
+const evidenceHolds = (refs: StoredOption['refs']) => refs.some(r => ownRef(r.ref));
 
 /**
  * One generation: the set, one whole-set retry for structure, kinds, lengths
@@ -640,7 +654,7 @@ async function generateSet(
   // Evidence (brief Part B item 7): invalid refs are dropped; an option with
   // none left gets one replacement.
   const withRefs = set.options.map(o => ({ ...o, refs: validRefs(o, ctx) }));
-  const failing = withRefs.filter(o => !o.refs.length);
+  const failing = withRefs.filter(o => !evidenceHolds(o.refs));
   let current: ParsedSet = { ...set, options: withRefs };
   if (failing.length) {
     const results = await Promise.all(failing.map(async f => {
@@ -648,7 +662,7 @@ async function generateSet(
       const r = await chatJson([
         ...base,
         { role: 'system', content: PATH_OPTION_REPLACE_NOTE },
-        { role: 'user', content: JSON.stringify({ REPLACE: { id: f.id, kind: f.kind, strongest_fit: f.id === current.strongest_fit_id, reason: 'none of its quotes was found word for word in the source it cites', previous: { name: f.name, why_it_fits: f.why_it_fits, refs: set!.options.find(o => o.id === f.id)?.refs ?? [] } }, KEEP: keep }) },
+        { role: 'user', content: JSON.stringify({ REPLACE: { id: f.id, kind: f.kind, strongest_fit: f.id === current.strongest_fit_id, reason: 'it has no quote, found word for word, from one of their answers or messages (a report quote alone is not enough)', previous: { name: f.name, why_it_fits: f.why_it_fits, refs: set!.options.find(o => o.id === f.id)?.refs ?? [] } }, KEEP: keep }) },
       ], OPTIONS_TEMPERATURE, 'path option replace', PATH_OPTIONS_MODEL, ctx.conversationId);
       return { f, r };
     }));
@@ -667,7 +681,7 @@ async function generateSet(
           ]
         : ['unusable output'];
       const refs = candidate ? validRefs(candidate, ctx) : [];
-      if (candidate && refs.length && !problems.length) {
+      if (candidate && evidenceHolds(refs) && !problems.length) {
         console.info(`[path options] ${f.id} replaced (evidence): "${f.name}" -> "${candidate.name}"`);
         log.replaced.push(`${f.id}: "${f.name}" -> "${candidate.name}"`);
         current = {
