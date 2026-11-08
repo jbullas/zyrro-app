@@ -40,7 +40,7 @@ import {
   type PathProfileRow,
 } from '@/lib/path-conversation';
 import { DIRECTION_CARD_LABELS, withMetaDefaults, type PathProfile } from '@/lib/path-profile';
-import { hasFirstPerson, sentences, thirdPersonWord } from '@/lib/path-text-checks';
+import { hasFirstPerson, pathSpecificStartWords, sentences, substanceShare, thirdPersonWord } from '@/lib/path-text-checks';
 import { PATH_OPTION_REPLACE_NOTE, PATH_OPTIONS_PROMPT } from '@/lib/prompts/path-options';
 import { PROJECT_NAME_PROMPT } from '@/lib/prompts/project-name';
 import { isCurrentSummary, loadUserSummary, quoteFound, resolveExcerpts, type RefIndex, type UserSummary } from '@/lib/user-summary';
@@ -476,7 +476,32 @@ function optionProblems(o: StoredOption, ctx: GenContext, whyStrongest: string |
   if (o.who_pays && !norm(o.what_it_is ?? '').includes(norm(o.who_pays))) {
     problems.push(`${o.id}: what_it_is does not name who pays ("${o.who_pays}")`);
   }
+  // The start is this path's start, not their readiness, risk or hours again (brief item 3).
+  if (!pathSpecificStartWords(o.starting_point, [o.name, o.what_it_is ?? '', o.what_it_looks_like], riskLines(ctx.card)).length) {
+    problems.push(`${o.id}: starting_point only restates their readiness, risk or hours and says nothing specific to this path`);
+  }
   return problems;
+}
+
+function riskLines(card: SummaryCard): string[] {
+  const r = card.risk;
+  return [r.readiness, r.at_stake, r.limits, r.hours, r.deadline ?? ''];
+}
+
+// Two starting points sharing this much of their substance say the same thing.
+const START_ALIKE = 0.5;
+
+function startsAlike(options: StoredOption[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < options.length; i++) {
+    for (let j = i + 1; j < options.length; j++) {
+      const a = options[i].starting_point;
+      const b = options[j].starting_point;
+      const share = Math.max(substanceShare(a, [b]), substanceShare(b, [a]));
+      if (share >= START_ALIKE) out.push(`the starting points of ${options[i].id} and ${options[j].id} are too alike (${share.toFixed(2)}); each must describe the start of its own path`);
+    }
+  }
+  return out;
 }
 
 function kindProblem(options: StoredOption[], level: DirectionLevel): string | null {
@@ -500,6 +525,7 @@ function setProblems(set: ParsedSet, ctx: GenContext): string[] {
   const problems = set.options.flatMap(o => optionProblems(o, ctx, o.id === set.strongest_fit_id ? set.why_strongest : null));
   const kind = kindProblem(set.options, ctx.level);
   if (kind) problems.push(kind);
+  problems.push(...startsAlike(set.options));
   for (const o of set.options) {
     if (ctx.notForMe.includes(norm(o.name))) problems.push(`${o.id}: "${o.name}" was marked not for me and must not return`);
   }
@@ -588,6 +614,7 @@ async function generateSet(
             ...(candidate.kind !== f.kind ? [`kind changed from ${f.kind} to ${candidate.kind}`] : []),
             ...(candidate.form !== f.form ? [`form changed from ${f.form} to ${candidate.form}`] : []),
             ...(ctx.notForMe.includes(norm(candidate.name)) ? ['a not for me option returned'] : []),
+            ...startsAlike(current.options.map(o => (o.id === f.id ? candidate : o))),
           ]
         : ['unusable output'];
       const refs = candidate ? validRefs(candidate, ctx) : [];

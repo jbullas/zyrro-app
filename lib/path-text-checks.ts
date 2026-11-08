@@ -41,6 +41,49 @@ export function wordShare(text: string, sources: string[]): number {
   return ws.filter(w => said.has(w)).length / ws.length;
 }
 
+// ── Brief 168-options: starting points ────────────────────────────────────
+
+// Words about time that any starting point may share (their hours, weeks).
+const TIME_STEMS = new Set([
+  'hour', 'week', 'weekly', 'month', 'day', 'year', 'time', 'now', 'next', 'first', 'few', 'under', 'rather',
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'twenty',
+]);
+
+function substanceStems(s: string): string[] {
+  return contentStems(s).filter(w => !TIME_STEMS.has(w) && !/^\d+$/.test(w));
+}
+
+/**
+ * Share of a starting point's substance (content words, without time words
+ * and numbers) found in the sources: high means it restates them.
+ */
+export function substanceShare(text: string, sources: string[]): number {
+  const ws = substanceStems(text);
+  if (!ws.length) return 1;
+  const said = new Set(sources.flatMap(substanceStems));
+  return ws.filter(w => said.has(w)).length / ws.length;
+}
+
+// Words any start can use about starting at all (pace, keeping the job,
+// committing or not), as stems: they say nothing about this path.
+const GENERIC_START_STEMS = new Set([
+  'explore', 'exploration', 'explor', 'alongside', 'begin', 'start', 'within', 'limit', 'available', 'current', 'work',
+  'job', 'income', 'salary', 'keep', 'unchang', 'change', 'chang', 'move', 'mov', 'transition', 'commit', 'committ',
+  'decision', 'decid', 'direction', 'possibility', 'future', 'gradual', 'step', 'way', 'path', 'option', 'role', 'yet',
+  'without', 'before', 'after', 'toward', 'towards', 'room', 'space', 'test', 'try', 'small', 'part', 'outset',
+]);
+
+/**
+ * The words a starting point shares with its own option (name, what it is,
+ * the picture) that are neither in the card's risk and time lines nor
+ * generic words about starting: what makes it this path's start.
+ */
+export function pathSpecificStartWords(start: string, option: string[], riskLines: string[]): string[] {
+  const risk = new Set(riskLines.flatMap(substanceStems));
+  const own = new Set(option.flatMap(substanceStems));
+  return [...new Set(substanceStems(start))].filter(w => !risk.has(w) && !GENERIC_START_STEMS.has(w) && own.has(w));
+}
+
 const FIRST_PERSON = /(^|[^\p{L}'])(i|i'm|i'd|i've|i'll|me|my|mine|myself)(?![\p{L}'])/u;
 
 export function hasFirstPerson(text: string): boolean {
