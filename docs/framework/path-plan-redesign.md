@@ -1,6 +1,26 @@
 # Zyrro Path and Plan Redesign (draft)
 
-Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card), and 2026-11-08 for the options (options by direction level, attempts as soft background, adjustment rounds, section lengths; then the option parts' order, a concrete name, "what it is" and the full-time picture). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
+Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card), and 2026-11-08 for the options (options by direction level, attempts as soft background, adjustment rounds, section lengths; then the option parts' order, a concrete name, "what it is" and the full-time picture). Revised again on 2026-11-08 for the conversation's purpose: the conversation exists to understand the tension that brought the user, starting from their Identity report and their answers (see What the conversation is for). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
+
+## What the conversation is for
+
+This section governs the rest of the document. Where anything below seems to say otherwise, this section wins.
+
+**Why the user is here.** The user arrives because of a tension in their life: something pulling them one way while something else holds them back. That tension is the reason they came. The conversation exists to understand it, together with them.
+
+**What Zyrro does.** Zyrro doesn't start from zero. The user's Identity report already names the tension in their signatures, their friction points and the pattern it notices. Zyrro starts from that, ties it to their 13 answers, and forms a view of how that tension shows up in their life right now. Where the report and the user's answers point different ways, the answers win: the opening view must hold up against what the user wrote, not only against the report. Zyrro opens by saying that view plainly, in the user's terms.
+
+From then on, every message from Zyrro shows what it understands and moves that understanding forward: where the tension is biting, what it's costing them, and what they want to do about it. It connects what they say to their answers and their report, names what it notices, and invites them to correct or deepen it. They should feel understood more with every exchange, not questioned.
+
+**The pattern and the path.** The user's past shows a pattern. That pattern may be the source of their tension, or it may point to where they're heading, or both. Which it is depends on the user, and Zyrro reads it from context, never by rule. Getting this right is the core of the conversation.
+
+**The practical facts.** Direction, readiness, what they'd risk, hard limits and hours still matter, because the options depend on them. Zyrro gathers them as part of understanding the user, asked in the light of their tension, not as a separate form at the end.
+
+**Grounded, not invented.** Everything Zyrro says rests on what the user wrote or said, or on their report. It never flatters, never echoes them back, and never claims a link the evidence doesn't support. A signature may be named when it helps the user see themselves, always explained in plain words.
+
+**How long.** As long as it takes to understand the user well enough, usually a handful of exchanges. It ends when Zyrro can describe their tension, their pattern and their constraints in a way they confirm on the summary card.
+
+**What comes out.** Options that grow out of that understanding. A path may surprise the user, but it should click when they read it: they recognise themselves in it.
 
 ## Goal
 
@@ -8,59 +28,68 @@ Path should give the user the same feeling as the Identity report: "Zyrro knows 
 
 ## Approach
 
-Path is a short, guardrailed mentor session. Zyrro works out the user's path options with them, in conversation. Users differ in life stage and state of mind, so there is no fixed set of screens. The goals of the conversation are fixed; the order, depth and tone adapt to the user.
+Path is a short, guardrailed mentor session. Zyrro works out the user's path options with them, in conversation. Users differ in life stage and state of mind, so there is no fixed set of screens. The purpose of the conversation is fixed (see What the conversation is for); the order, depth and tone adapt to the user.
 
-The rule for every turn: it exists only if its answer could change the path options. No turn confirms what is already confirmed, and no turn restates what Zyrro has already said.
+The rule for every turn: it shows what Zyrro now understands about the user and moves that understanding forward, or it gathers a practical fact the options depend on, and the best turns do both. No turn only collects an answer, confirms what is already confirmed, or restates what Zyrro has already said.
 
-Basic assumption: most users feel stuck in their current lives and need help to move forward.
+Basic assumption: most users feel stuck in their current lives and need help to move forward. The stuckness has a shape, the tension the user came with, and that is where Zyrro starts.
 
 ## The profile
 
 Behind the conversation sits a profile that fills in as the user talks. Six items:
 
-1. **Opening read:** the user has confirmed or corrected Zyrro's plain-language read of them.
+1. **Opening read:** the user has confirmed or corrected Zyrro's view of how their tension shows up in their life right now.
 2. **What's pushing them now,** and any deadline.
 3. **What they've tried before** to change things, and why it didn't stick. Context from the 13 answers only, never asked: each attempt needs an answer reference and an exact quote, checked in code like must-haves, and anything that fails the check is dropped. Soft background for the options, not shown on the card: an option is never dropped because it resembles something the user tried. When it does, its starting point or cost says what would be different this time, using only what the user said about why it didn't stick.
 4. **Clarity of direction:** a clear direction, a rough sense, or not yet, plus the user's own words when they have one. Something the user names that belongs to their free time rather than to where their life and work are heading is recorded in their words, but it is not the direction.
 5. **Risk, constraints and time:** the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; or not sure yet); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
 6. **Must-haves and must-avoids:** what a good direction has to include and what it has to avoid, taken from what the user said.
 
-Signatures are not a profile item. The user never confirms, rates or discusses individual signatures, and no signature names appear in the conversation. The report is supporting evidence, not something the user is asked to grade. The path options are the exception: there a signature may be named, but only in context (see Path options).
+The tension and the pattern are not profile items with fixed fields. They are Zyrro's understanding of the user, held in the living user summary, deepened through the conversation and confirmed on the summary card.
+
+Signatures are not a profile item either. The user never rates or grades their signatures. Zyrro may name a signature in the conversation or in the options when it helps the user see themselves, and always explains it in plain words in the same breath, so it never needs the report to make sense.
 
 ## Where each item comes from
 
-Zyrro never asks what the user has already told it. Before the conversation, one step reads the user's 13 answers and their report and marks each item as known, inferred or missing for that user. The questionnaire comes first; the report supports it.
+Zyrro never asks what the user has already told it. Before the conversation, one step reads the user's Identity report and 13 answers: it takes the tension and pattern the report names, ties them to the answers, and marks each profile item as known, inferred or missing for that user. The answers keep the user's own words; the report gives the shape of what Zyrro sees. Where the report and the answers point different ways, the answers win: the opening view must hold up against what the user wrote, not only against the report.
 
 | Item | Source | Status at start |
 | --- | --- | --- |
-| Opening read | Questionnaire first, report as support | Always shown, always confirmed or corrected |
+| Opening read | The tension and pattern the report names, tied to the answers; the answers win where they differ | Always shown, always confirmed or corrected |
 | Pushing them now | Q6 to Q10, Q13 | Usually known. Not asked separately; folded into the opening read |
 | Tried before | Q3, Q5, Q10 partly | Context only. Never asked |
 | Direction | Q13 says what to change, not where to go | Missing. Ask: a clear one, a rough sense or not yet, plus their words |
 | Risk, constraints, time | Hints only: Q1, Q2, Q3, Q10 | Missing. Ask, as one turn |
 | Must-haves and must-avoids | Q4, Q7, Q9, Q11, Q12 and the conversation | Derived by Zyrro, confirmed in the summary |
 
-## Conversation order
+## How the conversation runs
 
-About four exchanges, then the summary. Four is a target, not a cap: a vague answer, a contradiction or a rejected read can justify an extra question, but only one whose answer would change the options. If the user gives something away early, Zyrro records it and skips the question later.
+No fixed number of exchanges and no fixed sequence of questions. Usually a handful of exchanges, then the summary. Each exchange either deepens Zyrro's understanding of the user's tension and pattern, gathers a practical fact the options need, or does both. If the user gives something away early, Zyrro records it and doesn't ask again.
 
-1. **Opening read.** Two or three plain sentences on how Zyrro sees the user and what's pressing on them now, including any deadline and what's still unknown about it. No signature names. Tap choices (that's right, partly, not quite) plus room to add something or correct the read. What the user adds or corrects here feeds everything after; a note sent with "that's right" is added context, not a correction.
-2. **Where they want to go.** One turn. The message makes clear the question is about where their life and work go from here, not how they spend their free time. Tap choices for whether they have a sense of the direction they want to move in (a clear one, a rough sense, not yet), worded so as not to assume they have one; "not yet" is a full answer. An optional note in the same turn asks what it is, if they have one, so they can put it in their own words before Zyrro replies. If they have a clear or rough direction and what they wrote is missing or too broad to build options on, Zyrro asks one question to sharpen it, which may include whether they have tried it and what got in the way. At most one follow-up, and none after "not yet". If Zyrro has noticed a connection the user hasn't made, it offers it in the same message as the direction question, not as a separate turn.
-3. **Risk, constraints and time, together.** Last on purpose: by now the user has imagined something, so what they can put on the line for it is concrete. Tap choices for the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; not sure yet) and for what they'd put at risk (including "not sure yet"), a choice of hours per week, and a direct question about hard limits, with "nothing off the table" as a choice.
-4. **Summary.** The one explicit confirmation before options (see Summary before options).
+- **It opens with Zyrro's view.** Zyrro says plainly, in the user's terms, how it sees their tension showing up in their life right now, drawn from their report and their answers, with the answers winning where the two differ. It includes any deadline and what is still unknown about it. The user can confirm it, say it's partly right or not quite right, and add or correct in their own words. What they add or correct feeds everything after; a note sent with "that's right" is added context, not a correction.
+- **Every message after that shows understanding and moves it forward.** Zyrro connects what the user just said to their answers and their report, names what it notices (where the tension is biting, what it's costing them, how the pattern shows up), and invites them to correct or deepen it. A reading is offered as Zyrro's view, which the user can push back on. Zyrro asks one thing at a time.
+- **The pattern is read, not assumed.** Whether the user's pattern is the source of their tension, the direction they're heading, or both is something Zyrro works out with them from context. It doesn't decide it by rule, and it checks its reading with them.
+- **The practical facts come in the light of the tension.** Where they want their life and work to go, the change they're ready to make now, what they'd put at risk, their hard limits and their hours per week are asked when they fit the conversation, framed by what Zyrro now understands. Taps stay the way to answer what Zyrro can offer as choices (see Tap to confirm):
+  - Direction: a clear one, a rough sense, or not yet, worded so as not to assume they have one; "not yet" is a full answer. An optional note asks for their own words. The question is about where their life and work go, not how they spend their free time. Zyrro may ask one question to sharpen a direction that's too broad to build options on, and none after "not yet".
+  - Readiness: explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; or not sure yet.
+  - What they'd put at risk (including "not sure yet"), hard limits (with "nothing off the table"), and hours per week now, always asked explicitly.
+- **It ends on the summary card,** the one explicit confirmation before options (see Summary before options).
 
 ## When Zyrro has enough
 
-An item is needed only if its answer would change the options. Each needed item must be answered or explicitly marked as not known. "I don't know where I want to go" is a valid answer and changes the kind of options, not whether they're generated. When a needed item comes back vague, Zyrro may ask one follow-up for it, then moves on.
+The conversation ends when Zyrro can describe the user's tension, their pattern and their constraints well enough that they confirm it on the summary card. That is a judgement about understanding, not a count of questions.
 
-- Opening read: confirmed or corrected.
-- Pushing them: the main pressure is known, plus whether there's a deadline ("no rush" counts).
-- Direction: a clear direction, a rough sense, or not yet, plus their words when they have one.
+The practical facts are still needed, because the options depend on them. Each must be answered or explicitly marked as not known:
+
+- Pushing them: the main pressure, and whether there's a deadline ("no rush" counts).
+- Direction: a clear direction, a rough sense, or not yet, plus their words when they have one. "I don't know where I want to go" is a valid answer: it changes the kind of options, not whether they're generated.
 - Risk, constraints, time: the change they're ready for now (or not sure yet), what they'd put at risk (or not sure yet), hard limits (or none), hours per week now.
+
+When a fact comes back vague, Zyrro may ask once more, in the light of what it now understands, then moves on. Understanding that is still deepening is a reason to continue; a question that would only repeat what the user has already confirmed is not.
 
 ## Summary before options
 
-When the needed items are filled, the conversation phase ends and the summary card appears in the same turn. No message announces it. The card shows how Zyrro sees the user (not a list of their answers), what they want, their direction (the level and, when they have one, their direction in their own words; after "not yet", a line saying the options will start from their strengths), their must-haves and must-avoids, and their risk, limits and hours.
+When Zyrro understands the user well enough and the practical facts are in, the conversation phase ends and the summary card appears in the same turn. No message announces it. The card shows how Zyrro sees the user: the tension that brought them, the pattern behind it and what it means for them, in their terms, not a list of their answers. It also shows what they want, their direction (the level and, when they have one, their direction in their own words; after "not yet", a line saying the options will start from their strengths), their must-haves and must-avoids, and their risk, limits and hours.
 
 - Choices: that's right, mostly (with changes), that's not it, plus an optional note.
 - "Mostly" or "that's not it" needs a note or a pick of which part is off (the read, what they want, direction, must-haves, must-avoids, risk and limits). Zyrro may ask one clarifying question, then updates the summary and shows it again. Each must-have and must-avoid can also be removed on its own.
@@ -69,7 +98,7 @@ When the needed items are filled, the conversation phase ends and the summary ca
 
 ## Guardrails
 
-- **Length by progress, not count.** If the last few exchanges haven't filled or changed any profile item, Zyrro moves to the summary with what it has. A hard cap sits behind this only as a safety net, high enough that a real user never reaches it.
+- **Length by progress, not count.** If the last few exchanges have neither deepened Zyrro's understanding nor filled a practical fact, Zyrro moves to the summary with what it has. A hard cap sits behind this only as a safety net, high enough that a real user never reaches it.
 - **Lenient on topic.** Anything about the user's life, work, feelings or history is on topic, however roundabout. Only clearly unrelated requests (write a cover letter, help with code) get a polite redirect. Zyrro never ends a conversation on its own judgment of what's on topic.
 - **Token budget per user** for this step. This is the only hard stop: mechanical, so it can't misjudge anyone.
 - **Message length cap,** so whole documents can't be pasted in.
@@ -80,13 +109,14 @@ The open-ended ongoing conversation belongs to the Mentor subscription; these li
 
 ## Path options
 
+- **Grown out of the understanding.** The options answer the tension the user confirmed and follow from the pattern as Zyrro read it with them: away from it where the pattern is the source of the tension, along it where it points to where they're heading, or both. Each option should click when they read it: they recognise themselves in it, even when it surprises them.
 - **Three options** in the first go: the strongest fit plus two alternatives.
 - **Zyrro commits to one.** It marks the strongest fit and says why.
 - **Ambitious.** The strongest fit is the boldest true version of where the user's strengths and answers point, not a smaller version of their current situation. Their readiness, risk and hours shape only the starting point, never how big the direction is.
 - **Built on the Identity report.** Each option draws on the user's report as well as their answers: the strengths and patterns that make this path theirs. Report text can be cited as evidence, but every option also rests on at least one thing the user said themselves (an answer or a message).
-- **Signatures in context only.** An option may name one of the user's signatures, but only when the same sentence explains in plain words what it means for this user. Never a bare label that needs the report to make sense.
+- **Signatures in context only.** As in the conversation, an option may name one of the user's signatures only when the same sentence explains in plain words what it means for this user. Never a bare label that needs the report to make sense.
 - **All on target.** No option exists for variety. All point the right way; they differ in approach, not just in setting.
-- **More than one thread.** Options draw on the whole confirmed summary, not only its strongest theme.
+- **More than one thread.** Options draw on the whole confirmed understanding (the tension, the pattern and the summary), not only its strongest theme.
 - **Risk shapes the first step, not the direction.** A cautious user can get a bold direction that starts as a side project or research; a user ready for change gets it starting as a real move.
 - **In the user's own words.** Each option ties back to the confirmed summary and what the user said in the conversation.
 - **Options follow the direction level.** Path is about reinventing the user's life and work, building on their strengths and getting rid of what keeps them stuck, not about how they spend their free time.
@@ -129,7 +159,7 @@ In this order, so the user understands what an option is before reading why it f
 1. **Name.** A concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business, not an abstract description of an activity. It matches the option's form: a role with an employer is never named as consultancy or freelance work, and freelance or consultancy work is never named as a job with an employer. Clarity matters most while the user compares three.
 2. **What it is.** One sentence naming the form: reshaping their current role with their current employer; a new role with a different employer (saying what kind); freelance or consultancy (saying for whom); starting a business (saying what it sells and to whom); or a portfolio mix (saying the parts). It states who pays the user.
 3. **What it would look like.** The path once it is fully up and running and takes up their full working time, not limited by the hours they have now to explore or start. A concrete picture: where, with whom, what they actually do and how they earn. It leads with what would make this life exciting for them, vivid and specific; caveats belong in the cost. Their current hours, readiness and risk shape only the starting point.
-4. **Why it fits you.** Tied to the confirmed summary, what the user said in the conversation and their answers, and to the strengths and patterns their Identity report shows.
+4. **Why it fits you.** Tied to the tension and pattern the user confirmed, what they said in the conversation and their answers, and the strengths and patterns their Identity report shows.
 5. **Starting point.** One line on the shape of the start, pitched at the user's risk level: a side project alongside their job, a few months of research, or a real move now. No tasks; those belong to the Plan.
 6. **What it would cost them.** The honest trade-off, given their constraints, including any must-avoid it can't fully avoid.
 
@@ -161,26 +191,28 @@ This is a capability of the shared chat engine, so Mentor can use it too (check-
 
 ## Living user summary
 
-Recording answers accurately is not enough. Zyrro has to show the user that it understands them: connecting what they say to what they said earlier and to their report, and naming tensions in their own terms. The first build asked one call to both update the profile and write the reply, and the replies became form-filling.
+Recording answers accurately is not enough. Zyrro has to show the user that it understands them: their tension, their pattern, and how what they say connects to what they said earlier and to their report. The first build asked one call to both update the profile and write the reply, and the replies became form-filling.
 
-So a living user summary sits underneath the conversation, as a shared foundation layer: Path uses it now, Plan and Mentor later.
+So a living user summary sits underneath the conversation, as a shared foundation layer: Path uses it now, Plan and Mentor later. It holds Zyrro's understanding of the user, not a record of their answers.
 
 - **It belongs to the user, not to a conversation.** One per user, server-only.
-- **Fixed sections, fixed size.** The confirmed read, tensions and contradictions, connections between answers, what they've tried, what's pushing them, current direction, must-haves and must-avoids, open questions. Each section has a cap, and so does the whole.
+- **Fixed sections, fixed size.** The confirmed read, tensions and contradictions, connections between answers, what they've tried, what's pushing them, current direction, must-haves and must-avoids, open questions. Each section has a cap, and so does the whole. The tension that brought the user and the pattern behind it live in these sections; they are not separate fields.
 - **Balanced threads.** No single theme crowds out the rest; each distinct thread the user has shown keeps its place. Corrections and limits stay attached to what they qualify: an activity enjoyed in one form but not another, a change they can afford but haven't decided on, time available now for exploring rather than as a lasting commitment. Updates never flatten these into the plain version.
 - **Rewritten, never appended to.** Each update merges new information, replaces what is outdated and drops what no longer matters. The full history stays in the messages.
-- **Seeded at the start of Path** from the questionnaire first, and the Identity report as support.
+- **Seeded at the start of Path** with the tension and pattern the user's Identity report names, tied to their 13 answers; where the two differ, the answers win.
 
 **Each user answer takes two steps.**
 
-1. **Update.** Updates the six profile items and rewrites the summary with anything new: links to earlier answers or the report, tensions, corrections.
-2. **Reply.** Written from the summary. Its job is to show what Zyrro now understands, using the user's own words, then ask the next question. It does not echo the answer back or narrate the session.
+1. **Update.** Updates the profile items and rewrites the summary with anything new: what the answer shows about the tension and the pattern, links to earlier answers or the report, corrections.
+2. **Reply.** Written from the summary, with the report in view on every turn. Its job is to show what Zyrro now understands and move it forward, in the user's terms, then ask the next thing. It does not echo the answer back or narrate the session.
 
 The reply sees the evidence itself, not just a pointer to it: before it is written, every reference it relies on is resolved to a short excerpt of the source (the questionnaire answer, the user's message, or the report text).
 
-**No repetition.** The reply receives the themes already stated or confirmed in the conversation. It may bring one back only to connect it to something new, never to restate it. This is a structural input, not a list of banned phrases.
+**Understanding on every turn.** Any message may name what Zyrro notices or offer a reading of the user, when it's grounded in what they wrote or said or in their report, and the user is invited to correct or deepen it. A reading the user has already confirmed isn't offered again as new.
 
-**One interpretive reflection at most.** At most once in the conversation, Zyrro offers an interpretation the user hasn't made, in the same message as the next question, never as its own turn. The user can confirm or push back in their answer. The summary card is the only standalone confirmation. Brief acknowledgements of an answer are fine; the limit is on new interpretations.
+**No repetition.** The reply knows what has already been said and confirmed in the conversation. It may bring a theme back only to connect it to something new, never to restate it. This is a structural input, not a list of banned phrases.
+
+**Grounded, not invented.** Every link, reading and named pattern rests on the evidence. No flattery, no echoing, no connection the evidence doesn't support.
 
 ## Plan
 
