@@ -27,9 +27,12 @@ export type ChoiceGroup = {
   exclusive?: string[];
 };
 
+// required_unless_picked: the note is required when nothing is tapped (a tap
+// or a note, e.g. "what feels off" about the options).
 export type NoteRule = {
   required?: boolean;
   required_when?: { ids: string[]; unless_group?: string };
+  required_unless_picked?: boolean;
   placeholder?: string;
 };
 
@@ -52,9 +55,12 @@ export type PathOptionView = {
 
 // An options round on its message (purpose 'options'). last_round: no
 // "None of these feels right" after it, the user picks the closest one.
+// intro: the round's code-owned lead-in, shown above the options (none on the
+// first round).
 export type OptionsRoundView = {
   artifact_id: string;
   round: number;
+  intro?: string | null;
   options: PathOptionView[];
   strongest_fit_id: string;
   why_strongest: string;
@@ -157,6 +163,7 @@ export function validateChoiceAnswer(choices: ChatChoiceSet, rawIds: unknown, ra
 
   const rule = choices.note;
   if ((rule?.required || choices.mode === 'note') && !note) return { ok: false, error: 'note_required' };
+  if (rule?.required_unless_picked && !unique.length && !note) return { ok: false, error: 'note_required' };
   const when = rule?.required_when;
   if (when && unique.some(id => when.ids.includes(id)) && !note) {
     const hasGroupPick = !!when.unless_group && unique.some(id => splitId(id)[0] === when.unless_group);

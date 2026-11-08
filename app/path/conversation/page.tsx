@@ -8,8 +8,11 @@ import PrimaryButton from '@/components/PrimaryButton';
 import ChatThread from '@/components/ChatThread';
 import ChatChoices from '@/components/ChatChoices';
 import PathSummaryCard from '@/components/PathSummaryCard';
+import PathOptionsRound from '@/components/PathOptionsRound';
+import PathNaming from '@/components/PathNaming';
 import PathStart from '@/components/PathStart';
-import { choiceAnswerRows, choiceContent, noteFromContent, type ChatChoiceSet } from '@/lib/chat-choices';
+import SecondaryButton from '@/components/SecondaryButton';
+import { choiceAnswerRows, choiceContent, noteFromContent, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
 
 // #168: the new Path conversation, built alongside the current /path flow
 // (which stays untouched until the switchover). Temporary route, reachable
@@ -27,12 +30,22 @@ type PathMessage = {
 
 type PathPhase = 'seeding' | 'conversation' | 'summary' | 'options' | 'chosen';
 
+// The options generation's state (brief 168-options): generating, failed or ready.
+type OptionsState = { status: 'generating' | 'failed' | 'ready' | null; round: number | null };
+
 type ConversationResponse = {
-  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean };
+  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState };
   messages: PathMessage[];
 };
 
-type TurnResponse = { messages: PathMessage[]; phase: PathPhase; summary_confirmed: boolean };
+type TurnResponse = { messages: PathMessage[]; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState };
+
+// Choices still answerable once the summary is confirmed.
+const AFTER_SUMMARY: ChoicePurpose[] = ['options', 'options_feedback', 'naming'];
+
+const OPTIONS_POLL_MS = 3000;
+const OPTIONS_STATUS = 'Putting your three path options together. This takes about half a minute…';
+const NEW_OPTIONS_STATUS = 'Putting three new options together. This takes about half a minute…';
 
 type PageState = 'loading' | 'unpaid' | 'not-started' | 'no-report' | 'chat' | 'error';
 
@@ -110,14 +123,58 @@ export default function PathConversationPage() {
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState('');
   const [sendError, setSendError] = useState('');
+  const [options, setOptions] = useState<OptionsState>({ status: null, round: null });
+  const [retrying, setRetrying] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function showConversation(data: ConversationResponse) {
     setConversationId(data.conversation.id);
     setPhase(data.conversation.phase);
     setConfirmed(data.conversation.summary_confirmed);
+    setOptions(data.conversation.options ?? { status: null, round: null });
     setMessages(data.messages);
     setPageState('chat');
+  }
+
+  // While options are being put together (after "That's right" or "what
+  // feels off"), the thread shows a status line and reads the conversation
+  // back until the new round arrives. A reload lands here too and simply
+  // keeps waiting: the server never starts a second generation.
+  const generating = phase === 'options' && options.status === 'generating';
+  useEffect(() => {
+    if (!generating) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch('/api/path-conversation');
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as ConversationResponse;
+        if (cancelled || data.conversation.options?.status === 'generating') return;
+        showConversation(data);
+      } catch {
+        // Try again on the next tick.
+      }
+    }, OPTIONS_POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [generating]);
+
+  async function handleRetryOptions() {
+    setRetrying(true);
+    setSendError('');
+    try {
+      const res = await fetch('/api/path-conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'options_retry', conversation_id: conversationId }),
+      });
+      if (!res.ok) throw new Error(`retry failed: ${res.status}`);
+      showConversation(await res.json() as ConversationResponse);
+    } catch (err) {
+      console.error(err);
+      setSendError('Couldn’t start that again. Try again in a moment.');
+    } finally {
+      setRetrying(false);
+    }
   }
 
   useEffect(() => {
@@ -178,6 +235,7 @@ export default function PathConversationPage() {
       setMessages(prev => [...prev.filter(m => m !== pending), ...data.messages]);
       setPhase(data.phase);
       setConfirmed(data.summary_confirmed);
+      if (data.options) setOptions(data.options);
       return true;
     } catch (err) {
       console.error(err);
@@ -206,9 +264,14 @@ export default function PathConversationPage() {
   function handleChoice(message: PathMessage, choiceIds: string[], note: string | null) {
     if (sending || !message.choices) return;
     const purpose = message.choices.purpose;
-    const statusLine = purpose === 'summary' || purpose === 'summary_clarify'
-      ? 'Updating your summary…'
-      : purpose === 'risk_time' ? 'Putting your summary together…' : 'Reading your answer…';
+    const statusLine =
+      purpose === 'summary' && choiceIds.includes('verdict:right') ? OPTIONS_STATUS
+        : purpose === 'summary' || purpose === 'summary_clarify' ? 'Updating your summary…'
+          : purpose === 'risk_time' ? 'Putting your summary together…'
+            : purpose === 'options' ? (choiceIds.includes('pick:none') ? 'One moment…' : 'Saving your choice and finding names for this path…')
+              : purpose === 'options_feedback' ? NEW_OPTIONS_STATUS
+                : purpose === 'naming' ? 'Saving…'
+                  : 'Reading your answer…';
     sendTurn(
       { action: 'choice', message_id: message.id, choice_ids: choiceIds, note },
       { id: 'pending', role: 'user', content: choiceContent(message.choices, choiceIds, note), choices: null, selected_choice_ids: choiceIds },
@@ -267,10 +330,14 @@ export default function PathConversationPage() {
   }
 
   const latest = messages[messages.length - 1];
-  // Only the latest assistant message takes an answer, and nothing once the summary is confirmed.
-  const answerable = (m: PathMessage) => m === latest && m.role === 'assistant' && !sending && !confirmed;
+  // Only the latest assistant message takes an answer. Once the summary is
+  // confirmed, only the options, "what feels off" and the names do.
+  const answerable = (m: PathMessage) => m === latest && m.role === 'assistant' && !sending
+    && (!confirmed || (!!m.choices?.purpose && AFTER_SUMMARY.includes(m.choices.purpose)));
   // One input at a time: the free-text box only on an open question in the conversation phase.
   const showComposer = phase === 'conversation' && !(latest?.role === 'assistant' && latest.choices);
+  const optionsFailed = phase === 'options' && options.status === 'failed' && latest?.role === 'user';
+  const waitingStatus = (options.round ?? 1) > 1 ? NEW_OPTIONS_STATUS : OPTIONS_STATUS;
 
   return (
     <div className="flow-container mentor-chat-container">
@@ -281,8 +348,8 @@ export default function PathConversationPage() {
       )}
       <ChatThread
         messages={messages}
-        loading={sending}
-        statusText={status}
+        loading={sending || generating}
+        statusText={sending ? status : waitingStatus}
         input={input}
         onInputChange={setInput}
         onSend={handleSend}
@@ -310,19 +377,44 @@ export default function PathConversationPage() {
                 onSubmit={(ids, note) => handleChoice(message, ids, note)}
               />
             </div>
-          ) : null
-        }
-        renderInBubble={message =>
-          message.choices && !message.choices.card && answerable(message) ? (
-            <ChatChoices
+          ) : message.choices?.purpose === 'options' && message.choices.options_round ? (
+            // An options round: three cards in the thread (brief 168-options, Part E).
+            <PathOptionsRound
               key={message.id}
-              choices={message.choices}
+              round={message.choices.options_round}
+              choices={answerable(message) ? message.choices : null}
               disabled={sending}
               onSubmit={(ids, note) => handleChoice(message, ids, note)}
             />
           ) : null
         }
+        renderInBubble={message =>
+          !message.choices || message.choices.card || !answerable(message) ? null
+            : message.choices.purpose === 'naming' ? (
+              <PathNaming
+                key={message.id}
+                choices={message.choices}
+                disabled={sending}
+                onSubmit={(ids, note) => handleChoice(message, ids, note)}
+              />
+            ) : (
+              <ChatChoices
+                key={message.id}
+                choices={message.choices}
+                disabled={sending}
+                onSubmit={(ids, note) => handleChoice(message, ids, note)}
+              />
+            )
+        }
       />
+      {optionsFailed && (
+        <div className="mentor-composer path-options-retry">
+          <p className="flex-1">We couldn’t put your options together this time.</p>
+          <SecondaryButton onClick={handleRetryOptions} disabled={retrying}>
+            {retrying ? 'Starting…' : 'Try again'}
+          </SecondaryButton>
+        </div>
+      )}
     </div>
   );
 }

@@ -715,22 +715,22 @@ function toView(o: StoredOption): PathOptionView {
 }
 
 function roundView(artifactId: string, c: OptionsContent): OptionsRoundView {
+  const lastRound = c.round >= MAX_OPTIONS_ROUNDS;
+  const intro = [...(c.round > 1 ? [NEW_ROUND_TEXT] : []), ...(lastRound ? [LAST_ROUND_TEXT] : [])].join(' ') || null;
   return {
     artifact_id: artifactId,
     round: c.round,
+    intro,
     options: (c.options ?? []).map(toView),
     strongest_fit_id: c.strongest_fit_id ?? '',
     why_strongest: c.why_strongest ?? '',
-    last_round: c.round >= MAX_OPTIONS_ROUNDS,
+    last_round: lastRound,
   };
 }
 
 /** The round as plain markdown, for read-back anywhere. */
 function optionsMarkdown(view: OptionsRoundView): string {
-  const intro = [
-    ...(view.round > 1 ? [NEW_ROUND_TEXT] : []),
-    ...(view.last_round ? [LAST_ROUND_TEXT] : []),
-  ];
+  const intro = view.intro ? [view.intro] : [];
   const blocks = view.options.map(o => [
     `**${o.name}**${o.id === view.strongest_fit_id ? ' (Zyrro’s strongest fit)' : ''}`,
     ...(o.what_it_is ? [o.what_it_is] : []),
@@ -777,7 +777,7 @@ function feedbackMessage(view: OptionsRoundView): AssistantMessage {
         required: false,
         options: [{ id: 'close', label: 'Close' }, { id: 'not_for_me', label: 'Not for me' }],
       })),
-      note: { placeholder: 'What feels off, or what would be closer? (Optional)' },
+      note: { placeholder: 'What feels off, or what would be closer?', required_unless_picked: true },
     },
   };
 }
