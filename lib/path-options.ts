@@ -508,6 +508,19 @@ function startsAlike(options: StoredOption[]): string[] {
   return out;
 }
 
+/** Each part the third- or first-person check rejects, with the word and the full text, for the log. */
+function voiceRejections(set: ParsedSet, ctx: GenContext): string[] {
+  return set.options.flatMap(o => {
+    const fields: Array<[string, string]> = PART_KEYS.map(k => [k, o[k] ?? '']);
+    if (o.id === set.strongest_fit_id) fields.push(['why_strongest', set.why_strongest]);
+    return fields.flatMap(([field, text]) => {
+      const third = thirdPersonWord(text, ctx.firstName);
+      const why = third ? `third person ("${third}")` : hasFirstPerson(text) ? 'first person' : null;
+      return why ? [`${o.id}.${field} (${why}): ${JSON.stringify(text)}`] : [];
+    });
+  });
+}
+
 function kindProblem(options: StoredOption[], level: DirectionLevel): string | null {
   const count = (k: OptionKind) => options.filter(o => o.kind === k).length;
   const got = options.map(o => o.kind).join(', ');
@@ -570,6 +583,9 @@ async function generateSet(
 
   if (aProblems.length) {
     console.warn(`[path options] first set not usable as is; retrying once: ${aProblems.join('; ')}`);
+    // The rejected text of every voice check that triggered this retry, so a
+    // false positive (a "their" about other people) can be told from a real one.
+    if (a.set) for (const r of voiceRejections(a.set, ctx)) console.warn(`[path options] voice check rejected ${r}`);
     log.attempts = 2;
     const retry = await chatJson([
       ...base,
