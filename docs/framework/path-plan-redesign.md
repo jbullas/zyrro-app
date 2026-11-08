@@ -1,6 +1,6 @@
 # Zyrro Path and Plan Redesign (draft)
 
-Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card), and 2026-11-08 for the options (options by direction level, attempts as soft background, adjustment rounds, section lengths). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
+Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card), and 2026-11-08 for the options (options by direction level, attempts as soft background, adjustment rounds, section lengths; then the option parts' order, a concrete name, "what it is" and the full-time picture). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
 
 ## Goal
 
@@ -88,7 +88,8 @@ The open-ended ongoing conversation belongs to the Mentor subscription; these li
 - **In the user's own words.** Each option ties back to the confirmed summary and what the user said in the conversation.
 - **Options follow the direction level.** Path is about reinventing the user's life and work, building on their strengths and getting rid of what keeps them stuck, not about how they spend their free time.
   - A clear direction: the three options develop that direction in different forms.
-  - A rough sense, or not yet: at least two of the three are new paths built on the user's answers and report evidence; an option that rebalances what they already do (more or less of the same) is one at most.
+  - A rough sense that is specific enough to build on (after its follow-up, if one was asked): the options develop it in different forms, and at least one is a new path.
+  - A vague rough sense, or not yet: at least two of the three are new paths built on the user's answers and report evidence; an option that rebalances what they already do (more or less of the same) is one at most.
   - Something the user named about their free time is never the basis of an option.
   - Each option carries its kind (develops the direction, new path, rebalance) in its stored data, not shown to the user, so code can check the counts against the direction level.
 - **Past attempts are soft background.** An option is never dropped because it resembles something the user tried; it says what would be different this time (see the profile, item 3).
@@ -118,15 +119,18 @@ If the budget runs out mid-conversation, Zyrro wraps up with what it has, shows 
 
 ## What each option contains
 
-1. **Descriptive name.** A few words saying plainly what the path is. Clarity matters most while the user compares three.
-2. **Why it fits you.** Tied to the confirmed summary and what the user said in the conversation.
-3. **What it would look like.** A short picture of life on that path.
-4. **Starting point.** One line on the shape of the start, pitched at the user's risk level: a side project alongside their job, a few months of research, or a real move now. No tasks; those belong to the Plan.
-5. **What it would cost them.** The honest trade-off, given their constraints, including any must-avoid it can't fully avoid.
+In this order, so the user understands what an option is before reading why it fits them:
+
+1. **Name.** A concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business, not an abstract description of an activity. Clarity matters most while the user compares three.
+2. **What it is.** One sentence naming the form: reshaping their current role with their current employer; a new role with a different employer (saying what kind); freelance or consultancy (saying for whom); starting a business (saying what it sells and to whom); or a portfolio mix (saying the parts). It states who pays the user.
+3. **What it would look like.** The path once it is fully up and running and takes up their full working time, not limited by the hours they have now to explore or start. A concrete picture: where, with whom, what they actually do and how they earn. It leads with the appeal of that life, vivid and specific; caveats belong in the cost. Their current hours, readiness and risk shape only the starting point.
+4. **Why it fits you.** Tied to the confirmed summary and what the user said in the conversation.
+5. **Starting point.** One line on the shape of the start, pitched at the user's risk level: a side project alongside their job, a few months of research, or a real move now. No tasks; those belong to the Plan.
+6. **What it would cost them.** The honest trade-off, given their constraints, including any must-avoid it can't fully avoid.
 
 The strongest fit adds one line: why Zyrro picked it over the other two.
 
-**Lengths:** name, at most 6 words or 50 characters; why it fits you, at most 2 sentences or 280 characters; what it would look like, at most 2 sentences or 300 characters; starting point, 1 sentence of at most 160 characters; what it would cost them, at most 2 sentences or 240 characters; why Zyrro picked it, 1 sentence of at most 200 characters.
+**Lengths:** name, at most 6 words or 50 characters; what it is, 1 sentence of at most 200 characters; what it would look like, at most 3 sentences or 450 characters; why it fits you, at most 2 sentences or 280 characters; starting point, 1 sentence of at most 160 characters; what it would cost them, at most 2 sentences or 240 characters; why Zyrro picked it, 1 sentence of at most 200 characters.
 
 **After the user picks:** the existing project-naming system generates a brand-style name for the chosen path only. Plan and Mentor refer to the path by that name.
 
