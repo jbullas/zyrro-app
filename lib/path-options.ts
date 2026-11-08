@@ -83,7 +83,7 @@ const LIMITS = {
   what_it_is: { sentences: 1, chars: 200 },
   what_it_looks_like: { sentences: 3, chars: 450 },
   why_it_fits: { sentences: 2, chars: 280 },
-  starting_point: { sentences: 1, chars: 160 },
+  starting_point: { sentences: 1, chars: 180 },
   what_it_costs: { sentences: 2, chars: 240 },
   why_strongest: { sentences: 1, chars: 200 },
 } as const;
