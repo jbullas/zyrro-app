@@ -110,6 +110,7 @@ The open-ended ongoing conversation belongs to the Mentor subscription; these li
 ## Path options
 
 - **Grown out of the understanding.** The options answer the tension the user confirmed and follow from the pattern as Zyrro read it with them: away from it where the pattern is the source of the tension, along it where it points to where they're heading, or both. Each option should click when they read it: they recognise themselves in it, even when it surprises them.
+- **The whole tension.** When the confirmed tension or pattern reaches beyond work (belonging, time, the people around them), an option may show that part of the user's life changing too, in what it would look like and why it fits them. Options stay life-and-work options: free time is never the basis of an option, but each option shows how it answers the whole tension.
 - **Three options** in the first go: the strongest fit plus two alternatives.
 - **Zyrro commits to one.** It marks the strongest fit and says why.
 - **Ambitious.** The strongest fit is the boldest true version of where the user's strengths and answers point, not a smaller version of their current situation. Their readiness, risk and hours shape only the starting point, never how big the direction is.
