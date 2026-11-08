@@ -370,6 +370,15 @@ function buildInputs(
   const d = profile.direction.value;
   return {
     round,
+    // The main input (design doc, "Grown out of the understanding"): the
+    // tension and pattern the user confirmed, as the card put them, with the
+    // summary's notes behind them.
+    understanding: {
+      how_zyrro_sees_you: card.seen_as,
+      tensions: summary?.tensions.map(n => n.text) ?? [],
+      pattern_and_connections: summary?.connections.map(n => n.text) ?? [],
+      confirmed_read: summary?.confirmed_read?.text ?? null,
+    },
     card: {
       seen_as: card.seen_as,
       wants: card.wants,
@@ -386,9 +395,6 @@ function buildInputs(
     },
     summary: summary
       ? {
-          confirmed_read: summary.confirmed_read?.text ?? null,
-          tensions: summary.tensions.map(n => n.text),
-          connections: summary.connections.map(n => n.text),
           pushing: summary.pushing?.text ?? null,
           open_questions: summary.open_questions,
         }
