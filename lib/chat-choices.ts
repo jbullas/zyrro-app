@@ -70,6 +70,19 @@ export type OptionsRoundView = {
 // Name suggestions for the chosen path (purpose 'naming'); ids match the 'name' group's options.
 export type NameSuggestion = { id: string; name: string; rationale: string };
 
+// A name the user writes themselves for the chosen path (sent as the naming
+// turn's note): trimmed, at most this long, no em or en dashes.
+export const PROJECT_NAME_MAX_CHARS = 50;
+
+/** Why a typed name can't be saved, or null when it can. */
+export function typedNameProblem(raw: string): 'empty' | 'too_long' | 'dash' | null {
+  const name = raw.replace(/\s+/g, ' ').trim();
+  if (!name) return 'empty';
+  if (name.length > PROJECT_NAME_MAX_CHARS) return 'too_long';
+  if (/[—–]/.test(name)) return 'dash';
+  return null;
+}
+
 export type SummaryCardItem = { id: string; text: string; inferred: boolean };
 
 export type RiskLine = 'readiness' | 'at_stake' | 'limits' | 'hours' | 'deadline';

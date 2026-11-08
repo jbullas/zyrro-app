@@ -15,6 +15,7 @@ import {
 } from '@/lib/chat-turn';
 import {
   noteFromContent,
+  typedNameProblem,
   type ChatChoiceSet,
   type NameSuggestion,
   type OptionsRoundView,
@@ -860,13 +861,16 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
               mode: 'groups',
               purpose: 'naming',
               names: named.names,
+              // A suggestion, the skip, or a name of their own as the note
+              // (one of them; the typed name is checked in the naming turn).
               groups: [{
                 id: 'name',
                 label: 'Which name do you want for this path?',
                 mode: 'single',
-                required: true,
+                required: false,
                 options: [...named.names.map(n => ({ id: n.id, label: n.name })), { id: 'skip', label: 'Skip, keep the descriptive name' }],
               }],
+              note: { placeholder: 'Or write your own', required_unless_picked: true },
             } satisfies ChatChoiceSet,
           }
         : endMessage(option, undefined);
@@ -900,7 +904,14 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
 
     if (row.phase === 'chosen' && choices.purpose === 'naming' && choices.names) {
       const pick = ids.find(id => id.startsWith('name:'))?.slice(5);
-      const projectName = pick === 'skip' ? null : choices.names.find(n => n.id === pick)?.name;
+      let projectName: string | null | undefined;
+      if (pick) {
+        projectName = pick === 'skip' ? null : choices.names.find(n => n.id === pick)?.name;
+      } else {
+        // A name of their own: trimmed, at most 50 characters, no em or en dashes.
+        if (!note || typedNameProblem(note)) return refuse(400, 'invalid_name');
+        projectName = note.replace(/\s+/g, ' ').trim();
+      }
       if (projectName === undefined) return refuse(400, 'invalid_choice');
       const current = await latestChoice(supabase, conversation.id);
       if (!current) return refuse(409, 'stale_choice');
