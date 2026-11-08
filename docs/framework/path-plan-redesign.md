@@ -1,6 +1,6 @@
 # Zyrro Path and Plan Redesign (draft)
 
-Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
+Status: draft, 2026-11-05, revised 2026-11-06 after the Nadia\_Kessler test run (shorter conversation, no signature discussion), and 2026-11-07 after her Preview run (the direction question replaces the tried-before question; direction on the card), and 2026-11-08 for the options (options by direction level, attempts as soft background, adjustment rounds, section lengths). Miroslav signs off on this design. It replaces the current Path flow (Direction, Options, Your Path) as the design target; the current flow is not used as a starting point.
 
 ## Goal
 
@@ -20,7 +20,7 @@ Behind the conversation sits a profile that fills in as the user talks. Six item
 
 1. **Opening read:** the user has confirmed or corrected Zyrro's plain-language read of them.
 2. **What's pushing them now,** and any deadline.
-3. **What they've tried before** to change things, and why it didn't stick. Context from the 13 answers only, never asked: each attempt needs an answer reference and an exact quote, checked in code like must-haves, and anything that fails the check is dropped. Kept so the options don't re-offer what already failed; not shown on the card.
+3. **What they've tried before** to change things, and why it didn't stick. Context from the 13 answers only, never asked: each attempt needs an answer reference and an exact quote, checked in code like must-haves, and anything that fails the check is dropped. Soft background for the options, not shown on the card: an option is never dropped because it resembles something the user tried. When it does, its starting point or cost says what would be different this time, using only what the user said about why it didn't stick.
 4. **Clarity of direction:** a clear direction, a rough sense, or not yet, plus the user's own words when they have one. Something the user names that belongs to their free time rather than to where their life and work are heading is recorded in their words, but it is not the direction.
 5. **Risk, constraints and time:** the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; or not sure yet); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
 6. **Must-haves and must-avoids:** what a good direction has to include and what it has to avoid, taken from what the user said.
@@ -86,7 +86,13 @@ The open-ended ongoing conversation belongs to the Mentor subscription; these li
 - **More than one thread.** Options draw on the whole confirmed summary, not only its strongest theme.
 - **Risk shapes the first step, not the direction.** A cautious user can get a bold direction that starts as a side project or research; a user ready for change gets it starting as a real move.
 - **In the user's own words.** Each option ties back to the confirmed summary and what the user said in the conversation.
-- **If nothing lands, keep talking.** Zyrro asks what feels off and adjusts, instead of generating a fresh batch.
+- **Options follow the direction level.** Path is about reinventing the user's life and work, building on their strengths and getting rid of what keeps them stuck, not about how they spend their free time.
+  - A clear direction: the three options develop that direction in different forms.
+  - A rough sense, or not yet: at least two of the three are new paths built on the user's answers and report evidence; an option that rebalances what they already do (more or less of the same) is one at most.
+  - Something the user named about their free time is never the basis of an option.
+  - Each option carries its kind (develops the direction, new path, rebalance) in its stored data, not shown to the user, so code can check the counts against the direction level.
+- **Past attempts are soft background.** An option is never dropped because it resembles something the user tried; it says what would be different this time (see the profile, item 3).
+- **If nothing lands, keep talking.** Zyrro asks what feels off (for each option: close, or not for me, plus a note) and adjusts the set from that, instead of generating an unrelated fresh batch: an option marked close is kept or developed, one marked not for me doesn't return. At most two adjustment rounds; after that, Zyrro asks the user to choose the closest one.
 
 ## Where it lives
 
@@ -119,6 +125,8 @@ If the budget runs out mid-conversation, Zyrro wraps up with what it has, shows 
 5. **What it would cost them.** The honest trade-off, given their constraints, including any must-avoid it can't fully avoid.
 
 The strongest fit adds one line: why Zyrro picked it over the other two.
+
+**Lengths:** name, at most 6 words or 50 characters; why it fits you, at most 2 sentences or 280 characters; what it would look like, at most 2 sentences or 300 characters; starting point, 1 sentence of at most 160 characters; what it would cost them, at most 2 sentences or 240 characters; why Zyrro picked it, 1 sentence of at most 200 characters.
 
 **After the user picks:** the existing project-naming system generates a brand-style name for the chosen path only. Plan and Mentor refer to the path by that name.
 
@@ -180,7 +188,7 @@ Time available per week is part of the risk, constraints and time item and is al
 
 ## Open questions
 
-1. Length of each option section.
+1. Length of each option section: resolved 2026-11-08 (see What each option contains).
 2. What the Plan's milestones and first-stretch actions contain, and how the Plan is shown.
 3. What a redo resets beyond the conversation, for example whether an already chosen path and its Plan are kept.
 4. Values for the guardrails: stall threshold, hard cap, token budget, message length, rate limits.
