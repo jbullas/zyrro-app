@@ -93,7 +93,9 @@ The open-ended ongoing conversation belongs to the Mentor subscription; these li
   - Something the user named about their free time is never the basis of an option.
   - Each option carries its kind (develops the direction, new path, rebalance) in its stored data, not shown to the user, so code can check the counts against the direction level.
 - **Past attempts are soft background.** An option is never dropped because it resembles something the user tried; it says what would be different this time (see the profile, item 3).
-- **If nothing lands, keep talking.** Zyrro asks what feels off (for each option: close, or not for me, plus a note) and adjusts the set from that, instead of generating an unrelated fresh batch: an option marked close is kept or developed, one marked not for me doesn't return. At most two adjustment rounds; after that, Zyrro asks the user to choose the closest one.
+- **Say what to do.** Above every set of options, one code-owned line says what to do: choose the option to build the plan on, or ask Zyrro to adjust them; a note can be added either way. After a choice, the next steps are naming the path, then the plan.
+- **Choosing takes a note.** The user can add an optional note with their choice (anything to keep in mind about this path), sent with it in one step. It is kept with the chosen path, passed to naming, and kept for the Plan.
+- **If nothing lands, keep talking.** The user asks Zyrro to adjust the options ("Adjust these options"). Zyrro asks what feels off (for each option: close, or not for me, plus a note) and adjusts the set from that, instead of generating an unrelated fresh batch: an option marked close is kept or developed, one marked not for me doesn't return. At most two adjustment rounds; after that, Zyrro asks the user to choose the closest one.
 
 ## Where it lives
 
@@ -121,7 +123,7 @@ If the budget runs out mid-conversation, Zyrro wraps up with what it has, shows 
 
 In this order, so the user understands what an option is before reading why it fits them:
 
-1. **Name.** A concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business, not an abstract description of an activity. Clarity matters most while the user compares three.
+1. **Name.** A concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business, not an abstract description of an activity. It matches the option's form: a role with an employer is never named as consultancy or freelance work, and freelance or consultancy work is never named as a job with an employer. Clarity matters most while the user compares three.
 2. **What it is.** One sentence naming the form: reshaping their current role with their current employer; a new role with a different employer (saying what kind); freelance or consultancy (saying for whom); starting a business (saying what it sells and to whom); or a portfolio mix (saying the parts). It states who pays the user.
 3. **What it would look like.** The path once it is fully up and running and takes up their full working time, not limited by the hours they have now to explore or start. A concrete picture: where, with whom, what they actually do and how they earn. It leads with the appeal of that life, vivid and specific; caveats belong in the cost. Their current hours, readiness and risk shape only the starting point.
 4. **Why it fits you.** Tied to the confirmed summary and what the user said in the conversation.
@@ -132,7 +134,7 @@ The strongest fit adds one line: why Zyrro picked it over the other two.
 
 **Lengths:** name, at most 6 words or 50 characters; what it is, 1 sentence of at most 200 characters; what it would look like, at most 3 sentences or 450 characters; why it fits you, at most 2 sentences or 280 characters; starting point, 1 sentence of at most 180 characters; what it would cost them, at most 2 sentences or 240 characters; why Zyrro picked it, 1 sentence of at most 200 characters.
 
-**After the user picks:** the existing project-naming system generates a brand-style name for the chosen path only. Plan and Mentor refer to the path by that name.
+**After the user picks:** the existing project-naming system generates a brand-style name for the chosen path only, taking the user's note with the choice into account. Plan and Mentor refer to the path by that name.
 
 **Option versus Plan:** the option's starting point sets the frame ("start this as a side project"); the Plan turns it into concrete actions ("this week, do these three things").
 
