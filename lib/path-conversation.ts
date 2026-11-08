@@ -288,18 +288,40 @@ export function firstNameOf(digest: ContextDigest): string {
 
 type MustLists = { must_haves: EvidencedItem[]; must_avoids: EvidencedItem[] };
 
+// A pronoun cut out of an item leaves out a word or two; more than this is a
+// different stretch of the source, not a cut.
+const MAX_CUT_WORDS = 3;
+
 /**
  * Must-haves and must-avoids speak in the second person or without pronouns,
  * never in the third person (brief 168-card-fixes, fix 3). Code finds the
  * items that don't; those get one small rewrite call (only when there are
  * any); an item that still fails has its pronouns swapped by code.
  */
-async function inSecondPerson(input: MustLists, firstName: string, conversationId?: string): Promise<{ lists: MustLists; tokens: number }> {
+async function inSecondPerson(
+  input: MustLists,
+  firstName: string,
+  sourceOf: (ref: string) => string | undefined,
+  conversationId?: string,
+): Promise<{ lists: MustLists; tokens: number }> {
   // Step 3: an item that dodged its quote's pronoun by cutting it out is
   // broken ("…but personally unmoved"); code rebuilds it from the quote with
-  // only the pronouns turned to "you".
+  // only the pronouns turned to "you". The quote can be shorter than the item
+  // (brief 168-options item 5: a quote starting at "commercially sensible"
+  // hid the cut), so the item is also checked against its whole source; there
+  // a cut counts only when the words left out are a few, not a stretch of
+  // other sentences.
+  const cutIn = (i: EvidencedItem): string | null => {
+    const inQuote = personCutFrom(i.text, i.quote);
+    if (inQuote) return inQuote;
+    const source = sourceOf(i.ref);
+    const inSource = source ? personCutFrom(i.text, source) : null;
+    if (!inSource) return null;
+    const extra = inSource.split(/\s+/).length - i.text.split(/\s+/).length;
+    return extra <= MAX_CUT_WORDS ? inSource : null;
+  };
   const uncut = (items: EvidencedItem[]) => items.map(i => {
-    const stretch = personCutFrom(i.text, i.quote);
+    const stretch = cutIn(i);
     if (!stretch) return i;
     const text = secondPersonFromSource(stretch);
     console.warn(`[path items] ${i.id} cut the person out of its quote: "${i.text}"; rebuilt from the quote: "${text}"`);
@@ -425,7 +447,7 @@ export async function seedPath(digest: ContextDigest, conversationId?: string): 
       const avoids = validateEvidenced(parsed.must_avoids, ownIndex, 'a', []);
       const dropped = [...haves.dropped, ...avoids.dropped];
       if (dropped.length) console.warn(`[path seed] must items dropped: ${dropped.join('; ')}`);
-      const voiced = await inSecondPerson({ must_haves: haves.items, must_avoids: avoids.items }, firstNameOf(digest), conversationId);
+      const voiced = await inSecondPerson({ must_haves: haves.items, must_avoids: avoids.items }, firstNameOf(digest), ref => ownIndex.get(ref), conversationId);
       tokens += voiced.tokens;
       profile.must_haves_avoids = {
         ...profile.must_haves_avoids,
@@ -1125,6 +1147,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   const voiced = await inSecondPerson(
     { must_haves: statedIfTheirs(withRequested('must_haves', 'h')), must_avoids: statedIfTheirs(withRequested('must_avoids', 'a')) },
     firstNameOf(s.digest),
+    ref => s.ownIndex.get(ref),
     conversationId,
   );
   profile = {
