@@ -130,7 +130,7 @@ In this order, so the user understands what an option is before reading why it f
 
 The strongest fit adds one line: why Zyrro picked it over the other two.
 
-**Lengths:** name, at most 6 words or 50 characters; what it is, 1 sentence of at most 200 characters; what it would look like, at most 3 sentences or 450 characters; why it fits you, at most 2 sentences or 280 characters; starting point, 1 sentence of at most 160 characters; what it would cost them, at most 2 sentences or 240 characters; why Zyrro picked it, 1 sentence of at most 200 characters.
+**Lengths:** name, at most 6 words or 50 characters; what it is, 1 sentence of at most 200 characters; what it would look like, at most 3 sentences or 450 characters; why it fits you, at most 2 sentences or 280 characters; starting point, 1 sentence of at most 180 characters; what it would cost them, at most 2 sentences or 240 characters; why Zyrro picked it, 1 sentence of at most 200 characters.
 
 **After the user picks:** the existing project-naming system generates a brand-style name for the chosen path only. Plan and Mentor refer to the path by that name.
 
