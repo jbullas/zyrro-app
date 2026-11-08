@@ -89,8 +89,9 @@ import {
 // (lib/user-summary.ts); call B writes the reply from the summary, this turn's
 // insights and the evidence behind them. Code decides what comes next, applies
 // every tap on its own choices, and moves the phase to `summary` in the same
-// turn the profile completes, returning the summary card. Options are the
-// next brief.
+// turn the profile completes, returning the summary card. Confirming the card
+// moves the phase to options; the options, choice and naming live in
+// lib/path-options.ts (brief 168-options).
 
 export const PATH_ENTITLEMENT = 'onetime_payment' as const;
 
@@ -214,7 +215,7 @@ export async function buildContextDigest(supabase: SupabaseClient, userId: strin
 }
 
 // The report fields a ref may point at (report.<key>), as the text an excerpt shows.
-function reportFields(digest: ContextDigest): Record<string, string> {
+export function reportFields(digest: ContextDigest): Record<string, string> {
   const r = digest.report;
   const fields: Record<string, string> = {
     identity_thesis: r.identity_thesis,
@@ -234,13 +235,13 @@ function reportFields(digest: ContextDigest): Record<string, string> {
 // The not-yet-saved user message is referred to as m:latest until it has an id.
 const LATEST_REF = 'm:latest';
 
-type OwnMessage = { id: string; content: string };
+export type OwnMessage = { id: string; content: string };
 
 /**
  * The user's own words in each of their messages: the typed text, or for a
  * tap only the note (the tapped labels are Zyrro's words, not theirs).
  */
-function ownMessages(all: StoredMessage[]): OwnMessage[] {
+export function ownMessages(all: StoredMessage[]): OwnMessage[] {
   const out: OwnMessage[] = [];
   all.forEach((m, i) => {
     if (m.role !== 'user') return;
@@ -256,7 +257,7 @@ function ownMessages(all: StoredMessage[]): OwnMessage[] {
 function refIndexFor(digest: ContextDigest, messages: OwnMessage[]): RefIndex {
   return buildRefIndex({ answers: digest.answers, reportFields: reportFields(digest), userMessages: messages });
 }
-function ownIndexFor(digest: ContextDigest, messages: OwnMessage[]): RefIndex {
+export function ownIndexFor(digest: ContextDigest, messages: OwnMessage[]): RefIndex {
   return buildRefIndex({ answers: digest.answers, reportFields: {}, userMessages: messages });
 }
 
@@ -281,7 +282,7 @@ function evidenceCheck(ownIndex: RefIndex): EvidenceCheck {
   };
 }
 
-function firstNameOf(digest: ContextDigest): string {
+export function firstNameOf(digest: ContextDigest): string {
   return digest.report.prepared_for.split(/\s+/)[0] ?? '';
 }
 
@@ -335,7 +336,7 @@ async function inSecondPerson(input: MustLists, firstName: string, conversationI
 
 // temperature undefined: the model's default (the newer models only accept that).
 // Logs one usage line per call (tokens, cache hits, reasoning, latency).
-async function chatJson(
+export async function chatJson(
   messages: ChatCompletionMessageParam[],
   temperature: number | undefined,
   label: string,
@@ -390,7 +391,7 @@ function signatureTerms(digest: ContextDigest): string[] {
   ].map(t => t?.trim()).filter((t): t is string => !!t && t.length > 2);
 }
 
-function mentionsSignature(text: string, digest: ContextDigest): string | null {
+export function mentionsSignature(text: string, digest: ContextDigest): string | null {
   const lower = text.toLowerCase();
   return signatureTerms(digest).find(t => lower.includes(t.toLowerCase())) ?? null;
 }
@@ -734,7 +735,7 @@ function riskFacts(profile: PathProfile) {
  * order. Profiles from before brief 168-card-fixes fall back to the recorded
  * description.
  */
-function directionSources(profile: PathProfile, ownIndex: RefIndex): string[] {
+export function directionSources(profile: PathProfile, ownIndex: RefIndex): string[] {
   const v = profile.direction.value;
   if (!v || v.kind === 'no_idea') return [];
   const texts = (v.answer_refs ?? []).map(ref => ownIndex.get(ref)).filter((t): t is string => !!t?.trim());
@@ -908,8 +909,6 @@ function cardMarkdown(card: SummaryCard): string {
     ].join('\n'),
   ].join('\n\n');
 }
-
-const HOLDING_TEXT = 'Your summary is confirmed. Your three path options come next.';
 
 // ── Shared pieces of a turn ────────────────────────────────────────────────
 
@@ -1625,13 +1624,15 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
         // Changed risk and time answers: show the updated card once more before
         // confirming (Miroslav, 2026-11-06), built by code.
         if (riskChanged) return codeCard(cardState.round + 1, false);
-        // Confirmed: no model call. The options come next (not built in this brief).
+        // Confirmed: no model call and no message (brief 168-options, Part B
+        // item 1). The phase moves to options; the generation is started after
+        // this commit (lib/path-options.ts) and its options arrive as the reply.
         const confirmed: CardState = { ...cardState, card, correction: null, clarify_pending: false, confirmed: true };
         return {
           ok: true,
-          assistant: { content: HOLDING_TEXT, choices: null },
+          assistant: null,
           tokens: 0,
-          commit: commitWith(confirmed, { summary_confirmed_at: new Date().toISOString() }),
+          commit: commitWith(confirmed, { summary_confirmed_at: new Date().toISOString(), phase: 'options' }),
         };
       }
       if (verdict !== 'mostly' && verdict !== 'not_it') return { ok: false, status: 400, error: 'invalid_choice', tokens: 0 };

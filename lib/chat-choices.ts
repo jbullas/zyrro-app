@@ -33,7 +33,33 @@ export type NoteRule = {
   placeholder?: string;
 };
 
-export type ChoicePurpose = 'opening_read' | 'direction' | 'risk_time' | 'summary' | 'summary_clarify';
+// options: a round of three path options (brief 168-options); options_feedback:
+// what feels off about them; naming: names for the chosen path.
+export type ChoicePurpose = 'opening_read' | 'direction' | 'risk_time' | 'summary' | 'summary_clarify' | 'options' | 'options_feedback' | 'naming';
+
+// One path option as the user sees it (its kind and evidence stay server-side).
+export type PathOptionView = {
+  id: string;
+  name: string;
+  why_it_fits: string;
+  what_it_looks_like: string;
+  starting_point: string;
+  what_it_costs: string;
+};
+
+// An options round on its message (purpose 'options'). last_round: no
+// "None of these feels right" after it, the user picks the closest one.
+export type OptionsRoundView = {
+  artifact_id: string;
+  round: number;
+  options: PathOptionView[];
+  strongest_fit_id: string;
+  why_strongest: string;
+  last_round: boolean;
+};
+
+// Name suggestions for the chosen path (purpose 'naming'); ids match the 'name' group's options.
+export type NameSuggestion = { id: string; name: string; rationale: string };
 
 export type SummaryCardItem = { id: string; text: string; inferred: boolean };
 
@@ -68,7 +94,16 @@ export type SummaryCard = {
 
 // preselected: ids already picked when the choices are shown (the card's
 // re-offered risk and time taps, filled with the current answers).
-type ChoiceBase = { purpose?: ChoicePurpose; note?: NoteRule; card?: SummaryCard; preselected?: string[] };
+// options_round: the options shown (purpose 'options'); names: the suggestions
+// with their rationale (purpose 'naming').
+type ChoiceBase = {
+  purpose?: ChoicePurpose;
+  note?: NoteRule;
+  card?: SummaryCard;
+  preselected?: string[];
+  options_round?: OptionsRoundView;
+  names?: NameSuggestion[];
+};
 
 export type ChatChoiceSet =
   | (ChoiceBase & { mode: 'single' | 'multi'; max: number; options: ChoiceOption[] })

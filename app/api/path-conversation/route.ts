@@ -25,24 +25,29 @@ import {
   pathState,
   toMessageView,
 } from '@/lib/path-conversation';
-import { choiceContent, validateChoiceAnswer, type ChatChoiceSet } from '@/lib/chat-choices';
+import { choiceContent, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
+import { ensureOptionsGeneration, optionsStateView, PATH_FLOW_TURN_CONFIG } from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
 // the conversation id and the new message, or the tapped choices plus an
 // optional note. Typing is accepted only in the conversation phase and only
 // when the latest message has no choices; in the summary phase only the
-// card's choices and its one clarifying answer are accepted; once the summary
-// is confirmed, nothing is.
-// Start = seeding call + opening turn, so it needs more than a single reply.
-export const maxDuration = 120;
+// card's choices and its one clarifying answer are accepted. Once the summary
+// is confirmed (brief 168-options), only taps on the options, the "what feels
+// off" question and the name suggestions are, each on the latest message.
+// The options generation runs in the background after the turn that starts
+// it (after()), so this matches the generation budget, like
+// app/api/path-options/route.ts (GENERATION_BUDGET_MS in lib/generation-budget.ts).
+export const maxDuration = 240;
 
 async function conversationView(supabase: SupabaseClient, conversation: ConversationRow) {
-  const [messages, profileRow] = await Promise.all([
+  const [messages, profileRow, options] = await Promise.all([
     listConversationMessages(supabase, conversation.id),
     getProfileRow(supabase, conversation.id),
+    optionsStateView(supabase, conversation.id),
   ]);
   return {
-    conversation: { id: conversation.id, ...pathState(profileRow) },
+    conversation: { id: conversation.id, ...pathState(profileRow), options },
     messages: messages.map(toMessageView),
   };
 }
@@ -59,13 +64,17 @@ export async function GET() {
   const supabase = createServiceClient();
   const existing = await getPathConversation(supabase, auth.userId);
   if (!existing) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  // Resumes a due generation that never started (a summary confirmed before
+  // options existed) and flips a stranded one; never starts a second one.
+  await ensureOptionsGeneration(supabase, existing.conversation);
   return NextResponse.json(await conversationView(supabase, existing.conversation));
 }
 
 type PostBody =
   | { action: 'start' }
   | { action: 'message'; conversation_id: string; text: string }
-  | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string };
+  | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string }
+  | { action: 'options_retry'; conversation_id: string };
 
 export async function POST(req: NextRequest) {
   let body: PostBody;
@@ -77,12 +86,13 @@ export async function POST(req: NextRequest) {
 
   try {
     if (body.action === 'start') return await start();
+    if (body.action === 'options_retry') return await retryOptions();
 
     if (body.action === 'message' || body.action === 'choice') {
       if (typeof body.conversation_id !== 'string' || !body.conversation_id) {
         return NextResponse.json({ error: 'Missing conversation_id' }, { status: 400 });
       }
-      const result = await handleChatTurn(PATH_TURN_CONFIG, body.conversation_id, (supabase, conversation) =>
+      const result = await handleChatTurn(PATH_FLOW_TURN_CONFIG, body.conversation_id, (supabase, conversation) =>
         body.action === 'message'
           ? prepareMessage(supabase, conversation, body.text)
           : prepareChoice(supabase, conversation, body.message_id, body.choice_ids, body.note),
@@ -100,10 +110,26 @@ export async function POST(req: NextRequest) {
 async function turnResponse(result: TurnResult, conversationId: string) {
   if (!result.ok) return failure(result);
   const supabase = createServiceClient();
+  const [row, options] = await Promise.all([getProfileRow(supabase, conversationId), optionsStateView(supabase, conversationId)]);
   return NextResponse.json({
     messages: result.messages.map(toMessageView),
-    ...pathState(await getProfileRow(supabase, conversationId)),
+    ...pathState(row),
+    options,
   });
+}
+
+// After a failed options generation: starts that round again. Refused while
+// one is running or when nothing has failed.
+async function retryOptions() {
+  const auth = await requireEntitledUser(PATH_ENTITLEMENT);
+  if (!auth.ok) return failure(auth);
+  const supabase = createServiceClient();
+  const existing = await getPathConversation(supabase, auth.userId);
+  if (!existing) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  const state = await optionsStateView(supabase, existing.conversation.id);
+  if (state.status !== 'failed') return NextResponse.json({ error: 'nothing_to_retry' }, { status: 409 });
+  await ensureOptionsGeneration(supabase, existing.conversation, { retry: true });
+  return NextResponse.json(await conversationView(supabase, existing.conversation));
 }
 
 // Creates the user's one Path conversation (or reuses it), seeds the profile
@@ -165,15 +191,21 @@ async function prepareChoice(
   note: unknown,
 ): Promise<NewUserMessage | TurnFailure> {
   const row = await getProfileRow(supabase, conversation.id);
-  if (!row || (row.phase !== 'conversation' && row.phase !== 'summary') || row.summary_confirmed_at) {
+  const laterPurposes: ChoicePurpose[] | null = row?.phase === 'options' ? ['options', 'options_feedback']
+    : row?.phase === 'chosen' ? ['naming'] : null;
+  if (!row || (!laterPurposes && ((row.phase !== 'conversation' && row.phase !== 'summary') || row.summary_confirmed_at))) {
     return refuse(409, 'not_in_conversation');
   }
 
   const [latest] = await listConversationMessages(supabase, conversation.id, 1);
   const choices = latest?.choices as ChatChoiceSet | null | undefined;
   if (!latest || latest.id !== messageId || latest.role !== 'assistant' || !choices) return refuse(409, 'stale_choice');
-  const summaryChoices = choices.purpose === 'summary' || choices.purpose === 'summary_clarify';
-  if ((row.phase === 'summary') !== summaryChoices) return refuse(409, 'not_in_conversation');
+  if (laterPurposes) {
+    if (!choices.purpose || !laterPurposes.includes(choices.purpose)) return refuse(409, 'not_in_conversation');
+  } else {
+    const summaryChoices = choices.purpose === 'summary' || choices.purpose === 'summary_clarify';
+    if ((row.phase === 'summary') !== summaryChoices) return refuse(409, 'not_in_conversation');
+  }
 
   const answer = validateChoiceAnswer(choices, choiceIds, note);
   if (!answer.ok) return refuse(400, answer.error);

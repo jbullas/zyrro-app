@@ -149,9 +149,13 @@ export type AssistantMessage = { content: string; choices: unknown | null };
  * What a turn produced, before anything is saved. `commit` runs after both
  * messages are saved (it gets them, with their ids) and writes whatever else
  * the turn changed. A failure still reports the tokens it used.
+ *
+ * assistant null: the turn saves only the user's message (#168 options: the
+ * reply arrives later, from a background generation). Mentor never returns
+ * null, so its turns always save both messages.
  */
 export type TurnRun =
-  | { ok: true; assistant: AssistantMessage; tokens: number; commit: (saved: StoredMessage[]) => Promise<void> }
+  | { ok: true; assistant: AssistantMessage | null; tokens: number; commit: (saved: StoredMessage[]) => Promise<void> }
   | (TurnFailure & { tokens: number });
 
 /** A turn that runs its own model calls (Path: update, then reply). */
@@ -214,7 +218,21 @@ export async function runClaimedTurn<P>(
     saved.push(data as StoredMessage);
   }
 
-  const { data: reply, error: replyError } = await supabase
+  if (assistant) saved.push(await insertAssistantMessage(supabase, conversation, assistant));
+
+  await commit(saved);
+  await addTokens(supabase, conversation.id, tokens);
+
+  return { ok: true, messages: saved };
+}
+
+/** Saves an assistant message (a turn's reply, or one written later by a background job). */
+export async function insertAssistantMessage(
+  supabase: SupabaseClient,
+  conversation: Pick<ConversationRow, 'id' | 'user_id'>,
+  assistant: AssistantMessage,
+): Promise<StoredMessage> {
+  const { data, error } = await supabase
     .from('messages')
     .insert({
       user_id: conversation.user_id,
@@ -225,13 +243,8 @@ export async function runClaimedTurn<P>(
     })
     .select(MESSAGE_SELECT)
     .single();
-  if (replyError) throw replyError;
-  saved.push(reply as StoredMessage);
-
-  await commit(saved);
-  await addTokens(supabase, conversation.id, tokens);
-
-  return { ok: true, messages: saved };
+  if (error) throw error;
+  return data as StoredMessage;
 }
 
 // The default turn: one model call (one retry on unusable output).
