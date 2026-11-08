@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import SecondaryButton from '@/components/SecondaryButton';
 import SelectableList from '@/components/SelectableList';
-import type { ChatChoiceSet, OptionsRoundView, PathOptionView } from '@/lib/chat-choices';
+import { NOTE_MAX_CHARS, type ChatChoiceSet, type OptionsRoundView, type PathOptionView } from '@/lib/chat-choices';
 
 type PathOptionsRoundProps = {
   round: OptionsRoundView;
@@ -18,12 +18,16 @@ type PathOptionsRoundProps = {
 // .constellation-card, like the summary card). The parts follow the design
 // doc's order; the strongest fit is marked and shows why Zyrro picked it. On
 // a phone the last three parts fold behind "More about this path", so a card
-// reads as a name, what it is and the picture first. Choosing follows the
-// thread's pattern: tap "Choose this path" (or "None of these feels right"
-// under the cards), then one Continue. Earlier rounds stay in the thread
-// without their controls.
+// reads as a name, what it is and the picture first. Above the cards, the
+// round's code-owned line says what to do. Choosing follows the thread's
+// pattern: tap "Choose this path" (or "Adjust these options" under the
+// cards), add an optional note, then one Continue: the note goes with the
+// choice in the same turn. Earlier rounds stay in the thread without their
+// controls.
 export default function PathOptionsRound({ round, choices, disabled, onSubmit }: PathOptionsRoundProps) {
   const [pick, setPick] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const placeholder = pick === 'none' ? 'What should change? (Optional)' : choices?.note?.placeholder ?? 'Anything to add? (Optional)';
   const pickGroup = choices?.mode === 'groups' ? choices.groups.find(g => g.id === 'pick') : undefined;
   const noneOption = pickGroup?.options.find(o => o.id === 'none');
 
@@ -57,7 +61,17 @@ export default function PathOptionsRound({ round, choices, disabled, onSubmit }:
               onToggle={() => setPick(prev => (prev === 'none' ? null : 'none'))}
             />
           )}
-          <SecondaryButton onClick={() => pick && onSubmit([`pick:${pick}`], null)} disabled={disabled || !pick}>
+          <textarea
+            className="input-field"
+            rows={2}
+            value={note}
+            maxLength={NOTE_MAX_CHARS}
+            placeholder={placeholder}
+            aria-label={placeholder}
+            disabled={disabled}
+            onChange={e => setNote(e.target.value)}
+          />
+          <SecondaryButton onClick={() => pick && onSubmit([`pick:${pick}`], note.trim() || null)} disabled={disabled || !pick}>
             Continue →
           </SecondaryButton>
         </div>

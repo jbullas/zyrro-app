@@ -47,7 +47,7 @@ ADJUSTMENT ROUNDS
 
 THE PARTS OF AN OPTION, IN THE ORDER THE USER READS THEM, AND THE LIMITS ON EACH
 The user first learns what the option is and what life on it looks like, and only then why it fits them.
-- name: a concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business. Never an abstract description of an activity, a slogan or a brand name. At most 6 words and 50 characters.
+- name: a concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business. Never an abstract description of an activity, a slogan or a brand name. It matches the form: a current_employer or new_employer option is never named as consultancy or freelance work, and a freelance option is never named as a staff job with an employer. At most 6 words and 50 characters.
 - what_it_is: one sentence naming the form. For current_employer, what changes in their role there. For new_employer, what kind of employer. For freelance, for whom. For business, what it sells and to whom. For portfolio, the parts. It states who pays them. At most 200 characters.
 - what_it_looks_like: the path once it is fully up and running and takes up their full working time, never limited by the hours they have now to explore or start. A concrete picture: where they work, with whom, what they actually do in a working week, and how they earn. Lead with what is appealing about that life, vivid and specific; caveats belong in what_it_costs. Their current hours, readiness and risk play no part here. At most 3 sentences and 450 characters.
 - why_it_fits: why it fits them, tied to what they said in the session and in their answers, and to the must-haves it meets. At most 2 sentences and 280 characters.

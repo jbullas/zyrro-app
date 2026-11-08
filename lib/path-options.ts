@@ -170,6 +170,9 @@ export type PathChoiceContent = {
   was_strongest_fit: boolean;
   why_strongest: string | null;
   round: number;
+  // What the user asked to keep in mind about this path, sent with the
+  // choice; passed to naming and kept for the Plan (null: none given).
+  note?: string | null;
   // absent = not asked, null = skipped (same convention as path_report).
   project_name?: string | null;
 };
@@ -219,7 +222,8 @@ async function flipStranded(supabase: SupabaseClient, rows: OptionsRow[]): Promi
 
 /**
  * The user's answer to "what feels off", when it is the latest message: the
- * marks per option and their note. Null otherwise.
+ * marks per option and their note, after any note they sent with "Adjust
+ * these options" itself. Null otherwise. Takes the last four messages.
  */
 function pendingFeedback(messages: StoredMessage[]): Adjustment | null {
   const last = messages[messages.length - 1];
@@ -232,7 +236,14 @@ function pendingFeedback(messages: StoredMessage[]): Adjustment | null {
     const [opt, mark] = id.split(':');
     if (mark === 'close' || mark === 'not_for_me') marks[opt] = mark;
   }
-  const note = noteFromContent(choices, ids, last.content) || null;
+  // The note sent with "Adjust these options", from the tap that asked for this question.
+  const adjustTap = messages[messages.length - 3];
+  const optionsMsg = messages[messages.length - 4];
+  const optionsChoices = optionsMsg?.choices as ChatChoiceSet | null | undefined;
+  const adjustNote = adjustTap?.role === 'user' && adjustTap.selected_choice_ids && optionsChoices?.purpose === 'options'
+    ? noteFromContent(optionsChoices, adjustTap.selected_choice_ids, adjustTap.content)
+    : '';
+  const note = [adjustNote, noteFromContent(choices, ids, last.content)].filter(Boolean).join('\n\n') || null;
   return { from_artifact_id: choices.options_round.artifact_id, from_round: choices.options_round.round, marks, note };
 }
 
@@ -271,7 +282,7 @@ export async function ensureOptionsGeneration(
   if (!ready.length) {
     wanted = { round: 1, adjustment: null };
   } else {
-    const adjustment = pendingFeedback(await listConversationMessages(supabase, conversation.id, 2));
+    const adjustment = pendingFeedback(await listConversationMessages(supabase, conversation.id, 4));
     wanted = adjustment ? { round: adjustment.from_round + 1, adjustment } : null;
   }
   if (!wanted) return 'ready';
@@ -480,11 +491,29 @@ function optionProblems(o: StoredOption, ctx: GenContext, whyStrongest: string |
   if (o.who_pays && !norm(o.what_it_is ?? '').includes(norm(o.who_pays))) {
     problems.push(`${o.id}: what_it_is does not name who pays ("${o.who_pays}")`);
   }
+  const nameForm = nameFormProblem(o);
+  if (nameForm) problems.push(`${o.id}: ${nameForm}`);
   // The start is this path's start, not their readiness, risk or hours again (brief item 3).
   if (!pathSpecificStartWords(o.starting_point, [o.name, o.what_it_is ?? '', o.what_it_looks_like], riskLines(ctx.card)).length) {
     problems.push(`${o.id}: starting_point only restates their readiness, risk or hours and says nothing specific to this path`);
   }
   return problems;
+}
+
+// The name matches the form (design doc, "Name"): a role with an employer is
+// never named as consultancy or freelance work, and freelance work is never
+// named as a staff job with an employer.
+const INDEPENDENT_NAME = /\b(consult\w*|freelance\w*)\b/i;
+const EMPLOYED_NAME = /\b(officer|employee|staff|in-house|salaried)\b/i;
+
+function nameFormProblem(o: StoredOption): string | null {
+  if ((o.form === 'current_employer' || o.form === 'new_employer') && INDEPENDENT_NAME.test(o.name)) {
+    return `name "${o.name}" says consultancy or freelance work, but the form is ${o.form}`;
+  }
+  if (o.form === 'freelance' && EMPLOYED_NAME.test(o.name)) {
+    return `name "${o.name}" reads as a staff job with an employer, but the form is freelance`;
+  }
+  return null;
 }
 
 function riskLines(card: SummaryCard): string[] {
@@ -720,10 +749,13 @@ export async function runOptionsGeneration(artifactId: string): Promise<void> {
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
-const NONE_LABEL = 'None of these feels right';
+const NONE_LABEL = 'Adjust these options';
 const FEEDBACK_TEXT = 'What feels off? For each option, tell me whether it’s close or not for you, and add anything that would help me get closer.';
 const NEW_ROUND_TEXT = 'Here are three new options, shaped by what you told me.';
-const LAST_ROUND_TEXT = 'These are the last options in this session, so choose the one closest to what you want.';
+// The what-to-do line above every round (design doc, "Say what to do").
+const GUIDE_TEXT = 'Choose the option you want to build your plan on, or ask me to adjust them. You can add a note either way. After you choose, you’ll name your path, and then we’ll build the plan.';
+const LAST_ROUND_TEXT = 'These are the last options in this session. Choose the one closest to what you want to build your plan on; you can add a note. After you choose, you’ll name your path, and then we’ll build the plan.';
+const CHOICE_NOTE_PLACEHOLDER = 'Anything to keep in mind about this path? (Optional)';
 const PLAN_NEXT_TEXT = 'Your plan for this path comes next.';
 
 function toView(o: StoredOption): PathOptionView {
@@ -733,7 +765,7 @@ function toView(o: StoredOption): PathOptionView {
 
 function roundView(artifactId: string, c: OptionsContent): OptionsRoundView {
   const lastRound = c.round >= MAX_OPTIONS_ROUNDS;
-  const intro = [...(c.round > 1 ? [NEW_ROUND_TEXT] : []), ...(lastRound ? [LAST_ROUND_TEXT] : [])].join(' ') || null;
+  const intro = [...(c.round > 1 ? [NEW_ROUND_TEXT] : []), lastRound ? LAST_ROUND_TEXT : GUIDE_TEXT].join(' ');
   return {
     artifact_id: artifactId,
     round: c.round,
@@ -776,6 +808,8 @@ function optionsMessage(artifactId: string, c: OptionsContent): AssistantMessage
         ...(view.last_round ? [] : [{ id: 'none', label: NONE_LABEL }]),
       ],
     }],
+    // Optional, with a choice (kept on path_choice) or with "Adjust these options".
+    note: { placeholder: CHOICE_NOTE_PLACEHOLDER },
   };
   return { content: optionsMarkdown(view), choices };
 }
@@ -814,10 +848,14 @@ function endMessage(option: StoredOption, projectName: string | null | undefined
 
 // ── Naming (brief Part D item 2) ───────────────────────────────────────────
 
-async function suggestNames(option: StoredOption, conversationId: string): Promise<{ names: NameSuggestion[] | null; tokens: number }> {
+// The user's note with the choice goes into the description the prompt names
+// from (PROJECT_NAME_PROMPT is shared with the current /path naming, so its
+// input shape stays name and description).
+async function suggestNames(option: StoredOption, note: string | null, conversationId: string): Promise<{ names: NameSuggestion[] | null; tokens: number }> {
+  const description = [option.what_it_looks_like, option.starting_point, ...(note ? [`What they want to keep in mind about this path: ${note}`] : [])].join(' ');
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: PROJECT_NAME_PROMPT },
-    { role: 'user', content: JSON.stringify({ name: option.name, description: `${option.what_it_looks_like} ${option.starting_point}` }) },
+    { role: 'user', content: JSON.stringify({ name: option.name, description }) },
   ];
   let tokens = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -868,8 +906,9 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
         was_strongest_fit: option.id === content.strongest_fit_id,
         why_strongest: content.why_strongest ?? null,
         round: content.round,
+        note,
       };
-      const named = await suggestNames(option, conversation.id);
+      const named = await suggestNames(option, note, conversation.id);
       const assistant: AssistantMessage = named.names
         ? {
             content: `You chose **${option.name}**. Here are three names you could give this path. Pick one, or skip and keep its descriptive name.`,
