@@ -1169,11 +1169,23 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
 
   const confirmedRefs = reflections.filter(r => r.status === 'confirmed' || r.status === 'corrected').flatMap(r => r.refs ?? []);
   // Changed sections only; a full "summary" (the pre-follow-up shape) is accepted too.
-  const merged = mergeSummaryChanges(s.summary, out.summary_changes ?? out.summary);
-  const validated = merged ? validateSummary(merged, { index: s.index, confirmedRefs, previous: s.summary }) : null;
+  let merged = mergeSummaryChanges(s.summary, out.summary_changes ?? out.summary);
+  // A missing summary_changes key (about 1 call in 10) left the summary
+  // un-updated on turns that carried something for it (brief 168-options,
+  // item 6): one retry asks for the summary changes only. An empty object is
+  // a real "nothing changed" and is not retried.
   if (!merged) {
-    console.warn(`[path update] no usable summary_changes (got ${JSON.stringify(out.summary_changes)?.slice(0, 120)}; keys ${Object.keys(out).join(',')}); keeping the summary`);
+    console.warn(`[path update] no usable summary_changes (got ${JSON.stringify(out.summary_changes)?.slice(0, 120)}; keys ${Object.keys(out).join(',')}); retrying for the summary only`);
+    const started = Date.now();
+    const retry = await chatJson([
+      ...callAMessages,
+      { role: 'system', content: 'Your answer had no summary_changes. Return only this JSON object: { "summary_changes": { ... } }, with the summary sections this message changes, in the same form as before, or an empty object if it changes none. Nothing else will be used.' },
+    ], 0.2, `${callLabel} (summary retry)`, undefined, conversationId);
+    extraTokens += retry.tokens;
+    merged = mergeSummaryChanges(s.summary, retry.parsed?.summary_changes);
+    console.info(`[path update] summary retry ${merged ? `returned ${Object.keys((retry.parsed?.summary_changes as object) ?? {}).join(',') || 'no changes'}` : 'unusable too; keeping the summary'} in ${Date.now() - started} ms`);
   }
+  const validated = merged ? validateSummary(merged, { index: s.index, confirmedRefs, previous: s.summary }) : null;
   // The confirmed read says how the user now stands (fix 5): code takes out a
   // greeting and every sentence copied from Zyrro's first message. If nothing
   // of its own is left, or Zyrro speaks in it, it falls back to the previous
