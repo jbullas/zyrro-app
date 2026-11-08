@@ -217,9 +217,13 @@ export async function buildContextDigest(supabase: SupabaseClient, userId: strin
 // The report fields a ref may point at (report.<key>), as the text an excerpt shows.
 export function reportFields(digest: ContextDigest): Record<string, string> {
   const r = digest.report;
+  // The friction points and the named identity are where the report names the
+  // user's tension (brief 168-conversation-purpose), so they are citable too.
   const fields: Record<string, string> = {
     identity_thesis: r.identity_thesis,
     synthesis: r.synthesis,
+    ...(r.named_identity && { named_identity: r.named_identity }),
+    ...(r.friction_points?.length && { friction_points: r.friction_points.join('; ') }),
   };
   for (const [k, v] of Object.entries(r.how_you_operate ?? {})) if (typeof v === 'string') fields[`how_you_operate.${k}`] = v;
   for (const s of r.primary_signatures) {
@@ -1235,7 +1239,15 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   const cRefs = Array.isArray(c?.refs) ? c.refs.filter((r): r is string => typeof r === 'string' && s.index.has(r)) : [];
   if (cItem && cText && cText.length <= SUMMARY_CAPS.entry_chars && cRefs.length >= 2) contradiction = { item: cItem, text: cText, refs: cRefs };
 
+  // Whether Zyrro can yet describe the tension, pattern and constraints (brief
+  // 168-conversation-purpose); null when call A gave no usable judgement.
+  const u = out.understanding && typeof out.understanding === 'object' ? (out.understanding as Record<string, unknown>) : null;
+  const understanding = typeof u?.ready === 'boolean'
+    ? { ready: u.ready, still_unclear: typeof u.still_unclear === 'string' && u.still_unclear.trim() ? u.still_unclear.trim() : null }
+    : null;
+
   return {
+    understanding,
     ok: true as const,
     tokens: update.tokens + voiced.tokens + extraTokens,
     profile,
@@ -1491,6 +1503,15 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       s.summary = a.summary;
       s.reflections = a.reflections;
       insights = a.insights;
+      // Call A's readiness judgement, with the turn it first said ready.
+      if (a.understanding) {
+        const prev = s.profile.meta.understanding;
+        const firstReady = prev?.first_ready_turn ?? (a.understanding.ready ? turns : null);
+        s.profile = { ...s.profile, meta: { ...s.profile.meta, understanding: { ...a.understanding, first_ready_turn: firstReady } } };
+        console.info(`[path understanding] ${JSON.stringify({ conversation: conversation.id, turn: turns, ...a.understanding, first_ready_turn: firstReady })}`);
+      } else {
+        console.warn(`[path understanding] no usable judgement from call A (turn ${turns}); keeping ${JSON.stringify(s.profile.meta.understanding ?? null)}`);
+      }
 
       // A clarification has been answered; the next contradiction can be raised.
       if (asked?.kind === 'clarify') s.profile = { ...s.profile, meta: { ...s.profile.meta, pending_clarify: null } };

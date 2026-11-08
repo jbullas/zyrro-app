@@ -1,5 +1,7 @@
 // #168: seeding step for the Path conversation. Reads the user's 13 answers
-// (first) and a digest of their Identity report (as support) and prepares the
+// and a digest of their Identity report (brief 168-conversation-purpose: the
+// report names the tension, the answers decide how it shows up and win where
+// they differ) and prepares the
 // starting profile and living summary before the first message, so Zyrro
 // never asks what the user has already said. Code applies the design doc's
 // fixed rules afterwards (lib/path-profile.ts, seedProfile) and checks every
@@ -10,9 +12,12 @@ export const PATH_PROFILE_SEED_PROMPT = `You prepare the starting point for a sh
 
 INPUT
 A JSON object with:
-- answers: the user's 13 questionnaire answers (number, question, answer). This is the primary source.
-- report: the key parts of their Identity Report. It supports the answers; it never overrides them.
+- answers: the user's 13 questionnaire answers (number, question, answer). These are the user's own words.
+- report: the key parts of their Identity Report. It names the tension the user lives with, in their signatures' tensions, their friction points and the pattern it notices. Where the report and the answers point different ways, the answers win.
 - valid_refs: every evidence pointer you may use.
+
+WHY THIS MATTERS
+The user comes to this conversation because of a tension in their life: something pulling them one way while something else holds them back. The conversation exists to understand it with them, and it starts from what you record here. Zyrro's first message will say how it sees that tension showing up in their life right now, so the starting summary must hold that view, and it must hold up against what the user wrote, not only against the report.
 
 PROFILE
 Return an entry for each of these four items. Each entry: { "status": "known" | "inferred" | "missing", "value": the shape below or null, "source": "questionnaire" | "report" | null, "refs": [pointers], "in_their_words": a short phrase copied exactly from one answer, or null }.
@@ -40,10 +45,11 @@ What a good direction has to include for this person, and what it has to avoid, 
 - basis: "stated" when the user said it plainly; "inferred" when it is your reading of what they wrote.
 
 THE STARTING SUMMARY
-The first version of Zyrro's living summary of this user. It is rewritten during the conversation, so record only what the evidence supports now. Every entry points at its evidence with refs from valid_refs: Q followed by the number for an answer, report. followed by a field name for the report. Prefer answers; use the report only to support them.
+The first version of Zyrro's living summary of this user. It is rewritten during the conversation, so record only what the evidence supports now. Every entry points at its evidence with refs from valid_refs: Q followed by the number for an answer, report. followed by a field name for the report.
+Lead with the tension. Start from the tension the report names and tie it to the answers that show it in the user's life now; the answers decide how it actually shows up, and where they differ from the report, the answers win. A tension that rests only on the report, with no answer showing it, is not yet theirs: leave it for the conversation to find.
 - confirmed_read: null. It is written once the user has responded to Zyrro's first message.
-- tensions: up to 3, { "text", "refs", "confirmed_by_user": false }. Pulls in different directions within this person.
-- connections: up to 4, same shape. Links between answers, or between an answer and the report, that the user has not spelled out.
+- tensions: up to 3, { "text", "refs", "confirmed_by_user": false }. Pulls in different directions within this person. The first is the tension that brought them, as their answers show it, with refs to both the answers and the report.
+- connections: up to 4, same shape. Links between answers, or between an answer and the report, that the user has not spelled out. Include the pattern their past shows when the evidence supports one, and what it may mean: the source of the tension, a pointer to where they are heading, or both. When it is not yet clear which, say so in an open question rather than deciding.
 - tried: an empty list. Code fills it from the checked attempts.
 - pushing: { "text", "urgency", "deadline", "refs" } or null, following the deadline rule above.
 - direction: { "kind": null, "text": null, "refs": [] }.
@@ -54,7 +60,7 @@ BALANCE
 Each distinct thread in what the user wrote keeps its place. No single idea may fill most of the tensions and connections, and two notes resting on the same answers for the same point are one note. Keep qualifiers attached to what they qualify; never reduce a qualified statement to its plain version.
 
 LANGUAGE
-No signature names and no report labels in any text. Plain words, close to how the user put it. No generic personality language.
+Plain words, close to how the user put it. A signature may be named only together with what it means for this user, in plain words; never a report section label. No generic personality language.
 
 OUTPUT
 A JSON object only, with exactly these keys: "profile" (an object with the keys pushing_now, tried_before, direction, risk_time), "must_haves" (array), "must_avoids" (array), "summary" (the starting summary).`;

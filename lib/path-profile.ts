@@ -142,6 +142,15 @@ export type ProfileMeta = {
   // Must-haves and must-avoids the user removed on the card; never proposed again.
   removed_items: string[];
   last_asked: Asked | null;
+  // Call A's judgement after each user message (brief 168-conversation-purpose):
+  // whether Zyrro can yet describe the user's tension, pattern and constraints
+  // well enough for the summary card, and what is still unclear if not.
+  // first_ready_turn: the user turn on which it first said ready. Internal,
+  // never shown; it decides when the conversation ends.
+  understanding?: { ready: boolean; still_unclear: string | null; first_ready_turn: number | null } | null;
+  // Deepen turns (open questions that take the understanding further) asked in
+  // a row since the last practical question.
+  deepen_streak?: number;
 };
 
 export type PathProfile = { version: 2; meta: ProfileMeta } & { [K in ItemKey]: ProfileItem<ItemValues[K]> };
@@ -252,7 +261,7 @@ export function emptyRiskTime(): ItemValues['risk_time'] {
 }
 
 function emptyMeta(): ProfileMeta {
-  return { used_refs: [], pending_clarify: null, removed_items: [], last_asked: null };
+  return { used_refs: [], pending_clarify: null, removed_items: [], last_asked: null, understanding: null, deepen_streak: 0 };
 }
 
 export function emptyProfile(): PathProfile {
