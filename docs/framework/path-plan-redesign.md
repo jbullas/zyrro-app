@@ -25,7 +25,7 @@ Behind the conversation sits a profile that fills in as the user talks. Six item
 5. **Risk, constraints and time:** the change they're ready to make now (explore alongside current work, nothing changes yet; change the current setup: fewer hours or a different role; leave or make a big change: a new job, field or way of life; or not sure yet); what they're willing to put at risk (income, position, location, or not sure yet); hard limits (money, family, location, other commitments); and hours available per week for this now. Hard limits and hours are always asked explicitly.
 6. **Must-haves and must-avoids:** what a good direction has to include and what it has to avoid, taken from what the user said.
 
-Signatures are not a profile item. The user never confirms, rates or discusses individual signatures, and no signature names appear in the conversation. The report is supporting evidence, not something the user is asked to grade.
+Signatures are not a profile item. The user never confirms, rates or discusses individual signatures, and no signature names appear in the conversation. The report is supporting evidence, not something the user is asked to grade. The path options are the exception: there a signature may be named, but only in context (see Path options).
 
 ## Where each item comes from
 
@@ -82,6 +82,9 @@ The open-ended ongoing conversation belongs to the Mentor subscription; these li
 
 - **Three options** in the first go: the strongest fit plus two alternatives.
 - **Zyrro commits to one.** It marks the strongest fit and says why.
+- **Ambitious.** The strongest fit is the boldest true version of where the user's strengths and answers point, not a smaller version of their current situation. Their readiness, risk and hours shape only the starting point, never how big the direction is.
+- **Built on the Identity report.** Each option draws on the user's report as well as their answers: the strengths and patterns that make this path theirs. Report text can be cited as evidence, but every option also rests on at least one thing the user said themselves (an answer or a message).
+- **Signatures in context only.** An option may name one of the user's signatures, but only when the same sentence explains in plain words what it means for this user. Never a bare label that needs the report to make sense.
 - **All on target.** No option exists for variety. All point the right way; they differ in approach, not just in setting.
 - **More than one thread.** Options draw on the whole confirmed summary, not only its strongest theme.
 - **Risk shapes the first step, not the direction.** A cautious user can get a bold direction that starts as a side project or research; a user ready for change gets it starting as a real move.
@@ -125,8 +128,8 @@ In this order, so the user understands what an option is before reading why it f
 
 1. **Name.** A concrete, recognisable role or venture a person could say out loud: a real kind of job, practice or business, not an abstract description of an activity. It matches the option's form: a role with an employer is never named as consultancy or freelance work, and freelance or consultancy work is never named as a job with an employer. Clarity matters most while the user compares three.
 2. **What it is.** One sentence naming the form: reshaping their current role with their current employer; a new role with a different employer (saying what kind); freelance or consultancy (saying for whom); starting a business (saying what it sells and to whom); or a portfolio mix (saying the parts). It states who pays the user.
-3. **What it would look like.** The path once it is fully up and running and takes up their full working time, not limited by the hours they have now to explore or start. A concrete picture: where, with whom, what they actually do and how they earn. It leads with the appeal of that life, vivid and specific; caveats belong in the cost. Their current hours, readiness and risk shape only the starting point.
-4. **Why it fits you.** Tied to the confirmed summary and what the user said in the conversation.
+3. **What it would look like.** The path once it is fully up and running and takes up their full working time, not limited by the hours they have now to explore or start. A concrete picture: where, with whom, what they actually do and how they earn. It leads with what would make this life exciting for them, vivid and specific; caveats belong in the cost. Their current hours, readiness and risk shape only the starting point.
+4. **Why it fits you.** Tied to the confirmed summary, what the user said in the conversation and their answers, and to the strengths and patterns their Identity report shows.
 5. **Starting point.** One line on the shape of the start, pitched at the user's risk level: a side project alongside their job, a few months of research, or a real move now. No tasks; those belong to the Plan.
 6. **What it would cost them.** The honest trade-off, given their constraints, including any must-avoid it can't fully avoid.
 
