@@ -30,7 +30,34 @@ The card's "Risk, limits and time" block must show what the user said about it, 
   Old `line_facts` in stored profiles are ignored, with no migration.
 - **The correction-items call** keeps seeing the risk block (tapped values plus the one note), so a note about risk still never becomes a must-item.
 
+## Decision after step 3: no model writes the risk note (Miroslav, 2026-11-09)
+
+This replaces the risk-note call (decisions 1 to 3 below), the note's 400-character limit, and the parts of step 3 that check a written note.
+
+The risk-note call failed the judge on Miroslav's Preview replay twice:
+- it paraphrased away his specifics ("other tasks" for licensing and disputes)
+- it kept the note unchanged through corrections that added detail
+- a readiness detail that was also a must-have counted as must-item content
+
+The design:
+- **The card's risk block** shows the tapped values as now. Under them, it shows the user's own risk-turn note verbatim, with only I, me and my turned to you by code (`swapToSecondPerson`, as for stated must-items). Several risk-turn notes (a follow-up) are joined in order. No risk text means no note.
+- **Editing it.** When the user marks "Risk, limits and time" in a card correction, the card shows their risk text in an editable field, prefilled in their own first person. What they save replaces the stored text, with that message as its ref. The field reuses the existing input and textarea classes.
+- **Correction notes never change the risk text.** Neither do re-tapped values.
+- **Options read the same stored text**, kept as now in `risk_time.their_words`.
+- **Deleted:** the risk-note call and its prompt, and anything else only it used.
+
+Step 3 verification for this design, all through the real API and the real page at 1280 and 390:
+1. The Preview replay: the note on every card equals Nadia's risk-turn note with only the first person swapped. Corrections 1 and 2 leave it exactly as it was.
+2. A correction that marks "Risk, limits and time" and edits the field: the note becomes the edited text, swapped.
+3. A correction that doesn't mark it keeps the note exactly.
+4. The six scenarios, with the risk-note judge removed. Options still fit the user's hours and readiness.
+5. Regression: Mentor, `/identity`, `/dashboard` and `/path` are unchanged. The `168-card-items` must-item checks still pass.
+
+The guardrails below still apply: no new prompt rules anywhere, delete what this replaces, stop and report if a check fails, and report the net change in lines.
+
 ## Decisions on step 0 (Miroslav, 2026-11-09)
+
+Decisions 1 to 3 (the risk-note call, the re-tap call and the 400-character limit) are replaced by the decision above.
 
 1. **The note comes from its own small risk-note call**, not call B.
    - Input: only the user's stored risk text (the risk-turn note or notes, and every card correction note, each with its message id), the current tapped values and the previous note.
