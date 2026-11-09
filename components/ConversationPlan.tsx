@@ -95,12 +95,24 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
         {path.in_your_words && (
           <div className="section">
             <p className="card-sub-label">In your words:</p>
-            <p className="mentor-md-p">{path.in_your_words}</p>
+            {/* Their note at choice exactly as written, to Zyrro: no pronoun swap. */}
+            <p className="mentor-md-p">“{path.in_your_words}”</p>
           </div>
         )}
 
         <div className="section">
           <p className="mentor-md-p">{plan.frame}</p>
+        </div>
+
+        <div className="section">
+          <p className="eyebrow">MILESTONES</p>
+          <div className="card">
+            <ol className="mentor-md-ol">
+              {plan.milestones.map((m, i) => (
+                <li key={i} className="mentor-md-li">{m}</li>
+              ))}
+            </ol>
+          </div>
         </div>
 
         <div className="section">
@@ -118,20 +130,6 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
                 <p className="start-here-action-why"><strong>Done when:</strong> {a.done_when}</p>
               </div>
             ))}
-          </div>
-        </div>
-
-        <div className="section">
-          <p className="eyebrow">MILESTONES</p>
-          <div className="card">
-            <div className="phase-milestones">
-              {plan.milestones.map((m, i) => (
-                <div key={i} className="phase-milestone-item">
-                  <span className="phase-milestone-dot" />
-                  <span>{m}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>

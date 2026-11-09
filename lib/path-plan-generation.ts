@@ -11,10 +11,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { withPipelineDeadline } from '@/lib/llm';
 import { FLIP_GUARD_MS, GENERATION_BUDGET_MS } from '@/lib/generation-budget';
 import { createServiceClient, listConversationMessages, type ConversationRow } from '@/lib/chat-turn';
-import { chatJson, fixDashes, getProfileRow } from '@/lib/path-conversation';
+import { chatJson, getProfileRow } from '@/lib/path-conversation';
 import { parsePlan, planInput, planShape, type DraftPlan } from '@/lib/path-conversation-plan';
 import { PATH_CONVERSATION_PLAN_PROMPT } from '@/lib/prompts/path-conversation-plan';
-import { swapToSecondPerson } from '@/lib/path-text-checks';
 import { HOURS_BANDS, withMetaDefaults, type PathProfile } from '@/lib/path-profile';
 import type { PathChoiceContent } from '@/lib/path-options';
 import type { ChatChoiceSet, SummaryCard } from '@/lib/chat-choices';
@@ -183,8 +182,9 @@ export async function planView(supabase: SupabaseClient, conversationId: string)
   const path = {
     name: c.project_name || c.option.name,
     what_it_is: c.option.what_it_is ?? null,
-    // The note at choice, verbatim with only the first person swapped, as the card's risk note.
-    in_your_words: note ? fixDashes(swapToSecondPerson(note)) : null,
+    // The note at choice exactly as the user wrote it: it is written to Zyrro
+    // ("Help me…"), so a pronoun swap would break it (Miroslav, 2026-11-09).
+    in_your_words: note || null,
   };
   const rows = (await planRows(supabase, conversationId)).filter(r => r.content?.choice_id === choice.id);
   const latest = rows[rows.length - 1];
