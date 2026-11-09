@@ -37,6 +37,19 @@ Still open (design doc, open question 2): what the milestones and actions contai
 3. **Sizing:** code sizes the plan from the hours band's lower bound. The model fills in the content within that size and can't change the amount. The user's own words shape the content and timing, not the size. Due dates are day offsets from generation.
 4. **Where the Plan shows** (the page, the thread or both) is decided in step 2.
 
+## Plan judgement after step 1 (Miroslav, 2026-11-09): the content is good; the shape changes
+
+1. **Milestones have no dates.** They are an ordered list of outcomes. No milestone effort steps or week calculations.
+2. **In the first stretch, only the first action has a due date** (within a day or two). The other actions are ordered, each with its effort in hours. Above them, one code-written line gives the stretch's span at the user's pace (for example "About 5 weeks at your pace"), from the hours band as now.
+3. **Lengths, checked in code:**
+   - frame: up to 300 characters
+   - each milestone: up to 250
+   - each action: a short title, what to do up to 200, and "Done when" up to 150
+4. **The prose never states effort, days or weeks.** The page shows them.
+5. **The prose doesn't quote the user.** The page shows their note at choice verbatim and code-owned, like the risk note, so the Plan speaks in plain second person.
+
+These describe what the Plan is; there are no rules aimed at single cases. The three step 1 Plans are regenerated from the inputs saved in that run, without rerunning Path.
+
 ## Steps
 
 ### Step 0: audit, then stop and report
