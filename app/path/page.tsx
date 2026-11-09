@@ -9,18 +9,11 @@ import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import ReframeCtaBlock from '@/components/ReframeCtaBlock';
-import DirectionFlow from '@/components/DirectionFlow';
-import OptionsFlow, { COMMENTS_ACKNOWLEDGMENT } from '@/components/OptionsFlow';
-import PathReportFlow from '@/components/PathReportFlow';
+import PathConversation from '@/components/PathConversation';
 import type { ReframeTeaser } from '@/lib/artifact-schemas';
-import { useCheckpointSessionStatus } from '@/lib/checkpoint-status';
 import type { IdentityReportResponse } from '@/lib/identity-report-view';
-import { usePathDirection } from '@/lib/use-path-direction';
-import { usePathOptions } from '@/lib/use-path-options';
-import { usePathReport } from '@/lib/use-path-report';
-import { useProjectNaming } from '@/lib/use-project-naming';
 
-type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'checkpoint-flow' | 'error';
+type PageState = 'loading' | 'anonymous' | 'no-report' | 'verifying' | 'unpaid' | 'conversation' | 'error';
 
 export default function PathPage() {
   const [pageState, setPageState]             = useState<PageState>('loading');
@@ -32,39 +25,10 @@ export default function PathPage() {
   const [reframeTeaser, setReframeTeaser]     = useState<ReframeTeaser | null>(null);
   const [primaryConstellation, setPrimaryConstellation] = useState<{ name: string }[]>([]);
 
-  // ── Checkpoint flow state — only sessionId/refreshKey survive #134's
-  //    dead-code removal, since stage5NotYetRun below still reads
-  //    checkpointPhase (itself derived from these two). Everything else
-  //    that used to live in this block (startFailed, submitting, submitError,
-  //    redoText, selectedCandidateId, capExceededNotice) was only read/set by
-  //    the old Checkpoint 2/3/final-report/naming UI, removed below. sessionId
-  //    itself has no setter left — nothing writes to it anymore (the old
-  //    bootstrap effect that used to call setSessionId was removed earlier
-  //    this same cleanup), so it stays permanently null. ──────────────────
-  const [sessionId]                       = useState<string | null>(null);
-  const [refreshKey, setRefreshKey]       = useState(0);
-
-  const checkpointPhase = useCheckpointSessionStatus(sessionId, refreshKey);
-
-  const direction = usePathDirection(pageState === 'checkpoint-flow');
-  const [draftMustHaves, setDraftMustHaves]   = useState<string[]>([]);
-  const [draftMustAvoids, setDraftMustAvoids] = useState<string[]>([]);
-  const [draftIdealLife, setDraftIdealLife]   = useState('');
-
-  // #134 Slice 2 — activates the moment Direction completes, same gating
-  // convention usePathDirection itself uses (an `active` boolean derived
-  // from surrounding state, not a new PageState value). Called
-  // unconditionally at the top level, same as every other hook here — only
-  // the `active` argument varies with direction.step, not whether the hook
-  // itself is called, so this doesn't violate the rules of hooks.
-  const options = usePathOptions(direction.step === 'complete');
-
-  // #134 Slice 3 UI — same gating convention, one step further down the
-  // chain: activates the moment Options completes. naming has no `active`
-  // gate of its own (nothing to bootstrap — see lib/use-project-naming.ts's
-  // own header for why it's a separate hook from usePathReport).
-  const report = usePathReport(options.status === 'complete');
-  const naming = useProjectNaming();
+  // The old Direction/Options checkpoint flow's hooks used to live here. A
+  // paid user now gets the Path conversation instead (Miroslav, 2026-11-09),
+  // so they are removed from this page: left in place they would start the
+  // old pipeline on every visit. Their files stay until #170 removes them.
 
   const { user: authUser, loading: authLoading, error: authError } = useAuthUser();
 
@@ -123,7 +87,7 @@ export default function PathPage() {
           window.history.replaceState({}, '', '/path');
           if (cancelled) return;
           if (granted) {
-            if (!cancelled) setPageState('checkpoint-flow');
+            if (!cancelled) setPageState('conversation');
             return;
           }
         }
@@ -167,7 +131,7 @@ export default function PathPage() {
           }
         }
 
-        if (!cancelled) setPageState('checkpoint-flow');
+        if (!cancelled) setPageState('conversation');
       } catch (err) {
         console.error('Path entry gating failed:', err);
         if (!cancelled) {
@@ -180,48 +144,6 @@ export default function PathPage() {
     init();
     return () => { cancelled = true; };
   }, [entryRetryKey, authLoading, authUser, authError]);
-
-  // The old "kick off/resume the checkpoint session" bootstrap effect that
-  // used to live here (POSTing /api/generate-path-options, setting sessionId/
-  // startFailed) is removed, not just unwired — #134 Slice 1's Direction
-  // bootstrap (usePathDirection) replaces it. Leaving it in place would have
-  // kept invisibly kicking off the old Stage 1/2 pipeline (real LLM calls) on
-  // every page load with nothing left in the render tree to consume the
-  // result, since sessionId/checkpointPhase are no longer rendered below.
-
-  // ── Resume-trigger Stage 5's kickoff ─────────────────────────────────
-  // recordChosenCandidate (Checkpoint 2's proceed, Stage B) only PARKS the
-  // session at current_stage=5 — it never runs Stage 5 itself. The actual
-  // kickoff only happens inside POST /api/generate-path-options's own
-  // resume branch (#129 Stage C), so something has to call that route again
-  // once we land here with no stage5 output yet, or this would sit on a
-  // spinner forever. Depends on primitive values, not the whole
-  // checkpointPhase object (which gets a new reference on every poll tick),
-  // so this only actually fires on a real state transition.
-  const stage5NotYetRun =
-    checkpointPhase.phase === 'awaiting_checkpoint' &&
-    checkpointPhase.currentStage === 5 &&
-    !(checkpointPhase.content.stage_outputs as Record<string, unknown>).stage5;
-
-  useEffect(() => {
-    if (!stage5NotYetRun) return;
-    let cancelled = false;
-
-    (async () => {
-      const res = await fetch('/api/generate-path-options', { method: 'POST' });
-      if (cancelled || !res.ok) return;
-      setRefreshKey(k => k + 1);
-    })();
-
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage5NotYetRun]);
-
-  // The "fetch the final report once the session completes" and "offer
-  // naming once" effects that used to live here, plus submitCheckpointResponse/
-  // handleGenerateNames/handleSaveName below, are removed along with the old
-  // Checkpoint 2/3/final-report/naming UI they only ever served — see the
-  // dead-code removal note further down, at the point that UI used to render.
 
   async function handleCheckout() {
     if (!userId) return;
@@ -340,144 +262,9 @@ export default function PathPage() {
     );
   }
 
-  // ── Checkpoint 1 "Direction" (#134 Slice 1) ──────────────────────────
-  // Every remaining pageState value returned above, so pageState is
-  // 'checkpoint-flow' from here on. This block fully owns rendering for it
-  // in this slice — nothing below (the old sessionId/checkpointPhase flow)
-  // is reachable, since nothing here ever sets sessionId.
-  if (direction.loading) {
-    return (
-      <GeneratingState heading="Loading your Direction step." />
-    );
-  }
-
-  if (direction.error || !direction.content || !direction.step) {
-    return (
-      <MessageState
-        eyebrow="YOUR PATH"
-        heading="Something went wrong."
-        body={direction.error ?? 'We couldn’t load your Direction step. Please try again.'}
-        cta={<PrimaryButton onClick={direction.retry}>Try again</PrimaryButton>}
-      />
-    );
-  }
-
-  // ── Checkpoint 2 "Options" (#134 Slice 2) ────────────────────────────
-  // Direction is complete — usePathOptions activated above the moment
-  // direction.step flipped to 'complete'. This replaces DirectionFlow's own
-  // terminal 'complete' branch entirely: PathPage never renders
-  // <DirectionFlow> once direction.step is 'complete' (see the fallthrough
-  // below, reached only when it isn't), so that branch inside
-  // DirectionFlow.tsx is now unreachable dead code — flagged here, not
-  // deleted this slice, same "flag, don't necessarily delete yet" posture
-  // as #134 Slice 1's own dead-code notes elsewhere in this file.
-  if (direction.step === 'complete') {
-    if (options.loading) {
-      return (
-        <GeneratingState heading="Loading your Options step." />
-      );
-    }
-
-    if (options.error || !options.status || !options.content) {
-      return (
-        <MessageState
-          eyebrow="YOUR PATH"
-          heading="Something went wrong."
-          body={options.error ?? 'We couldn’t load your Options step. Please try again.'}
-          cta={<PrimaryButton onClick={options.retry}>Try again</PrimaryButton>}
-        />
-      );
-    }
-
-    // options.content is guaranteed non-null past the guard above, but TS
-    // can't see that through the object property access alone — narrow via
-    // a local const, same pattern used just below for optionsStatus/
-    // DirectionFlow's stricter prop type. Hoisted up here (rather than only
-    // declared right before the final <OptionsFlow> render, as it used to
-    // be) so it's also usable inside the report.loading branch immediately
-    // below, for #138 §3's comments-acknowledgment fix.
-    const optionsContent = options.content;
-
-    // ── Final delivery: "Your Path" report + naming (#134 Slice 3) ─────
-    // Options reached its own terminal state — usePathReport activated
-    // above the moment options.status flipped to 'complete'. This replaces
-    // OptionsFlow's own 'complete' branch entirely, same "supersede, flag
-    // don't delete" posture as this block's own header comment already
-    // uses for DirectionFlow's terminal branch: PathPage never renders
-    // <OptionsFlow> once options.status is 'complete' (see the fallthrough
-    // below, reached only when it isn't), so that branch inside
-    // OptionsFlow.tsx (the plain chosen-candidate summary card) is now
-    // unreachable dead code — flagged here, not deleted this slice.
-    if (options.status === 'complete') {
-      if (report.loading) {
-        // #138 §3: this is the real, reachable moment for the "your comment
-        // was captured" acknowledgment — OptionsFlow.tsx's own 'complete'
-        // branch (where an earlier version of this fix lived) never renders,
-        // per this block's own comment above. Live-verification confirmed
-        // that directly: the confirm+comment flow lands here, not there.
-        // Conditional on optionsContent.comments, same guard shape already
-        // used for the (unreachable) echo in OptionsFlow.tsx.
-        return (
-          <GeneratingState
-            heading="Loading your Path report."
-            description={optionsContent.comments ? COMMENTS_ACKNOWLEDGMENT : undefined}
-          />
-        );
-      }
-
-      if (report.error) {
-        return (
-          <MessageState
-            eyebrow="YOUR PATH"
-            heading="Something went wrong."
-            body={report.error}
-            cta={<PrimaryButton onClick={report.retry}>Try again</PrimaryButton>}
-          />
-        );
-      }
-
-      return <PathReportFlow report={report} naming={naming} />;
-    }
-
-    // options.status is guaranteed non-null past the guard above, but TS
-    // can't see that through the object property access alone — narrow via
-    // a local const, same pattern DirectionFlow's stricter prop type uses
-    // just below. optionsContent was already narrowed above.
-    const optionsStatus = options.status;
-
-    return (
-      <OptionsFlow options={{ ...options, status: optionsStatus, content: optionsContent }} />
-    );
-  }
-
-  // direction.content/direction.step are guaranteed non-null past the guard
-  // above, but TS can't see that through the object property access alone —
-  // narrow via local consts so DirectionFlow's stricter prop type checks out.
-  const directionContent = direction.content;
-  const directionStep = direction.step;
-
-  return (
-    <DirectionFlow
-      direction={{ ...direction, content: directionContent, step: directionStep }}
-      draftMustHaves={draftMustHaves}
-      setDraftMustHaves={setDraftMustHaves}
-      draftMustAvoids={draftMustAvoids}
-      setDraftMustAvoids={setDraftMustAvoids}
-      draftIdealLife={draftIdealLife}
-      setDraftIdealLife={setDraftIdealLife}
-    />
-  );
-
-  // The old Checkpoint 2/3/final-report/naming UI that used to render from
-  // here to the end of this component is removed, not left dead. It became
-  // permanently unreachable once #134 Slice 1 replaced the old checkpoint
-  // bootstrap with usePathDirection (sessionId is never set anymore, so
-  // checkpointPhase never leaves 'idle' and finalResult never gets set) —
-  // and, being unreachable, it no longer type-checks under strict control-
-  // flow narrowing (TypeScript stops narrowing checkpointPhase/finalResult
-  // for code it can prove is dead). Superseded by #134's new Checkpoint
-  // 2 ("Options") and final delivery, not yet built. See lib/path-checkpoint.ts
-  // and lib/generate-path-checkpoint.ts for the still-intact Stage 5/6
-  // reasoning pipeline and API routes this UI used to call into — none of
-  // that backend code was touched by this removal.
+  // ── Paid: the Path conversation, its intro and "Your path" ──────────
+  // (Miroslav, 2026-11-09). Every other pageState returned above, so this
+  // is the paid, report-ready user. The old Direction/Options flow is no
+  // longer reachable from here; #170 removes its code.
+  return <PathConversation />;
 }

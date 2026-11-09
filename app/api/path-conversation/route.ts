@@ -26,7 +26,7 @@ import {
   toMessageView,
 } from '@/lib/path-conversation';
 import { choiceContent, NOTE_MAX_CHARS, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
-import { ensureOptionsGeneration, optionsStateView, PATH_FLOW_TURN_CONFIG } from '@/lib/path-options';
+import { chosenPathView, ensureOptionsGeneration, optionsStateView, PATH_FLOW_TURN_CONFIG } from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
 // the conversation id and the new message, or the tapped choices plus an
@@ -41,13 +41,14 @@ import { ensureOptionsGeneration, optionsStateView, PATH_FLOW_TURN_CONFIG } from
 export const maxDuration = 240;
 
 async function conversationView(supabase: SupabaseClient, conversation: ConversationRow) {
-  const [messages, profileRow, options] = await Promise.all([
+  const [messages, profileRow, options, chosen] = await Promise.all([
     listConversationMessages(supabase, conversation.id),
     getProfileRow(supabase, conversation.id),
     optionsStateView(supabase, conversation.id),
+    chosenPathView(supabase, conversation.id),
   ]);
   return {
-    conversation: { id: conversation.id, ...pathState(profileRow), options },
+    conversation: { id: conversation.id, ...pathState(profileRow), options, chosen },
     messages: messages.map(toMessageView),
   };
 }

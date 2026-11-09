@@ -80,13 +80,17 @@ export default function PathOptionsRound({ round, choices, disabled, onSubmit }:
   );
 }
 
-function PathOptionCard({
+// Also used by the "Your path" view on /path (components/PathChosen.tsx):
+// label replaces "Option N", and initiallyOpen shows every part on a phone too.
+export function PathOptionCard({
   option,
   index,
   strongest,
   chosen,
   onChoose,
   disabled,
+  label,
+  initiallyOpen = false,
 }: {
   option: PathOptionView;
   index: number;
@@ -94,12 +98,14 @@ function PathOptionCard({
   chosen: boolean;
   onChoose: (() => void) | null;
   disabled?: boolean;
+  label?: string;
+  initiallyOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   return (
     <div className={`card constellation-card path-option-card${open ? ' path-option-card--open' : ''}${chosen ? ' path-option-card--chosen' : ''}`}>
       <div className="constellation-card-header">
-        <p className="eyebrow">Option {index + 1}</p>
+        <p className="eyebrow">{label ?? `Option ${index + 1}`}</p>
         {strongest && <span className="path-option-tag">Zyrro’s strongest fit</span>}
       </div>
       <div className="constellation-card-body">

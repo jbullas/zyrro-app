@@ -1064,6 +1064,36 @@ export type OptionsStateView = {
   choice: { name: string; project_name: string | null | undefined; was_strongest_fit: boolean } | null;
 };
 
+// The "Your path" view on /path (Miroslav, 2026-11-09): the chosen option in
+// full, and the other two options of the round it was chosen from.
+export type ChosenPathView = {
+  name: string;
+  option: PathOptionView;
+  was_strongest_fit: boolean;
+  why_strongest: string | null;
+  others: Array<{ option: PathOptionView; strongest: boolean }>;
+};
+
+/** The chosen path for read-back: no model call. Null before a path is chosen. */
+export async function chosenPathView(supabase: SupabaseClient, conversationId: string): Promise<ChosenPathView | null> {
+  const choice = await latestChoice(supabase, conversationId);
+  if (!choice) return null;
+  const { data: row, error } = await supabase.from('artifacts').select('path_options_artifact_id').eq('id', choice.id).single();
+  if (error) throw error;
+  const { data: round } = row?.path_options_artifact_id
+    ? await supabase.from('artifacts').select('content').eq('id', row.path_options_artifact_id).single()
+    : { data: null };
+  const content = round?.content as OptionsContent | undefined;
+  const c = choice.content;
+  return {
+    name: c.project_name || c.option.name,
+    option: toView(c.option),
+    was_strongest_fit: c.was_strongest_fit,
+    why_strongest: c.why_strongest,
+    others: (content?.options ?? []).filter(o => o.id !== c.option.id).map(o => ({ option: toView(o), strongest: o.id === content?.strongest_fit_id })),
+  };
+}
+
 /** The options state for read-back: no model call. */
 export async function optionsStateView(supabase: SupabaseClient, conversationId: string): Promise<OptionsStateView> {
   const [rows, choice] = await Promise.all([optionsRows(supabase, conversationId), latestChoice(supabase, conversationId)]);

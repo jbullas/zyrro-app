@@ -58,7 +58,7 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
         eyebrow="YOUR PLAN"
         heading="Your Plan starts with your path."
         body="Finish your Path conversation and choose your path. Your Plan will be built from it."
-        cta={<PrimaryButton href="/path/conversation">Go to your Path conversation</PrimaryButton>}
+        cta={<PrimaryButton href="/path">Go to your Path conversation</PrimaryButton>}
       />
     );
   }
