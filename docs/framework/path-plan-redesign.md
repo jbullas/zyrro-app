@@ -178,7 +178,9 @@ The report's energiser and friction lists are not offered as choices in Path. Th
 
 - **Derived from the user.** Zyrro derives the must-haves and must-avoids from the 13 answers and the conversation.
 - **Evidence required.** Each item points to the questionnaire answer or user message it came from and quotes the words that support it. Code checks that the reference exists and that the quote appears in that source, and drops any item that fails. A valid reference alone doesn't prove the item, so each is also marked stated (the user said it) or inferred (Zyrro's reading), and inferred items are labelled as such on the card.
+- **Stated items are in the user's words.** A stated item's text on the card is its quote, with only the user's own first-person words turned to "you" by code; words about other people stay as they are. Zyrro chooses which words to quote but never rewords them, so the quote is the complete phrase that states the item and reads on its own. When the only statement of an item leans on something said earlier, the item is inferred instead. Inferred items are in Zyrro's wording and labelled as inferred on the card.
 - **Confirmed in the summary,** where the user can correct them. No separate turn asks for them.
+- **A note on a risk line stays on that line.** When a correction note, or part of one, qualifies a risk line (what they're ready to change, what they'd put at risk, what's off the table, their hours or their deadline), it changes that line and never becomes a must-have or must-avoid.
 - **The options honour them.** "Why it fits you" refers to the must-haves; "What it would cost them" says so honestly if a must-avoid can't be avoided.
 
 ## Tap to confirm
