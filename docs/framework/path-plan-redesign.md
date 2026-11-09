@@ -91,7 +91,7 @@ When a fact comes back vague, Zyrro may ask once more, in the light of what it n
 
 When Zyrro understands the user well enough and the practical facts are in, the conversation phase ends and the summary card appears in the same turn. No message announces it. The card shows how Zyrro sees the user: the tension that brought them, the pattern behind it and what it means for them, in their terms, not a list of their answers. It also shows what they want, their direction (the level and, when they have one, their direction in their own words; after "not yet", a line saying the options will start from their strengths), their must-haves and must-avoids, and their risk, limits and hours.
 
-- **The risk block** shows the tapped values on their lines (Ready to, Would put at risk, Off the table, Time, and Deadline from what's pushing them), and one note under them.
+- **The risk block** shows the tapped values on their lines (Ready to, Would put at risk, Off the table, Time), and one note under them. There is no Deadline line: its text would be Zyrro's, and nothing the user writes could correct it. Their own risk text carries their timing. The deadline stays in the profile, and options still use it.
   - The note is the user's own words: the note they sent with their risk answer, verbatim, with only I, me and my turned to you. No model writes or rewords it. With no risk text there is no note.
   - When the user marks "Risk, limits and time" in a correction, the card shows their risk text in an editable field, in their own first person. What they save replaces it. Correction notes and re-tapped values never change it.
   - Risk said elsewhere in the conversation stays out of the note. Options get the tapped values and the user's risk text.
