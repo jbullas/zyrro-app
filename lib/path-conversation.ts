@@ -54,7 +54,6 @@ import {
   hasFirstPerson,
   mechanicalSecondPerson,
   personCutFrom,
-  secondPersonFromSource,
   swapToSecondPerson,
   thirdPersonWord,
 } from '@/lib/path-text-checks';
@@ -297,10 +296,13 @@ type MustLists = { must_haves: EvidencedItem[]; must_avoids: EvidencedItem[] };
 const MAX_CUT_WORDS = 3;
 
 /**
- * Must-haves and must-avoids speak in the second person or without pronouns,
- * never in the third person (brief 168-card-fixes, fix 3). Code finds the
- * items that don't; those get one small rewrite call (only when there are
- * any); an item that still fails has its pronouns swapped by code.
+ * Inferred must-haves and must-avoids speak in the second person or without
+ * pronouns, never in the third person (brief 168-card-fixes, fix 3). Code
+ * finds the items that don't; those get one small rewrite call (only when
+ * there are any); an item that still fails has its pronouns swapped by code.
+ * Stated items never come here (brief 168-card-items, fix 1): their text is
+ * the user's quote with only the first person swapped, and the third-person
+ * check and swap would turn other people's "they" into "you".
  */
 async function inSecondPerson(
   input: MustLists,
@@ -325,9 +327,11 @@ async function inSecondPerson(
     return extra <= MAX_CUT_WORDS ? inSource : null;
   };
   const uncut = (items: EvidencedItem[]) => items.map(i => {
+    if (i.basis === 'stated') return i;
     const stretch = cutIn(i);
     if (!stretch) return i;
-    const text = secondPersonFromSource(stretch);
+    // The stretch is the user's own words: only their first person is swapped.
+    const text = swapToSecondPerson(stretch, false);
     console.warn(`[path items] ${i.id} cut the person out of its quote: "${i.text}"; rebuilt from the quote: "${text}"`);
     return { ...i, text };
   });
@@ -336,7 +340,7 @@ async function inSecondPerson(
   // First person counts too: an item copied close to the user's quote came
   // through as "…leave me unmoved" in a live run.
   const wrongVoice = (t: string) => thirdPersonWord(t, firstName) ?? (hasFirstPerson(t) ? 'first person' : null);
-  const flagged = all.filter(i => wrongVoice(i.text));
+  const flagged = all.filter(i => i.basis === 'inferred' && wrongVoice(i.text));
   if (!flagged.length) return { lists, tokens: 0 };
   console.warn(`[path items] not second person: ${flagged.map(i => `${i.id} (${wrongVoice(i.text)}) "${i.text}"`).join('; ')}`);
   const { parsed, tokens } = await chatJson([
@@ -808,6 +812,15 @@ const LINE_LABELS: Record<RiskLine, string> = {
   readiness: 'Ready to', at_stake: 'Would put at risk', limits: 'Off the table', hours: 'Time', deadline: 'Deadline',
 };
 
+/** The card's risk lines as the user saw them: label, value and note. */
+function riskLinesFor(risk: SummaryCard['risk']) {
+  return RISK_LINES.map(l => ({
+    line: LINE_LABELS[l],
+    value: (l === 'deadline' ? risk.deadline : risk[l]) ?? null,
+    note: risk.notes?.[l] ?? null,
+  }));
+}
+
 /**
  * Code's rule for the risk notes: a line takes a note only when the user said
  * something that qualifies that line (a checked fact), and a note that mostly
@@ -1065,6 +1078,9 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
               note: correctionNote,
               must_haves: input.correction.card.must_haves.map(({ id, text }) => ({ id, text })),
               must_avoids: input.correction.card.must_avoids.map(({ id, text }) => ({ id, text })),
+              // Brief 168-card-items, fix 2: the call can only tell a note on a
+              // risk line from an item if it sees the lines.
+              risk_lines: riskLinesFor(input.correction.card.risk),
             }),
           },
         ], 0.2, 'path correction items', undefined, conversationId)
@@ -1074,7 +1090,29 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   let extraTokens = noteCall?.tokens ?? 0;
   const out = update.parsed;
 
-  const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex));
+  // A card correction replaces the whole risk block with call A's (brief
+  // 168-card-items, decision 1). In the first live runs call A left the block
+  // out of corrections altogether, so a missing block gets one retry that
+  // asks for it alone; still missing, the facts stay as they were.
+  const correcting = input.mode === 'summary_correction';
+  if (correcting) {
+    const riskOf = (updates: unknown) => (Array.isArray(updates) ? updates : []).find(u => (u as Record<string, unknown> | null)?.item === 'risk_time') as Record<string, unknown> | undefined;
+    let risk = riskOf(out.profile_updates);
+    if (!risk) {
+      console.warn('[path update] correction: call A returned no risk block; asking for it once more');
+      const started = Date.now();
+      const retry = await chatJson([
+        ...callAMessages,
+        { role: 'system', content: 'Your answer had no risk_time. In summary_correction mode it is always required. Return only this JSON object: { "profile_updates": [ { "item": "risk_time", "status": "confirmed", "value": { "line_facts": { "readiness", "at_stake", "limits", "hours", "deadline" } }, "in_their_words": null } ] }, with all five lines as they should now stand after the correction: each fact already in PROFILE that still stands, copied as it is, each one the note changes, written with the whole of what the user said about that line, and null for a line with no fact. Nothing else will be used.' },
+      ], 0.2, `${callLabel} (risk retry)`, undefined, conversationId);
+      extraTokens += retry.tokens;
+      risk = riskOf(retry.parsed?.profile_updates);
+      console.info(`[path update] correction: risk retry ${risk ? 'returned the block' : 'returned no block either; the risk facts stay as they were'} in ${Date.now() - started} ms`);
+      if (risk) out.profile_updates = [...(Array.isArray(out.profile_updates) ? out.profile_updates : []), risk];
+    }
+    if (risk) console.info(`[path update] correction: risk block from call A: ${JSON.stringify(risk.value)}`);
+  }
+  const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex), { replaceRiskFacts: correcting });
   let profile = applied.profile;
 
   // null (or missing) means unchanged. A returned list that is empty or wholly
@@ -1099,8 +1137,11 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   if (input.mode === 'summary_correction' && Array.isArray(noteItems)) {
     for (const a of noteItems) {
       const o = a && typeof a === 'object' ? (a as Record<string, unknown>) : null;
-      // Each quote is checked against the note itself (ref m:latest).
-      if (o?.list === 'must_haves' || o?.list === 'must_avoids') requested[o.list].push({ ...o, ref: LATEST_REF, basis: 'stated' });
+      // Each quote is checked against the note itself (ref m:latest). The note
+      // is the user's words, so an item is stated unless the model says its
+      // quote leans on something earlier and can't stand on the card
+      // (brief 168-card-items, decision 2).
+      if (o?.list === 'must_haves' || o?.list === 'must_avoids') requested[o.list].push({ ...o, ref: LATEST_REF, basis: o.basis === 'inferred' ? 'inferred' : 'stated' });
     }
     console.info(`[path update] correction items asked for by the note: ${JSON.stringify(noteItems)}`);
   }
@@ -1118,25 +1159,22 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   /**
    * A correction never drops an item the user didn't remove (step 1b): code
    * starts from the card's items (removals with the control are already
-   * applied) and changes them only as the note asks: an item added from the
-   * note, or one that replaces a named card item with a reworded version.
+   * applied) and only adds what the note asks for. A reworded item is added
+   * alongside the original, never in its place (brief 168-card-items,
+   * decision 4): in a live run a rewording replaced an item the user never
+   * touched. The user removes the original with the remove control.
    * Call A's full lists are not used here; in a live run a corrected list
    * silently lost an item the user never touched.
    */
   function correctedList(key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a'): EvidencedItem[] {
     const base = current?.[key] ?? [];
     const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-    let list = [...base];
+    const list = [...base];
     for (const raw of requested[key]) {
       const checked = validateEvidenced([raw], s.ownIndex, prefix, []);
       if (checked.dropped.length) { console.warn(`[path update] note item ${key} dropped: ${checked.dropped.join('; ')}`); continue; }
       const item = checked.items[0];
-      const replaces = typeof (raw as Record<string, unknown>).replaces === 'string' ? (raw as Record<string, string>).replaces : null;
-      const target = replaces ? list.find(b => b.id === replaces) : undefined;
-      if (target) {
-        console.info(`[path update] correction: ${key} ${target.id} "${target.text}" replaced by "${item.text}"`);
-        list = list.map(b => (b === target ? { ...item, id: b.id } : b));
-      } else if (!list.some(b => norm(b.text) === norm(item.text))) {
+      if (!list.some(b => norm(b.text) === norm(item.text))) {
         if (list.length >= SUMMARY_CAPS.must_items) { console.warn(`[path update] correction: ${key} full, not added: "${item.text}"`); continue; }
         list.push(item);
       }
@@ -1146,15 +1184,15 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     if (leftOut.length) console.info(`[path update] correction: kept ${key} call A's list left out: ${leftOut.map(b => `"${b.text}"`).join(', ')}`);
     return list.map((item, i) => ({ ...item, id: `${prefix}${i + 1}` }));
   }
-  // "Zyrro's guess" is decided in code (brief 168-direction-and-card, Part B
-  // item 2): an item resting on one of the user's messages in this
-  // conversation, which includes everything added from a correction note, is
-  // what they said. Items from the questionnaire keep the model's call.
-  const statedIfTheirs = (items: EvidencedItem[]) =>
-    items.map(i => (i.ref.startsWith('m:') && i.basis !== 'stated' ? { ...i, basis: 'stated' as const } : i));
-  // Second person on every item, enforced by code (fix 3).
+  // Stated or inferred is the model's call, made when it picks the quote
+  // (brief 168-card-items, decision 2): a stated item's text is its quote, so
+  // an item whose quote leans on something earlier is inferred, in Zyrro's
+  // wording. This replaces forcing every item from a user message to stated
+  // (brief 168-direction-and-card, Part B item 2), which would now show
+  // Zyrro's wording as the user's.
+  // Second person on every inferred item, enforced by code (fix 3).
   const voiced = await inSecondPerson(
-    { must_haves: statedIfTheirs(withRequested('must_haves', 'h')), must_avoids: statedIfTheirs(withRequested('must_avoids', 'a')) },
+    { must_haves: withRequested('must_haves', 'h'), must_avoids: withRequested('must_avoids', 'a') },
     firstNameOf(s.digest),
     ref => s.ownIndex.get(ref),
     conversationId,
@@ -1835,7 +1873,14 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     const notes: Partial<Record<RiskLine, string>> = {};
     for (const l of RISK_LINES) {
       const sameValue = l === 'deadline' ? previous.deadline === now.deadline : previous[l] === now[l];
-      const sameFact = JSON.stringify(factsBefore[l] ?? null) === JSON.stringify(factsNow[l] ?? null);
+      // Field by field: a stored fact comes back from jsonb with its keys
+      // reordered, and a correction now rebuilds every fact (brief
+      // 168-card-items, decision 1), so whole-object JSON never matched.
+      const fact = (f: unknown) => {
+        const o = f && typeof f === 'object' ? (f as Record<string, unknown>) : null;
+        return o ? [o.ref ?? null, o.text ?? null, o.quote ?? null] : null;
+      };
+      const sameFact = JSON.stringify(fact(factsBefore[l])) === JSON.stringify(fact(factsNow[l]));
       const lineNote = sameValue && sameFact ? previous.notes?.[l] : prose.notes[l];
       if (lineNote) notes[l] = lineNote;
     }

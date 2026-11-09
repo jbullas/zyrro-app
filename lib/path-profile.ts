@@ -389,6 +389,9 @@ export function applyProfileUpdates(
   updates: unknown,
   answered: AskedItem[],
   check: EvidenceCheck,
+  // A card correction (brief 168-card-items, decision 1): call A returns all
+  // five risk lines as they now stand, and they replace the whole block.
+  opts: { replaceRiskFacts?: boolean } = {},
 ): { profile: PathProfile; changed: ItemKey[] } {
   const next = structuredClone(profile);
   const changed: ItemKey[] = [];
@@ -423,7 +426,24 @@ export function applyProfileUpdates(
         value = { ...coerced, answer_refs: cur?.answer_refs ?? [] };
       } else if (item === 'risk_time') {
         const base = { ...emptyRiskTime(), ...((current.value as ItemValues['risk_time'] | null) ?? {}) };
-        const facts: Record<string, QuotedFact | null> = { ...(base.line_facts ?? {}), ...(coerced.line_facts as Record<string, QuotedFact | null>) };
+        const returned = coerced.line_facts as Record<string, QuotedFact | null>;
+        let facts: Record<string, QuotedFact | null>;
+        if (opts.replaceRiskFacts) {
+          // Every line is what call A returned; a line it left out has no
+          // fact. A returned fact that failed its quote check keeps the
+          // line's previous fact rather than silently clearing it.
+          const rawFacts = obj(obj(u.value)?.line_facts) ?? {};
+          facts = {};
+          for (const line of RISK_FACT_LINES) {
+            if (line in returned) facts[line] = returned[line];
+            else if (line in rawFacts && rawFacts[line] !== null) {
+              facts[line] = base.line_facts?.[line] ?? null;
+              console.warn(`[path profile] risk block replace: ${line} fact failed its check; kept the previous one`);
+            } else facts[line] = null;
+          }
+        } else {
+          facts = { ...(base.line_facts ?? {}), ...returned };
+        }
         for (const k of Object.keys(facts)) if (!facts[k]) delete facts[k];
         value = { ...base, line_facts: facts };
       } else {

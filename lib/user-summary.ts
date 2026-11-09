@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EvidencedItem, PathProfile } from '@/lib/path-profile';
+import { leansOnEarlier, swapToSecondPerson } from '@/lib/path-text-checks';
 
 // #168: the living user summary (docs/framework/path-plan-redesign.md,
 // "Living user summary"). One per user in public.user_summaries, server-only.
@@ -139,12 +140,48 @@ function normalizeForQuote(s: string): string {
 }
 
 const MIN_QUOTE_WORDS = 3;
+// A stated item's quote is what the card shows, so a short item ("being
+// invisible") is its own evidence; three words dropped such items once the
+// quote became the text (brief 168-card-items, step 4).
+const MIN_STATED_QUOTE_WORDS = 2;
 
-/** The quote appears in the source (ignoring case, spacing and punctuation), and is at least three words. */
-export function quoteFound(quote: string, source: string): boolean {
+/** The quote appears in the source (ignoring case, spacing and punctuation), and is at least three words (or minWords). */
+export function quoteFound(quote: string, source: string, minWords = MIN_QUOTE_WORDS): boolean {
   const q = normalizeForQuote(quote);
-  if (q.split(' ').filter(Boolean).length < MIN_QUOTE_WORDS) return false;
+  if (q.split(' ').filter(Boolean).length < minWords) return false;
   return ` ${normalizeForQuote(source)} `.includes(` ${q} `);
+}
+
+/**
+ * The stretch of the source the quote matched, in the user's own spelling and
+ * punctuation (the quote check ignores case and punctuation, so the model's
+ * copy can differ from what they wrote). Whole words of the source, with
+ * sentence punctuation trimmed from the ends. Null when the quote isn't found.
+ */
+export function quoteSpan(quote: string, source: string): string | null {
+  const q = normalizeForQuote(quote).split(' ').filter(Boolean);
+  if (!q.length) return null;
+  const tokens = source.split(/\s+/).filter(Boolean);
+  // Each normalized word of the source, with the token it came from.
+  const words: Array<{ w: string; t: number }> = [];
+  tokens.forEach((tok, t) => normalizeForQuote(tok).split(' ').filter(Boolean).forEach(w => words.push({ w, t })));
+  for (let i = 0; i + q.length <= words.length; i++) {
+    if (!q.every((w, k) => words[i + k].w === w)) continue;
+    const span = tokens.slice(words[i].t, words[i + q.length - 1].t + 1).join(' ');
+    return span.replace(/^[“"‘'(]+/, '').replace(/[.,;:!?”")]+$/, '').trim() || null;
+  }
+  return null;
+}
+
+/**
+ * A stated item's text (brief 168-card-items, fix 1): the user's own words
+ * from the quote, with only their first person turned to "you". Never the
+ * model's wording, and never the third-person swap: "they" in a user's quote
+ * is about someone else.
+ */
+export function statedItemText(quote: string, source: string): string | null {
+  const span = quoteSpan(quote, source);
+  return span ? swapToSecondPerson(span, false) : null;
 }
 
 /**
@@ -164,16 +201,35 @@ export function validateEvidenced(
   const items: EvidencedItem[] = [];
   for (const entry of Array.isArray(raw) ? raw : []) {
     const o = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null;
-    const text = typeof o?.text === 'string' ? o.text.trim() : '';
+    const modelText = typeof o?.text === 'string' ? o.text.trim() : '';
     const ref = typeof o?.ref === 'string' ? o.ref.trim() : '';
     const quote = typeof o?.quote === 'string' ? o.quote.trim() : '';
-    const basis = o?.basis === 'stated' ? 'stated' : 'inferred';
-    if (!text || text.length > SUMMARY_CAPS.entry_chars) { dropped.push(`${prefix}: empty or too long`); continue; }
-    if (removedSet.has(normalizeForQuote(text))) { dropped.push(`${prefix}: removed by user: ${text}`); continue; }
-    if (!/^Q\d+$/.test(ref) && !ref.startsWith('m:')) { dropped.push(`${prefix}: ref not the user's own words (${ref}): ${text}`); continue; }
+    let basis: EvidencedItem['basis'] = o?.basis === 'stated' ? 'stated' : 'inferred';
+    if (basis === 'inferred' && (!modelText || modelText.length > SUMMARY_CAPS.entry_chars)) { dropped.push(`${prefix}: empty or too long`); continue; }
+    if (!/^Q\d+$/.test(ref) && !ref.startsWith('m:')) { dropped.push(`${prefix}: ref not the user's own words (${ref}): ${modelText || quote}`); continue; }
     const source = ownIndex.get(ref);
-    if (!source) { dropped.push(`${prefix}: ref does not resolve (${ref}): ${text}`); continue; }
-    if (!quoteFound(quote, source)) { dropped.push(`${prefix}: quote not in ${ref}: "${quote}"`); continue; }
+    if (!source) { dropped.push(`${prefix}: ref does not resolve (${ref}): ${modelText || quote}`); continue; }
+    if (!quoteFound(quote, source, basis === 'stated' ? MIN_STATED_QUOTE_WORDS : MIN_QUOTE_WORDS)) { dropped.push(`${prefix}: quote not in ${ref}: "${quote}"`); continue; }
+    // A stated item is the user's words (brief 168-card-items, fix 1): its
+    // text is the quote with only the pronouns swapped. A quote over the item
+    // cap is dropped, never cut. A quote that leans on something earlier
+    // can't stand on the card (decision 2): the item becomes inferred and
+    // shows Zyrro's wording, which every item carries.
+    let text = modelText;
+    if (basis === 'stated') {
+      const span = quoteSpan(quote, source);
+      const leans = span ? leansOnEarlier(span) : null;
+      if (span && leans) {
+        if (!modelText || modelText.length > SUMMARY_CAPS.entry_chars) { dropped.push(`${prefix}: stated quote leans (${leans}) and no usable wording of Zyrro's: "${quote}"`); continue; }
+        console.info(`[path items] stated quote leans on something earlier (${leans}), shown as inferred: quote "${span}", text "${modelText}"`);
+        basis = 'inferred';
+      } else {
+        text = span ? swapToSecondPerson(span, false) : '';
+        if (!text) { dropped.push(`${prefix}: stated quote not placed in ${ref}: "${quote}"`); continue; }
+        if (text.length > SUMMARY_CAPS.entry_chars) { dropped.push(`${prefix}: stated quote over ${SUMMARY_CAPS.entry_chars} chars (${text.length}): "${quote}"`); continue; }
+      }
+    }
+    if (removedSet.has(normalizeForQuote(text))) { dropped.push(`${prefix}: removed by user: ${text}`); continue; }
     if (items.some(i => normalizeForQuote(i.text) === normalizeForQuote(text))) continue;
     items.push({ id: '', text, ref, quote, basis });
   }

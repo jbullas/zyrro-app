@@ -113,6 +113,22 @@ export function directionLineProblem(line: string, sources: string[]): string | 
   return null;
 }
 
+// Brief 168-card-items, decision 2: a quote that leans on something said
+// before it can't stand on the card. Narrow on purpose: a pointing word at the
+// end, or a linking word among the first few words.
+const POINTING_END = new Set(['that', 'it', 'this', 'there', 'them']);
+const LINKING_START = new Set(['also', 'and', 'but', 'so']);
+const LINKING_WITHIN = 3;
+
+/** Why a stated item's quote leans on something earlier, or null. */
+export function leansOnEarlier(quote: string): string | null {
+  const words = quote.toLowerCase().replace(/[‘’]/g, "'").split(/\s+/).map(w => w.replace(/[^\p{L}']/gu, '')).filter(Boolean);
+  const last = words[words.length - 1];
+  if (last && POINTING_END.has(last)) return `ends with "${last}"`;
+  const linking = words.slice(0, LINKING_WITHIN).find(w => LINKING_START.has(w));
+  return linking ? `"${linking}" near the start` : null;
+}
+
 /** "I'd like…" as "You'd like…": pronouns swapped, nothing else changed. */
 export function swapToSecondPerson(text: string, capitalize = true): string {
   const swapped = text
@@ -204,11 +220,6 @@ export function personCutFrom(item: string, source: string): string | null {
   for (let i = first; i <= last; i++) if (!matched.includes(i)) cut.push(bare(src[i]));
   if (!cut.some(w => PERSON_WORDS.has(w))) return null;
   return src.slice(first, last + 1).join(' ').replace(/[.,;:!?]+$/, '');
-}
-
-/** An item rebuilt from its source stretch with only the pronouns turned to the second person. */
-export function secondPersonFromSource(stretch: string): string {
-  return swapToSecondPerson(mechanicalSecondPerson(stretch), false);
 }
 
 const VERB_AGREEMENT: Record<string, string> = { is: 'are', was: 'were', has: 'have', does: 'do', "isn't": "aren't", "wasn't": "weren't", "doesn't": "don't", "hasn't": "haven't" };
