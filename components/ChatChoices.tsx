@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import SecondaryButton from '@/components/SecondaryButton';
 import SelectableList from '@/components/SelectableList';
 import { NOTE_MAX_CHARS, validateChoiceAnswer, type ChatChoiceSet, type ChoiceGroup } from '@/lib/chat-choices';
@@ -15,6 +15,9 @@ type ChatChoicesProps = {
   onSelectedChange?: (ids: string[]) => void;
   // Groups the parent renders itself; still part of the answer and its checks.
   hiddenGroups?: string[];
+  // Something the parent shows right under one group, where the user is
+  // acting (the summary card's risk field under "What's off?").
+  afterGroup?: { id: string; content: ReactNode };
 };
 
 // #168: tap-to-confirm choices inside the assistant's bubble
@@ -28,7 +31,7 @@ type ChatChoicesProps = {
 // Each group's label is a question in normal text; multi-answer groups say
 // "Pick any that apply" and use square checkboxes. Pre-filled picks
 // (choices.preselected) start selected.
-export default function ChatChoices({ choices, disabled, onSubmit, selected: controlled, onSelectedChange, hiddenGroups = [] }: ChatChoicesProps) {
+export default function ChatChoices({ choices, disabled, onSubmit, selected: controlled, onSelectedChange, hiddenGroups = [], afterGroup }: ChatChoicesProps) {
   const [own, setOwn] = useState<string[]>(choices.preselected ?? []);
   const selected = controlled ?? own;
   const setSelected = (update: (prev: string[]) => string[]) => {
@@ -91,6 +94,7 @@ export default function ChatChoices({ choices, disabled, onSubmit, selected: con
             optionId => toggleInGroup(group, optionId),
             group.mode === 'multi',
           )}
+          {afterGroup?.id === group.id && afterGroup.content}
         </div>
       ))}
       {(choices.mode === 'single' || choices.mode === 'multi') && (

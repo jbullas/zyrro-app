@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import ChatChoices from '@/components/ChatChoices';
 import { NOTE_MAX_CHARS, type ChatChoiceSet, type RiskLine, type SummaryCard, type SummaryCardItem } from '@/lib/chat-choices';
+
+// The label of the card's risk field (brief 168-risk-note; Miroslav, 2026-11-09).
+const RISK_FIELD_LABEL = 'Your words about risk and time. Edit them here.';
 
 type PathSummaryCardProps = {
   card: SummaryCard;
@@ -28,6 +31,7 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
   // "Risk, limits and time" as off (brief 168-risk-note).
   const [riskText, setRiskText] = useState(choices?.risk_text ?? '');
   const riskFieldOpen = !!choices && choices.risk_text !== undefined && selected.includes('part:risk');
+  const riskFieldId = useId();
   const removable = new Set(
     choices?.mode === 'groups' ? choices.groups.find(g => g.id === 'remove')?.options.map(o => o.id) ?? [] : [],
   );
@@ -116,18 +120,6 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
             {risk.qualifier && <li>{risk.qualifier}</li>}
           </ul>
           {risk.note && <p className="path-risk-note mt-2">{risk.note}</p>}
-          {riskFieldOpen && (
-            <textarea
-              className="input-field mt-2"
-              rows={4}
-              value={riskText}
-              maxLength={NOTE_MAX_CHARS}
-              placeholder="What you’d like to say about your risk, limits and time"
-              aria-label="Your words about risk, limits and time"
-              disabled={disabled}
-              onChange={e => setRiskText(e.target.value)}
-            />
-          )}
         </div>
         {choices && (
           <div className="divided-list">
@@ -139,6 +131,25 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
               selected={selected}
               onSelectedChange={setSelected}
               hiddenGroups={['remove']}
+              // The risk field opens right under "What's off?", where the user
+              // marks "Risk, limits and time", so it can't open out of view.
+              afterGroup={riskFieldOpen ? {
+                id: 'part',
+                content: (
+                  <div className="flex flex-col gap-8 mt-2">
+                    <label htmlFor={riskFieldId} className="path-question">{RISK_FIELD_LABEL}</label>
+                    <textarea
+                      id={riskFieldId}
+                      className="input-field"
+                      rows={4}
+                      value={riskText}
+                      maxLength={NOTE_MAX_CHARS}
+                      disabled={disabled}
+                      onChange={e => setRiskText(e.target.value)}
+                    />
+                  </div>
+                ),
+              } : undefined}
             />
           </div>
         )}

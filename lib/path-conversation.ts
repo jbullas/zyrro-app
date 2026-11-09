@@ -728,24 +728,29 @@ const CARD_PARTS = [
 
 /**
  * The card's risk block, built by code from the profile: the tapped values on
- * their lines, the deadline from what's pushing them, and one note: the
- * user's own risk text, verbatim with only the first person turned to "you"
- * (brief 168-risk-note; no model writes it). Long dashes are replaced, as on
- * every card item.
+ * their lines and one note: the user's own risk text, verbatim with only the
+ * first person turned to "you" (brief 168-risk-note; no model writes it).
+ * Long dashes are replaced, as on every card item. The deadline is not on the
+ * card: its text is the model's and nothing the user writes can correct it
+ * (Miroslav, 2026-11-09); options get it from the profile (riskDeadline).
  */
 function cardRisk(profile: PathProfile): SummaryCard['risk'] {
   const v = profile.risk_time.value;
   const notKnown = 'Not known yet';
   const band = HOURS_BANDS.find(b => b.id === v?.hours_band);
-  const p = profile.pushing_now.value;
   return {
     readiness: v?.readiness ? READINESS_CARD_LABELS[v.readiness] : notKnown,
     at_stake: v?.at_stake_unsure ? AT_STAKE_CARD_LABELS.unsure : v?.at_stake.length ? v.at_stake.map(s => AT_STAKE_CARD_LABELS[s]).join(', ') : notKnown,
     limits: v?.no_limits ? LIMIT_CARD_LABELS.none : v?.limits.length ? v.limits.map(l => LIMIT_CARD_LABELS[l]).join(', ') : notKnown,
     hours: band ? `${band.label} a week, available now` : notKnown,
-    deadline: p?.urgency === 'deadline' ? (p.deadline ? fixDashes(p.deadline) : 'A decision with a deadline') : null,
     note: (v?.their_words ?? []).map(w => fixDashes(swapToSecondPerson(w.text))).join(' ') || null,
   };
+}
+
+/** The decision with a deadline, from what's pushing them: for options, not shown on the card. */
+export function riskDeadline(profile: PathProfile): string | null {
+  const p = profile.pushing_now.value;
+  return p?.urgency === 'deadline' ? (p.deadline ? fixDashes(p.deadline) : 'A decision with a deadline') : null;
 }
 
 const RISK_KEYS = ['readiness', 'at_stake', 'limits', 'hours'] as const;
@@ -876,7 +881,6 @@ function cardMarkdown(card: SummaryCard): string {
       line('Would put at risk', r.at_stake),
       line('Off the table', r.limits),
       line('Time', r.hours),
-      ...(r.deadline ? [line('Deadline', r.deadline)] : []),
     ].join('\n'),
     ...(r.note ? [r.note] : []),
   ].join('\n\n');

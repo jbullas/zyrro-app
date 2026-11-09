@@ -34,6 +34,7 @@ import {
   ownMessages,
   PATH_TURN_CONFIG,
   reportFields,
+  riskDeadline,
   type CardState,
   type ContextDigest,
   type PathPhase,
@@ -722,7 +723,9 @@ export async function runOptionsGeneration(artifactId: string): Promise<void> {
     if (!row?.context_digest || !cardState?.card) throw new Error('no confirmed card');
     const digest = row.context_digest;
     const profile = withMetaDefaults(row.profile as PathProfile);
-    const card = cardState.card;
+    // The deadline is no longer on the card (Miroslav, 2026-11-09); options
+    // and their checks still take it from the profile, as before.
+    const card: SummaryCard = { ...cardState.card, risk: { ...cardState.card.risk, deadline: riskDeadline(profile) } };
     const [stored, all, rows] = await Promise.all([
       loadUserSummary(supabase, art.user_id),
       listConversationMessages(supabase, conversationId),
