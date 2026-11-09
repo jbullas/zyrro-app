@@ -55,6 +55,7 @@ Commit the doc change on its own.
 - Decisions of 2026-11-09, after step 4 first passed:
   - Items a correction note asks for are always added, even past 5. The cap of 5 applies only to items Zyrro proposes itself (the seed and call A).
   - The "around it" false positive in the leaning check ("knowledge circulating freely, and people meeting around it" shown as inferred) is accepted.
+  - Later the same day: the leaning check looks for a linking word (also, and, but, so) only as the first word of the quote. "Near the start" also caught phrases that lean on nothing ("cost targets and firefighting", "more abstract and more political"). The pointing word at the end stays.
 
 ### Step 3: notes on risk lines
 
@@ -70,6 +71,8 @@ Commit the doc change on its own.
   - The readiness note wording "…while leaving open whether you'd leave the partnership if the firm says no" is accepted. The step 4 check stays at the wording that accepts it ("open whether"), no wider.
   - In `summary_correction` mode, the risk block moves out of call A into its own small call, run alongside call A like the correction-items call. It sees the note, the parts marked, the card's risk lines and the current facts. It returns all five lines as they should now stand, each thing the user said on one line only, and code replaces the block with them as now.
   - The risk-block retry and the risk rules in call A's correction section are removed. Call A's risk_time rule for conversation mode stays as it is.
+  - **Withdrawn, later the same day.** The separate risk call misplaced facts in both of its runs: Nadia's undecided part landed on at risk or deadline, and must-haves landed on the risk lines (Priya in the first run, Marcus in both). Call A with the retry had passed. The risk handling goes back exactly to commit `1ecb9ae`: call A returns the risk block in correction mode, with the one retry and the "one line only" rule. No readiness rule is added.
+- The step 4 script keeps the checks that a note puts risk facts only on the lines it qualifies, and that a note asking only for must-haves puts none.
 
 ### Step 4: live verification
 
