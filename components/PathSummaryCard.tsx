@@ -119,7 +119,13 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
             ))}
             {risk.qualifier && <li>{risk.qualifier}</li>}
           </ul>
-          {risk.note && <p className="path-risk-note mt-2">{risk.note}</p>}
+          {/* The user's own risk text: the section's main content, not a footnote. */}
+          {risk.note && (
+            <div className="mt-4">
+              <p className="card-sub-label">In your words:</p>
+              <p className="mentor-md-p">{risk.note}</p>
+            </div>
+          )}
         </div>
         {choices && (
           <div className="divided-list">
