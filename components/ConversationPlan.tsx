@@ -110,7 +110,7 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
             {plan.actions.map(a => (
               <div key={a.index} className="start-here-action">
                 <p className="start-here-action-text">{a.title}</p>
-                <p className="card-sub-label">
+                <p className="cover-context-line">
                   {a.due_day !== null && view.generated_at ? `Due ${dueDate(view.generated_at, a.due_day)} · ` : ''}
                   {effortLabel(a.effort_hours)}
                 </p>
