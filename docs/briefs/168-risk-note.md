@@ -122,6 +122,10 @@ All through the real API, and through the real page at 1280 and 390.
 - Stop if the risk note drops an undecided part or carries must-item content in more than one run. That means the design needs rethinking, not a prompt patch.
 - Stop if the build would need a migration.
 
+## Conversation-quality list (logged from step 3)
+
+- **Options starting points vs readiness** (Miroslav, 2026-11-09: existing options behaviour, not caused by this build). Marcus (specific_idea, no risk text) tapped "Change my current setup". Two of his three starting points were side pilots alongside his job; the starting-point judge said they fit his hours but not his readiness.
+
 ## Out of scope
 
 - Must-item quote quality (fragments, "you dislike" openers): conversation-quality list.
