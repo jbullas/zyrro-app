@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { useAuthUser } from '@/lib/use-auth-user';
+import { createClient } from '@/utils/supabase/client';
 import { IconLogin, IconMenu2, IconX } from '@tabler/icons-react';
 import { IDENTITY_REPORT_COPY } from '@/lib/identity-report-copy';
 import { PATH_ENABLED } from '@/lib/feature-flags';
@@ -50,6 +51,23 @@ export default function Header({ showLogin = true }: HeaderProps) {
   // flipped true on the triggering tap, auto-reset after 2s.
   const [comingSoon, setComingSoon] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // #169: the Plan link works for a user who has a Plan from the Path
+  // conversation (brief 169-plan-page, decision 3); muted for everyone else.
+  // Asked again on every page change, so a Plan made in this visit counts.
+  // The user the "has a Plan" answer belongs to, so a sign-out never shows a stale link.
+  const [planFor, setPlanFor] = useState<string | null>(null);
+  const hasPlan = !!user && planFor === user.id;
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    createClient()
+      .from('artifacts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('type', 'path_conversation_plan')
+      .then(({ count }: { count: number | null }) => { if (!cancelled) setPlanFor((count ?? 0) > 0 ? user.id : null); });
+    return () => { cancelled = true; };
+  }, [user, pathname]);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -96,8 +114,9 @@ export default function Header({ showLogin = true }: HeaderProps) {
   function renderNavItems() {
     return NAV_ITEMS.map((item) => {
       const active = isActiveItem(pathname, item.href);
-      const className = `nav-btn${active ? ' nav-btn--active' : ''}${item.muted ? ' nav-btn--muted' : ''}`;
-      return item.muted ? (
+      const muted = item.muted && !(item.href === '/plan' && hasPlan);
+      const className = `nav-btn${active ? ' nav-btn--active' : ''}${muted ? ' nav-btn--muted' : ''}`;
+      return muted ? (
         <button key={item.href} type="button" className={className} onClick={handleMutedTap}>
           {item.label}
         </button>

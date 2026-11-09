@@ -389,7 +389,15 @@ export default function PathConversationPage() {
           ) : null
         }
         renderInBubble={message =>
-          !message.choices || message.choices.card || !answerable(message) ? null
+          // The end of Path: a code-owned "See your plan" button under the
+          // last message once the path is chosen and named (brief
+          // 169-plan-page, decision 2), old end messages included.
+          phase === 'chosen' && !message.choices && message.id === latest?.id && message.role === 'assistant' ? (
+            <div className="mt-2">
+              <PrimaryButton href="/plan">See your plan</PrimaryButton>
+            </div>
+          )
+          : !message.choices || message.choices.card || !answerable(message) ? null
             : message.choices.purpose === 'naming' ? (
               <PathNaming
                 key={message.id}

@@ -23,6 +23,7 @@ import {
   type SummaryCard,
 } from '@/lib/chat-choices';
 import { FLIP_GUARD_MS, GENERATION_BUDGET_MS } from '@/lib/generation-budget';
+import { ensurePlanGeneration } from '@/lib/path-plan-generation';
 import { isRateLimitError, withPipelineDeadline } from '@/lib/llm';
 import {
   chatJson,
@@ -782,7 +783,6 @@ const NEW_ROUND_TEXT = 'Here are three new options, shaped by what you told me.'
 const GUIDE_TEXT = 'Choose the option you want to build your plan on, or ask me to adjust them. You can add a note either way. After you choose, you’ll name your path, and then we’ll build the plan.';
 const LAST_ROUND_TEXT = 'These are the last options in this session. Choose the one closest to what you want to build your plan on; you can add a note. After you choose, you’ll name your path, and then we’ll build the plan.';
 const CHOICE_NOTE_PLACEHOLDER = 'Anything to keep in mind about this path? (Optional)';
-const PLAN_NEXT_TEXT = 'Your plan for this path comes next.';
 
 function toView(o: StoredOption): PathOptionView {
   const { id, name, what_it_is, what_it_looks_like, why_it_fits, starting_point, what_it_costs } = o;
@@ -859,6 +859,15 @@ function feedbackMessage(view: OptionsRoundView): AssistantMessage {
   };
 }
 
+/** Starts the Plan generation; a failure to start is logged, never fails the turn (/plan resumes it). */
+async function startPlan(supabase: SupabaseClient, conversation: Pick<ConversationRow, 'id' | 'user_id'>): Promise<void> {
+  try {
+    await ensurePlanGeneration(supabase, conversation);
+  } catch (err) {
+    console.error(`[path plan] conversation ${conversation.id}: start failed; /plan will resume it:`, err);
+  }
+}
+
 function endMessage(option: StoredOption, projectName: string | null | undefined): AssistantMessage {
   const title = projectName || option.name;
   return {
@@ -866,8 +875,9 @@ function endMessage(option: StoredOption, projectName: string | null | undefined
       `**${title}**`,
       ...(projectName ? [option.name] : []),
       `**Starting point:** ${option.starting_point}`,
-      PLAN_NEXT_TEXT,
     ].join('\n\n'),
+    // The page shows a code-owned "See your plan" button under this message
+    // (brief 169-plan-page, decision 2).
     choices: null,
   };
 }
@@ -971,6 +981,8 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
           if (insError) console.error('[path options] path_choice insert failed:', insError);
           const { error: phaseError } = await supabase.from('path_profiles').update({ phase: 'chosen' }).eq('conversation_id', conversation.id);
           if (phaseError) console.error('[path options] phase update failed:', phaseError);
+          // No name suggestions: the conversation ends here, so the Plan starts now.
+          if (!named.names) await startPlan(supabase, conversation);
           console.info(`[path options] conversation ${conversation.id}: chose ${option.id} "${option.name}" (round ${content.round}, strongest ${choice.was_strongest_fit}); names ${named.names ? 'offered' : 'unavailable'}`);
         },
       };
@@ -1005,6 +1017,9 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
             .update({ content: { ...current.content, project_name: projectName } satisfies PathChoiceContent })
             .eq('id', current.id);
           if (error) console.error('[path options] project name save failed:', error);
+          // The path is chosen and named (or naming skipped): the Plan
+          // generation starts by itself (brief 169-plan-page, decision 1).
+          await startPlan(supabase, conversation);
         },
       };
     }

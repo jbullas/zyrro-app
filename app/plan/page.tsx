@@ -13,8 +13,10 @@ import LimitsBlock from '@/components/LimitsBlock';
 import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
 import { useGenerationStatus } from '@/lib/generation-status';
 import { getCurrentArtifact } from '@/lib/artifacts';
+import ConversationPlan from '@/components/ConversationPlan';
+import type { PlanView } from '@/lib/path-plan-generation';
 
-type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'has-artifact';
+type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'has-artifact' | 'new-flow';
 
 export default function PlanPage() {
   const [pageState, setPageState]     = useState<PageState>('loading');
@@ -25,6 +27,7 @@ export default function PlanPage() {
     path_id: string;
   } | null>(null);
   const [retrying, setRetrying]       = useState(false);
+  const [conversationPlan, setConversationPlan] = useState<PlanView | null>(null);
   // Used only to retry the initial artifact-ID lookup in the edge case where the
   // row hasn't committed yet when the page first loads.
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -104,7 +107,19 @@ export default function PlanPage() {
         }
       }
 
-      // Fetch the latest path selection
+      // #169: a path chosen in the Path conversation wins over the old flow
+      // (brief 169-plan-page). The server route owns that state.
+      const planRes = await fetch('/api/path-plan');
+      if (planRes.ok) {
+        const view = await planRes.json() as PlanView;
+        if (view.status !== 'no_choice') {
+          if (!cancelled) { setConversationPlan(view); setPageState('new-flow'); }
+          return;
+        }
+      }
+      if (cancelled) return;
+
+      // The old flow (until #170): the latest path selection
       const { data: selection } = await supabase
         .from('path_selections')
         .select('path_options_artifact_id, path_id')
@@ -184,16 +199,14 @@ export default function PlanPage() {
     );
   }
 
-  // ── No selection ──────────────────────────────────────────────────
+  // ── The Path conversation's Plan (#169) ───────────────────────────
+  if (pageState === 'new-flow' && conversationPlan) {
+    return <ConversationPlan initial={conversationPlan} />;
+  }
+
+  // ── No plan in either flow: the new empty state (brief 169-plan-page, decision 2)
   if (pageState === 'no-selection') {
-    return (
-      <MessageState
-        eyebrow="YOUR PLAN"
-        heading="Choose your path first."
-        body="Select one of your four path options and your Plan will be generated automatically."
-        cta={<PrimaryButton href="/path">See Your Path Options</PrimaryButton>}
-      />
-    );
+    return <ConversationPlan initial={{ status: 'no_choice', path: null, plan: null, generated_at: null }} />;
   }
 
   // ── has-artifact: hook-driven generation states ───────────────────
