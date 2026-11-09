@@ -2,25 +2,32 @@
 
 import { useState } from 'react';
 import ChatChoices from '@/components/ChatChoices';
-import type { ChatChoiceSet, RiskLine, SummaryCard, SummaryCardItem } from '@/lib/chat-choices';
+import { NOTE_MAX_CHARS, type ChatChoiceSet, type RiskLine, type SummaryCard, type SummaryCardItem } from '@/lib/chat-choices';
 
 type PathSummaryCardProps = {
   card: SummaryCard;
   // The card's choices, only while it is the one waiting for an answer.
   choices: ChatChoiceSet | null;
   disabled?: boolean;
-  onSubmit: (choiceIds: string[], note: string | null) => void;
+  // riskText: what the user saved in the risk field, sent only when they
+  // marked "Risk, limits and time" (brief 168-risk-note).
+  onSubmit: (choiceIds: string[], note: string | null, riskText?: string) => void;
 };
 
 // #168: the summary card in the Path thread (briefs 168-shorter-flow and
 // 168-followup). Built from the Identity report's card styles: .card with a
 // header strip and body, and /identity's +/– bullet lists. Each must-have and
 // must-avoid has its own remove control (part of the card's answer, ids
-// "remove:<id>"). Risk, limits and time show one line each, with its note in
-// the second person underneath, and a Deadline line when there is one.
-// Earlier rounds stay in the thread without their choices.
+// "remove:<id>"). Risk, limits and time show one line each, a Deadline line
+// when there is one, and one note under them (brief 168-risk-note); cards
+// from before it keep a note under each line. Earlier rounds stay in the
+// thread without their choices.
 export default function PathSummaryCard({ card, choices, disabled, onSubmit }: PathSummaryCardProps) {
   const [selected, setSelected] = useState<string[]>(choices?.preselected ?? []);
+  // The user's risk text in their own words, editable once they mark
+  // "Risk, limits and time" as off (brief 168-risk-note).
+  const [riskText, setRiskText] = useState(choices?.risk_text ?? '');
+  const riskFieldOpen = !!choices && choices.risk_text !== undefined && selected.includes('part:risk');
   const removable = new Set(
     choices?.mode === 'groups' ? choices.groups.find(g => g.id === 'remove')?.options.map(o => o.id) ?? [] : [],
   );
@@ -108,6 +115,19 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
             ))}
             {risk.qualifier && <li>{risk.qualifier}</li>}
           </ul>
+          {risk.note && <p className="path-risk-note mt-2">{risk.note}</p>}
+          {riskFieldOpen && (
+            <textarea
+              className="input-field mt-2"
+              rows={4}
+              value={riskText}
+              maxLength={NOTE_MAX_CHARS}
+              placeholder="What you’d like to say about your risk, limits and time"
+              aria-label="Your words about risk, limits and time"
+              disabled={disabled}
+              onChange={e => setRiskText(e.target.value)}
+            />
+          )}
         </div>
         {choices && (
           <div className="divided-list">
@@ -115,7 +135,7 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
             <ChatChoices
               choices={choices}
               disabled={disabled}
-              onSubmit={onSubmit}
+              onSubmit={(ids, note) => onSubmit(ids, note, riskFieldOpen ? riskText : undefined)}
               selected={selected}
               onSelectedChange={setSelected}
               hiddenGroups={['remove']}

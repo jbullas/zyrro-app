@@ -1,7 +1,7 @@
 // #168 card fixes, step 3: the must-haves and must-avoids a correction note
 // asks for. A separate small call that sees only the note, the card's items
-// and its risk lines (so a note on a risk line stays off the lists, brief
-// 168-card-items fix 2), run alongside call A; code checks every quote against the note and
+// and its risk block (so a note about risk stays off the lists, briefs
+// 168-card-items and 168-risk-note), run alongside call A; code checks every quote against the note and
 // applies the result. Removal stays with the card's remove control. No
 // examples or sample sentences on purpose: the model copies them.
 
@@ -17,10 +17,10 @@ Return every item the note asks to add.
 Each item: { "list": "must_haves" | "must_avoids", "basis", "quote", "text" }.
 - basis: "stated" when the note says it in words that make sense on their own; "inferred" only when the words that say it lean on something said before them and would not make sense alone.
 - quote: words copied exactly from the note, at least three words (two for a stated item). Copy it as they wrote it, in their own first person: never turn it to you, and never change a word of it yourself. For a stated item, the quote is what the card shows, in their words: code turns only I, me and my to you, and none of your wording is used. So choose it with care: the whole phrase that states the item, at the scope they gave it and with every qualifier they attached, starting at the words that name what they need or object to, without the words that only say they want, like or dislike it and without linking words that point back to something else, reading as a complete phrase to someone who has not seen the rest of the note, and no longer than it needs to be (at most 240 characters). For an inferred item, the quote is the evidence for your wording.
-- text: always your own short plain phrase for the item, for a stated item too: the card shows it whenever the quote cannot stand on its own. In your words, at most 240 characters, keeping every qualifier they attached. Speak to them as you, or use no pronoun for them; never the first or the third person.
+- text: always your own short plain phrase for the item, for a stated item too: the card shows it whenever the quote cannot stand on its own. In your words, at most 240 characters, keeping every qualifier they attached. Speak to them as you, or use no pronoun for them; never the first or the third person.
 
 INPUT
-A JSON object: { "note": string, "must_haves": [ { "id", "text" } ], "must_avoids": [ { "id", "text" } ], "risk_lines": [ { "line", "value", "note" } ] }.
+A JSON object: { "note": string, "must_haves": [ { "id", "text" } ], "must_avoids": [ { "id", "text" } ], "risk": { "readiness", "at_stake", "limits", "hours", "deadline", "note" } }.
 
 OUTPUT
 A JSON object only: { "items": [ ... ] }, an empty list when the note asks for none.`;

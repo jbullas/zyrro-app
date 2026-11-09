@@ -25,7 +25,7 @@ import {
   pathState,
   toMessageView,
 } from '@/lib/path-conversation';
-import { choiceContent, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
+import { choiceContent, NOTE_MAX_CHARS, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
 import { ensureOptionsGeneration, optionsStateView, PATH_FLOW_TURN_CONFIG } from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
@@ -73,7 +73,7 @@ export async function GET() {
 type PostBody =
   | { action: 'start' }
   | { action: 'message'; conversation_id: string; text: string }
-  | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string }
+  | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string; risk_text?: string }
   | { action: 'options_retry'; conversation_id: string };
 
 export async function POST(req: NextRequest) {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       const result = await handleChatTurn(PATH_FLOW_TURN_CONFIG, body.conversation_id, (supabase, conversation) =>
         body.action === 'message'
           ? prepareMessage(supabase, conversation, body.text)
-          : prepareChoice(supabase, conversation, body.message_id, body.choice_ids, body.note),
+          : prepareChoice(supabase, conversation, body.message_id, body.choice_ids, body.note, body.risk_text),
       );
       return await turnResponse(result, body.conversation_id);
     }
@@ -189,6 +189,7 @@ async function prepareChoice(
   messageId: unknown,
   choiceIds: unknown,
   note: unknown,
+  riskText: unknown,
 ): Promise<NewUserMessage | TurnFailure> {
   const row = await getProfileRow(supabase, conversation.id);
   const laterPurposes: ChoicePurpose[] | null = row?.phase === 'options' ? ['options', 'options_feedback']
@@ -209,10 +210,18 @@ async function prepareChoice(
 
   const answer = validateChoiceAnswer(choices, choiceIds, note);
   if (!answer.ok) return refuse(400, answer.error);
+  // The card's risk field (brief 168-risk-note): only on the summary card, and
+  // only with "Risk, limits and time" marked off.
+  if (riskText !== undefined && riskText !== null) {
+    const fieldOpen = choices.purpose === 'summary' && choices.risk_text !== undefined && answer.ids.includes('part:risk');
+    if (!fieldOpen || typeof riskText !== 'string') return refuse(400, 'invalid_choice');
+    if (riskText.trim().length > NOTE_MAX_CHARS) return refuse(400, 'note_too_long');
+  }
 
   return {
     content: choiceContent(choices, answer.ids, answer.note),
     selected_choice_ids: answer.ids,
     note: answer.note,
+    ...(typeof riskText === 'string' && { risk_text: riskText }),
   };
 }

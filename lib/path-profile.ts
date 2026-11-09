@@ -61,14 +61,6 @@ export type EvidencedItem = {
   basis: 'stated' | 'inferred';
 };
 
-// The lines of the card's risk and time section.
-export const RISK_FACT_LINES = ['readiness', 'at_stake', 'limits', 'hours', 'deadline'] as const;
-export type RiskFactLine = typeof RISK_FACT_LINES[number];
-
-// Something the user said, with the source it came from and the exact words
-// that support it (checked in code against that source).
-export type QuotedFact = { text: string; ref: string; quote: string };
-
 export type Attempt = { what: string; why_it_stalled: string; ref: string; quote: string };
 
 export type ItemValues = {
@@ -102,9 +94,10 @@ export type ItemValues = {
     no_limits: boolean;
     hours_band: string | null;
     hours_per_week: number | null;
-    // What the user said that qualifies one card line, kept on that line only
-    // (brief 168-direction-and-card, Part B items 3 and 4).
-    line_facts: Partial<Record<RiskFactLine, QuotedFact>>;
+    // The user's own risk text, verbatim and in order: the note sent with
+    // each risk answer, or what they saved in the card's risk field, which
+    // replaces it (brief 168-risk-note). The card shows it as its risk note.
+    their_words: Array<{ ref: string; text: string }>;
   };
   must_haves_avoids: { must_haves: EvidencedItem[]; must_avoids: EvidencedItem[] };
 };
@@ -179,19 +172,6 @@ export type EvidenceCheck = {
 const FACT_TEXT_MAX = 240;
 const MAX_ATTEMPTS = 4;
 
-/** A { text, ref, quote } the model gave, kept only when the quote is in that source. */
-function quotedFact(v: unknown, check: EvidenceCheck, label: string): QuotedFact | null {
-  const o = obj(v);
-  const text = str(o?.text);
-  const ref = str(o?.ref);
-  const quote = str(o?.quote);
-  if (!text || !ref || !quote || text.length > FACT_TEXT_MAX || !check.quote(ref, quote)) {
-    console.warn(`[path profile] ${label} dropped: ref ${ref ?? 'none'}, quote "${quote ?? ''}"`);
-    return null;
-  }
-  return { text, ref, quote };
-}
-
 /** A phrase recorded as the user's own words: kept only when it is mostly their words. */
 function theirWords(v: unknown, check: EvidenceCheck, label: string): string | null {
   const s = str(v);
@@ -201,9 +181,9 @@ function theirWords(v: unknown, check: EvidenceCheck, label: string): string | n
   return null;
 }
 
-// Values the model may set. risk_time: only the facts that qualify a line; the
-// tapped parts come from code and are kept as they are.
-const COERCE: { [K in ModelItem]: (v: unknown, check: EvidenceCheck) => Record<string, unknown> | null } = {
+// Values the model may set. risk_time is set only by its taps and by code
+// (brief 168-risk-note): call A has no value to give for it.
+const COERCE: { [K in Exclude<ModelItem, 'risk_time'>]: (v: unknown, check: EvidenceCheck) => Record<string, unknown> | null } = {
   pushing_now(v, check) {
     const o = obj(v);
     const pressure = str(o?.pressure);
@@ -236,19 +216,6 @@ const COERCE: { [K in ModelItem]: (v: unknown, check: EvidenceCheck) => Record<s
       specific_enough: typeof o?.specific_enough === 'boolean' ? o.specific_enough : null,
     };
   },
-  risk_time(v, check) {
-    const raw = obj(obj(v)?.line_facts);
-    if (!raw) return null;
-    // A line given as null clears it; a fact that fails its check is dropped.
-    const facts: Partial<Record<RiskFactLine, QuotedFact | null>> = {};
-    for (const line of RISK_FACT_LINES) {
-      if (!(line in raw)) continue;
-      if (raw[line] === null) { facts[line] = null; continue; }
-      const fact = quotedFact(raw[line], check, `risk fact (${line})`);
-      if (fact) facts[line] = fact;
-    }
-    return Object.keys(facts).length ? { line_facts: facts } : null;
-  },
 };
 
 export function emptyItem<V>(): ProfileItem<V> {
@@ -258,7 +225,7 @@ export function emptyItem<V>(): ProfileItem<V> {
 export function emptyRiskTime(): ItemValues['risk_time'] {
   return {
     readiness: null, at_stake: [], at_stake_unsure: false, limits: [], no_limits: false,
-    hours_band: null, hours_per_week: null, line_facts: {},
+    hours_band: null, hours_per_week: null, their_words: [],
   };
 }
 
@@ -381,17 +348,15 @@ export function seedProfile(raw: unknown, check: EvidenceCheck): PathProfile {
  * Model updates, applied with code deciding statuses: an item the user was
  * just asked about is confirmed by their answer (or not_known if they said
  * so); any other item becomes inferred unless already confirmed. Only the
- * MODEL_ITEMS are accepted; risk_time only takes the facts that qualify its
- * lines. Words recorded as the user's are checked against what they wrote.
+ * MODEL_ITEMS are accepted, and risk_time is left to its taps and to code
+ * (brief 168-risk-note). Words recorded as the user's are checked against
+ * what they wrote.
  */
 export function applyProfileUpdates(
   profile: PathProfile,
   updates: unknown,
   answered: AskedItem[],
   check: EvidenceCheck,
-  // A card correction (brief 168-card-items, decision 1): call A returns all
-  // five risk lines as they now stand, and they replace the whole block.
-  opts: { replaceRiskFacts?: boolean } = {},
 ): { profile: PathProfile; changed: ItemKey[] } {
   const next = structuredClone(profile);
   const changed: ItemKey[] = [];
@@ -401,7 +366,7 @@ export function applyProfileUpdates(
     const u = obj(raw);
     const item = oneOf(u?.item, MODEL_ITEMS);
     let status = oneOf(u?.status, STATUSES);
-    if (!u || !item || !status) continue;
+    if (!u || !item || item === 'risk_time' || !status) continue;
     const current = next[item] as ProfileItem<unknown>;
     const isAnswered = (answered as readonly string[]).includes(item);
     if (isAnswered) {
@@ -424,37 +389,11 @@ export function applyProfileUpdates(
         // The messages that answered the direction question are code's to keep.
         const cur = current.value as ItemValues['direction'] | null;
         value = { ...coerced, answer_refs: cur?.answer_refs ?? [] };
-      } else if (item === 'risk_time') {
-        const base = { ...emptyRiskTime(), ...((current.value as ItemValues['risk_time'] | null) ?? {}) };
-        const returned = coerced.line_facts as Record<string, QuotedFact | null>;
-        let facts: Record<string, QuotedFact | null>;
-        if (opts.replaceRiskFacts) {
-          // Every line is what call A returned; a line it left out has no
-          // fact. A returned fact that failed its quote check keeps the
-          // line's previous fact rather than silently clearing it.
-          const rawFacts = obj(obj(u.value)?.line_facts) ?? {};
-          facts = {};
-          for (const line of RISK_FACT_LINES) {
-            if (line in returned) facts[line] = returned[line];
-            else if (line in rawFacts && rawFacts[line] !== null) {
-              facts[line] = base.line_facts?.[line] ?? null;
-              console.warn(`[path profile] risk block replace: ${line} fact failed its check; kept the previous one`);
-            } else facts[line] = null;
-          }
-        } else {
-          facts = { ...(base.line_facts ?? {}), ...returned };
-        }
-        for (const k of Object.keys(facts)) if (!facts[k]) delete facts[k];
-        value = { ...base, line_facts: facts };
       } else {
         value = coerced;
       }
     }
-    // risk_time's status is decided by its taps, not by a free-text update.
-    if (item === 'risk_time') status = current.status === 'missing' && value ? 'inferred' : current.status;
-    if ((status === 'confirmed' || status === 'known' || status === 'inferred') && value === null) continue;
-    // Not knowing risk and time is never a model call: those are tapped.
-    if (item === 'risk_time' && status === 'not_known') continue;
+    if ((status === 'confirmed' || status === 'inferred') && value === null) continue;
 
     const quote = shortQuote(u.in_their_words);
     const updated: ProfileItem<unknown> = {

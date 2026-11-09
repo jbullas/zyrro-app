@@ -107,7 +107,9 @@ export type SummaryCard = {
     hours: string;
     // A decision with a term or date attached; it limits how long they can explore.
     deadline?: string | null;
-    // What qualifies each line, in the second person, on the line it qualifies.
+    // One note under the block, from the user's own risk text (brief 168-risk-note).
+    note?: string | null;
+    // Cards from before brief 168-risk-note: a note under each line it qualified.
     notes?: Partial<Record<RiskLine, string>>;
     // Cards from before the follow-up brief: one free-text qualifier.
     qualifier?: string | null;
@@ -117,12 +119,15 @@ export type SummaryCard = {
 // preselected: ids already picked when the choices are shown (the card's
 // re-offered risk and time taps, filled with the current answers).
 // options_round: the options shown (purpose 'options'); names: the suggestions
-// with their rationale (purpose 'naming').
+// with their rationale (purpose 'naming'). risk_text: on the summary card, the
+// user's risk text in their own first person, prefilled in the field that
+// opens when they mark "Risk, limits and time" (brief 168-risk-note).
 type ChoiceBase = {
   purpose?: ChoicePurpose;
   note?: NoteRule;
   card?: SummaryCard;
   preselected?: string[];
+  risk_text?: string;
   options_round?: OptionsRoundView;
   names?: NameSuggestion[];
 };

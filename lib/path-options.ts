@@ -387,6 +387,9 @@ function buildInputs(
       must_avoids: card.must_avoids.map(({ id, text, inferred }) => ({ id, text, inferred })),
       risk: card.risk,
     },
+    // The user's own words about their readiness, risk, limits, time and
+    // timing, verbatim with their message ids (brief 168-risk-note).
+    risk_text: profile.risk_time.value?.their_words ?? [],
     direction: {
       level: d ? DIRECTION_CARD_LABELS[d.kind] : 'Not known',
       level_for_options: LEVEL_FOR_OPTIONS[directionLevel(profile)],

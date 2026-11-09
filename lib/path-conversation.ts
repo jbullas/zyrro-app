@@ -4,7 +4,7 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
 import type { ConversationRow, RunTurn, StoredMessage, TurnContext, TurnRun } from '@/lib/chat-turn';
 import { addTokens, listConversationMessages } from '@/lib/chat-turn';
-import { noteFromContent, type ChatChoiceSet, type ChoiceGroup, type RiskLine, type SummaryCard } from '@/lib/chat-choices';
+import { noteFromContent, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
 import { mergeAnswersWithQuestions } from '@/lib/identity-questions';
 import { getChatCompletionDetailed, isRateLimitError, PATH_RETRY } from '@/lib/llm';
 import {
@@ -21,6 +21,7 @@ import {
   DIRECTION_NOTE_PLACEHOLDER,
   DIRECTION_QUESTION,
   emptyProfile,
+  emptyRiskTime,
   HOURS_BANDS,
   isItemComplete,
   isPathProfile,
@@ -725,38 +726,65 @@ const CARD_PARTS = [
   { id: 'risk', label: 'Risk, limits and time' },
 ];
 
-const RISK_LINES: RiskLine[] = ['readiness', 'at_stake', 'limits', 'hours', 'deadline'];
-
 /**
- * The card's risk lines, built by code from the profile. Each line carries
- * the note call B wrote for it (second person, brief item 9); the user's own
- * typed note is never pasted here.
+ * The card's risk block, built by code from the profile: the tapped values on
+ * their lines, the deadline from what's pushing them, and one note: the
+ * user's own risk text, verbatim with only the first person turned to "you"
+ * (brief 168-risk-note; no model writes it). Long dashes are replaced, as on
+ * every card item.
  */
-function cardRisk(profile: PathProfile, notes: Partial<Record<RiskLine, string>> = {}): SummaryCard['risk'] {
+function cardRisk(profile: PathProfile): SummaryCard['risk'] {
   const v = profile.risk_time.value;
   const notKnown = 'Not known yet';
   const band = HOURS_BANDS.find(b => b.id === v?.hours_band);
   const p = profile.pushing_now.value;
-  const deadline = p?.urgency === 'deadline' ? (p.deadline ? fixDashes(p.deadline) : 'A decision with a deadline') : null;
-  const kept = Object.fromEntries(Object.entries(notes).filter(([k, n]) => !!n && (k !== 'deadline' || !!deadline)));
   return {
     readiness: v?.readiness ? READINESS_CARD_LABELS[v.readiness] : notKnown,
     at_stake: v?.at_stake_unsure ? AT_STAKE_CARD_LABELS.unsure : v?.at_stake.length ? v.at_stake.map(s => AT_STAKE_CARD_LABELS[s]).join(', ') : notKnown,
     limits: v?.no_limits ? LIMIT_CARD_LABELS.none : v?.limits.length ? v.limits.map(l => LIMIT_CARD_LABELS[l]).join(', ') : notKnown,
     hours: band ? `${band.label} a week, available now` : notKnown,
-    deadline,
-    notes: kept,
+    deadline: p?.urgency === 'deadline' ? (p.deadline ? fixDashes(p.deadline) : 'A decision with a deadline') : null,
+    note: (v?.their_words ?? []).map(w => fixDashes(swapToSecondPerson(w.text))).join(' ') || null,
   };
 }
 
-// The facts behind the risk lines, for call B to write the second-person
-// notes from: only what the user said that qualifies each line, per line.
-function riskFacts(profile: PathProfile) {
-  const facts = profile.risk_time.value?.line_facts ?? {};
-  return {
-    lines: cardRisk(profile),
-    what_they_said: Object.fromEntries(RISK_LINES.map(l => [l, facts[l]?.text ?? null])),
-  };
+const RISK_KEYS = ['readiness', 'at_stake', 'limits', 'hours'] as const;
+
+/** Whether re-tapped answers changed any of the card's tapped risk values. */
+function riskValuesChanged(before: SummaryCard['risk'], profile: PathProfile): boolean {
+  const now = cardRisk(profile);
+  return RISK_KEYS.some(k => before[k] !== now[k]);
+}
+
+/** The card's risk block as the correction-items call sees it: the values and the one note. */
+function riskBlockFor(risk: SummaryCard['risk']) {
+  return { readiness: risk.readiness, at_stake: risk.at_stake, limits: risk.limits, hours: risk.hours, deadline: risk.deadline ?? null, note: risk.note ?? null };
+}
+
+// ── The user's risk text (brief 168-risk-note) ─────────────────────────────
+
+/** A risk answer's note added to the user's risk text, verbatim, when there is one. */
+function withRiskText(profile: PathProfile, text: string | null): PathProfile {
+  const t = text?.trim();
+  if (!t) return profile;
+  const v = { ...emptyRiskTime(), ...(profile.risk_time.value ?? {}) };
+  return { ...profile, risk_time: { ...profile.risk_time, value: { ...v, their_words: [...(v.their_words ?? []), { ref: LATEST_REF, text: t }] } } };
+}
+
+/** The user's risk text in their own first person, for the card's editable field. */
+function riskTextForEditing(profile: PathProfile): string {
+  return (profile.risk_time.value?.their_words ?? []).map(w => w.text).join('\n\n');
+}
+
+/**
+ * What the user saved in the card's risk field replaces their risk text,
+ * with this message as its ref. Saved unchanged, it is left as it was.
+ */
+function withEditedRiskText(profile: PathProfile, edited: string): PathProfile {
+  const t = edited.trim();
+  if (t === riskTextForEditing(profile).trim()) return profile;
+  const v = { ...emptyRiskTime(), ...(profile.risk_time.value ?? {}) };
+  return { ...profile, risk_time: { ...profile.risk_time, value: { ...v, their_words: t ? [{ ref: LATEST_REF, text: t }] : [] } } };
 }
 
 /**
@@ -779,93 +807,14 @@ function directionFacts(profile: PathProfile, ownIndex: RefIndex) {
   return { level: DIRECTION_CARD_LABELS[v.kind], their_words: v.kind === 'no_idea' ? null : directionSources(profile, ownIndex) };
 }
 
-type CardProse = { seen_as: string; wants: string; direction: string | null; notes: Partial<Record<RiskLine, string>> };
+type CardProse = { seen_as: string; wants: string; direction: string | null };
 
 // Fix 1: every card after the first opens with this line (code-owned).
 export const CARD_INTRO = 'Here’s the updated summary with your changes. Your earlier answers are already filled in, so just check it and confirm, or change anything that’s still off.';
 
-// ── Risk notes: right line only, nothing repeated (Part B items 3 and 4) ──
-
-// A note whose main words are mostly found in another part of the card
-// repeats it. Tuned in live verification; every drop is logged.
-const NOTE_OVERLAP_MAX = 0.6;
-// Short function words carry no content, so they don't count either way.
-const FUNCTION_WORDS = new Set([
-  'your', 'yours', 'with', 'that', 'this', 'from', 'have', 'they', 'them', 'their', 'what', 'when', 'which',
-  'would', 'about', 'into', 'than', 'then', 'there', 'will', 'been', 'more', 'some', 'only', 'just', 'also',
-  'still', 'want', 'wants', 'were', 'it\'s', 'you\'re', 'you\'ve', 'yourself',
-]);
-
-function contentWords(s: string): string[] {
-  return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[^\p{L}\p{N}\s']/gu, ' ')
-    .split(/\s+/).filter(w => w.length > 3 && !FUNCTION_WORDS.has(w));
-}
-
-function overlapShare(note: string, other: string): number {
-  const ws = contentWords(note);
-  if (!ws.length) return 0;
-  const o = new Set(contentWords(other));
-  return ws.filter(w => o.has(w)).length / ws.length;
-}
-
-const LINE_LABELS: Record<RiskLine, string> = {
-  readiness: 'Ready to', at_stake: 'Would put at risk', limits: 'Off the table', hours: 'Time', deadline: 'Deadline',
-};
-
-/** The card's risk lines as the user saw them: label, value and note. */
-function riskLinesFor(risk: SummaryCard['risk']) {
-  return RISK_LINES.map(l => ({
-    line: LINE_LABELS[l],
-    value: (l === 'deadline' ? risk.deadline : risk[l]) ?? null,
-    note: risk.notes?.[l] ?? null,
-  }));
-}
-
-/**
- * Code's rule for the risk notes: a line takes a note only when the user said
- * something that qualifies that line (a checked fact), and a note that mostly
- * repeats its own line or another part of the card is dropped. Each drop is
- * logged with the line and the part it matched.
- */
-function gateRiskNotes(
-  notes: Partial<Record<RiskLine, string>>,
-  profile: PathProfile,
-  card: Pick<SummaryCard, 'wants' | 'direction' | 'must_haves' | 'must_avoids'> & { risk: SummaryCard['risk'] },
-): Partial<Record<RiskLine, string>> {
-  const facts = profile.risk_time.value?.line_facts ?? {};
-  const kept: Partial<Record<RiskLine, string>> = {};
-  for (const line of RISK_LINES) {
-    const note = notes[line];
-    if (!note) continue;
-    if (!facts[line]) {
-      console.info(`[path card note] dropped: line=${line} reason=no_fact note=${JSON.stringify(note)}`);
-      continue;
-    }
-    const lineValue = (l: RiskLine) => (l === 'deadline' ? card.risk.deadline ?? '' : card.risk[l]);
-    const others: Array<[string, string]> = [
-      [`its own line (${LINE_LABELS[line]})`, lineValue(line)],
-      ['What you want', card.wants],
-      ...(card.direction?.text ? [['Your direction', card.direction.text] as [string, string]] : []),
-      ...card.must_haves.map(i => [`Must-have "${i.text}"`, i.text] as [string, string]),
-      ...card.must_avoids.map(i => [`Must-avoid "${i.text}"`, i.text] as [string, string]),
-      ...RISK_LINES.filter(l => l !== line).map(l => [`line ${LINE_LABELS[l]}`, lineValue(l)] as [string, string]),
-      ...Object.entries(kept).map(([l, n]) => [`note on ${LINE_LABELS[l as RiskLine]}`, n] as [string, string]),
-    ];
-    const worst = others
-      .map(([section, text]) => ({ section, share: overlapShare(note, text) }))
-      .sort((a, b) => b.share - a.share)[0];
-    if (worst && worst.share >= NOTE_OVERLAP_MAX) {
-      console.info(`[path card note] dropped: line=${line} reason=overlap matches=${JSON.stringify(worst.section)} share=${worst.share.toFixed(2)} note=${JSON.stringify(note)}`);
-      continue;
-    }
-    kept[line] = note;
-  }
-  return kept;
-}
-
 function buildCard(round: number, prose: CardProse, profile: PathProfile, direction: SummaryCard['direction']): SummaryCard {
   const toItems = (items: EvidencedItem[] = []) => items.map(i => ({ id: i.id, text: fixDashes(i.text), inferred: i.basis === 'inferred' }));
-  const base = {
+  return {
     round,
     intro: round > 1 ? CARD_INTRO : null,
     seen_as: prose.seen_as,
@@ -873,25 +822,8 @@ function buildCard(round: number, prose: CardProse, profile: PathProfile, direct
     direction,
     must_haves: toItems(profile.must_haves_avoids.value?.must_haves),
     must_avoids: toItems(profile.must_haves_avoids.value?.must_avoids),
+    risk: cardRisk(profile),
   };
-  const lines = cardRisk(profile);
-  return { ...base, risk: cardRisk(profile, gateRiskNotes(prose.notes, profile, { ...base, risk: lines })) };
-}
-
-const RISK_KEYS = ['readiness', 'at_stake', 'limits', 'hours'] as const;
-
-/** A card's risk lines rebuilt after re-tapped answers: a line whose value changed loses its old note. */
-function refreshRisk(card: SummaryCard, profile: PathProfile): { card: SummaryCard; changed: boolean } {
-  const before = card.risk;
-  const fresh = cardRisk(profile);
-  const notes: Partial<Record<RiskLine, string>> = {};
-  for (const line of RISK_LINES) {
-    const note = before.notes?.[line];
-    const same = line === 'deadline' ? before.deadline === fresh.deadline : before[line] === fresh[line];
-    if (note && same) notes[line] = note;
-  }
-  const changed = RISK_KEYS.some(k => before[k] !== fresh[k]);
-  return { card: { ...card, risk: { ...fresh, notes } }, changed };
 }
 
 function cardChoices(card: SummaryCard, profile: PathProfile, offerRisk: boolean): ChatChoiceSet {
@@ -919,6 +851,7 @@ function cardChoices(card: SummaryCard, profile: PathProfile, offerRisk: boolean
     groups,
     card,
     ...(offerRisk && { preselected: riskPreselected(profile) }),
+    risk_text: riskTextForEditing(profile),
     note: { placeholder: 'What should change?', required_when: { ids: ['verdict:mostly', 'verdict:not_it'], unless_group: 'part' } },
   };
 }
@@ -928,7 +861,7 @@ function cardMarkdown(card: SummaryCard): string {
   const list = (items: SummaryCard['must_haves']) =>
     items.length ? items.map(i => `- ${i.text}${i.inferred ? ' (Zyrro’s guess)' : ''}`).join('\n') : '- None recorded';
   const r = card.risk;
-  const line = (label: string, value: string, key: RiskLine) => `- ${label}: ${value}${r.notes?.[key] ? `. ${r.notes[key]}` : ''}`;
+  const line = (label: string, value: string) => `- ${label}: ${value}`;
   const d = card.direction;
   return [
     ...(card.intro ? [card.intro] : []),
@@ -939,13 +872,13 @@ function cardMarkdown(card: SummaryCard): string {
     '**Must-avoids**', list(card.must_avoids),
     '**Risk, limits and time**',
     [
-      line('Ready to', r.readiness, 'readiness'),
-      line('Would put at risk', r.at_stake, 'at_stake'),
-      line('Off the table', r.limits, 'limits'),
-      line('Time', r.hours, 'hours'),
-      ...(r.deadline ? [line('Deadline', r.deadline, 'deadline')] : []),
-      ...(r.qualifier ? [`- ${r.qualifier}`] : []),
+      line('Ready to', r.readiness),
+      line('Would put at risk', r.at_stake),
+      line('Off the table', r.limits),
+      line('Time', r.hours),
+      ...(r.deadline ? [line('Deadline', r.deadline)] : []),
     ].join('\n'),
+    ...(r.note ? [r.note] : []),
   ].join('\n\n');
 }
 
@@ -1078,9 +1011,9 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
               note: correctionNote,
               must_haves: input.correction.card.must_haves.map(({ id, text }) => ({ id, text })),
               must_avoids: input.correction.card.must_avoids.map(({ id, text }) => ({ id, text })),
-              // Brief 168-card-items, fix 2: the call can only tell a note on a
-              // risk line from an item if it sees the lines.
-              risk_lines: riskLinesFor(input.correction.card.risk),
+              // The call can only tell a note about risk from an item if it
+              // sees the risk block (briefs 168-card-items and 168-risk-note).
+              risk: riskBlockFor(input.correction.card.risk),
             }),
           },
         ], 0.2, 'path correction items', undefined, conversationId)
@@ -1090,29 +1023,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
   let extraTokens = noteCall?.tokens ?? 0;
   const out = update.parsed;
 
-  // A card correction replaces the whole risk block with call A's (brief
-  // 168-card-items, decision 1). In the first live runs call A left the block
-  // out of corrections altogether, so a missing block gets one retry that
-  // asks for it alone; still missing, the facts stay as they were.
-  const correcting = input.mode === 'summary_correction';
-  if (correcting) {
-    const riskOf = (updates: unknown) => (Array.isArray(updates) ? updates : []).find(u => (u as Record<string, unknown> | null)?.item === 'risk_time') as Record<string, unknown> | undefined;
-    let risk = riskOf(out.profile_updates);
-    if (!risk) {
-      console.warn('[path update] correction: call A returned no risk block; asking for it once more');
-      const started = Date.now();
-      const retry = await chatJson([
-        ...callAMessages,
-        { role: 'system', content: 'Your answer had no risk_time. In summary_correction mode it is always required. Return only this JSON object: { "profile_updates": [ { "item": "risk_time", "status": "confirmed", "value": { "line_facts": { "readiness", "at_stake", "limits", "hours", "deadline" } }, "in_their_words": null } ] }, with all five lines as they should now stand after the correction: each fact already in PROFILE that still stands, copied as it is, each one the note changes, written with the whole of what the user said about that line, and null for a line with no fact. Nothing else will be used.' },
-      ], 0.2, `${callLabel} (risk retry)`, undefined, conversationId);
-      extraTokens += retry.tokens;
-      risk = riskOf(retry.parsed?.profile_updates);
-      console.info(`[path update] correction: risk retry ${risk ? 'returned the block' : 'returned no block either; the risk facts stay as they were'} in ${Date.now() - started} ms`);
-      if (risk) out.profile_updates = [...(Array.isArray(out.profile_updates) ? out.profile_updates : []), risk];
-    }
-    if (risk) console.info(`[path update] correction: risk block from call A: ${JSON.stringify(risk.value)}`);
-  }
-  const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex), { replaceRiskFacts: correcting });
+  const applied = applyProfileUpdates(s.profile, out.profile_updates, input.answered, evidenceCheck(s.ownIndex));
   let profile = applied.profile;
 
   // null (or missing) means unchanged. A returned list that is empty or wholly
@@ -1377,7 +1288,7 @@ async function runReply(
         turn_insights: insights,
         earlier_answers: Object.entries(earlier).map(([ref, text]) => ({ ref, text })),
         evidence,
-        ...(next.kind === 'card' && { risk_and_time: riskFacts(s.profile), direction: directionFacts(s.profile, s.ownIndex) }),
+        ...(next.kind === 'card' && { direction: directionFacts(s.profile, s.ownIndex) }),
         recent_messages: s.all.slice(-REPLY_RECENT_MESSAGES).map(({ role, content }) => ({ role, content })),
         latest_message: latestText !== null ? { ref: LATEST_REF, content: latestText } : null,
       }),
@@ -1392,8 +1303,7 @@ async function runReply(
     const reply = await chatJson(messages, REPLY_TEMPERATURE, next.kind === 'card' ? 'path card' : 'path reply', PATH_REPLY_MODEL, conversationId);
     tokens += reply.tokens;
     parsed = reply.parsed;
-    const notes = parsed?.risk_notes && typeof parsed.risk_notes === 'object' ? Object.values(parsed.risk_notes as Record<string, unknown>) : [];
-    const text = [parsed?.reply, parsed?.seen_as, parsed?.wants, parsed?.direction, ...notes].filter(t => typeof t === 'string').join(' ');
+    const text = [parsed?.reply, parsed?.seen_as, parsed?.wants, parsed?.direction].filter(t => typeof t === 'string').join(' ');
     refsUsed = sourceRefs((Array.isArray(parsed?.refs_used) ? parsed.refs_used : [])
       .filter((r): r is string => typeof r === 'string' && (r === LATEST_REF || r in excerpts)));
     // Logged only: a signature named in the reply, for the verification judge.
@@ -1417,11 +1327,10 @@ function addUsedRefs(profile: PathProfile, refs: string[]): PathProfile {
   return { ...profile, meta: { ...profile.meta, used_refs: all } };
 }
 
-// The prompt asks for about 600 and 350 characters (160 per risk note); these
-// ceilings are only a safety net against a runaway output.
+// The prompt asks for about 600 and 350 characters; these ceilings are only a
+// safety net against a runaway output.
 const CARD_SEEN_AS_MAX = 900;
 const CARD_WANTS_MAX = 600;
-const CARD_NOTE_MAX = 240;
 // Only a runaway guard: the direction line's real limits are checked by
 // directionLineProblem, which retries and then falls back (fix 2). A hard cap
 // here once threw away a faithful line and pasted the user's raw words instead.
@@ -1434,14 +1343,8 @@ function cardProse(parsed: Record<string, unknown> | null): CardProse | null {
     console.warn(`[path card] unusable prose: seen_as ${seen.length} chars, wants ${wants.length} chars`);
     return null;
   }
-  const raw = parsed?.risk_notes && typeof parsed.risk_notes === 'object' ? (parsed.risk_notes as Record<string, unknown>) : {};
-  const notes: Partial<Record<RiskLine, string>> = {};
-  for (const line of RISK_LINES) {
-    const n = typeof raw[line] === 'string' ? fixDashes((raw[line] as string).trim()) : '';
-    if (n && n.length <= CARD_NOTE_MAX) notes[line] = n;
-  }
   const d = typeof parsed?.direction === 'string' ? fixDashes(parsed.direction.trim()) : '';
-  return { seen_as: seen, wants, direction: d && d.length <= CARD_DIRECTION_RAW_MAX ? d : null, notes };
+  return { seen_as: seen, wants, direction: d && d.length <= CARD_DIRECTION_RAW_MAX ? d : null };
 }
 
 /**
@@ -1533,7 +1436,9 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       // Taps on code-owned choices, applied exactly, before call A.
       if (ids && answeredChoices?.purpose === 'opening_read') s.profile = applyOpeningReadTap(s.profile, ids, note);
       if (ids && answeredChoices?.purpose === 'direction') s.profile = applyDirectionTap(s.profile, ids, note);
-      if (ids && answeredChoices?.purpose === 'risk_time') s.profile = applyRiskTimeTap(s.profile, ids);
+      // A risk answer: its taps, and its note kept verbatim as the user's risk
+      // text, which the card shows (brief 168-risk-note).
+      if (ids && answeredChoices?.purpose === 'risk_time') s.profile = withRiskText(applyRiskTimeTap(s.profile, ids), latestOwn);
       if (!ids && asked?.kind === 'follow_up' && asked.item === 'opening_read') s.profile = applyOpeningReadFollowUp(s.profile, userMessage.content);
       const tapped = s.profile;
 
@@ -1675,9 +1580,6 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
   const ids = userMessage.selected_choice_ids ?? [];
   const note = userMessage.note ?? null;
   let tokens = 0;
-  // What the user had said about each risk line before this turn, so a
-  // corrected card knows which lines are unchanged (step 3).
-  const factsBefore = JSON.parse(JSON.stringify(s.profile.risk_time.value?.line_facts ?? {})) as Record<string, unknown>;
 
   // Removals on the card are applied by code, exactly. Only that exact item is
   // blocked from coming back; a reworded version the user asks for may be added.
@@ -1700,7 +1602,15 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
   let riskChanged = false;
   if (answeredChoices?.purpose === 'summary' && offeredRisk(answeredChoices)) {
     s.profile = applyRiskTimeTap(s.profile, ids);
-    ({ card, changed: riskChanged } = refreshRisk(card, s.profile));
+    riskChanged = riskValuesChanged(card.risk, s.profile);
+  }
+  // "Risk, limits and time" marked off: what the user saved in the card's risk
+  // field replaces their risk text (brief 168-risk-note). Nothing else changes it.
+  let riskEdited = false;
+  if (answeredChoices?.purpose === 'summary' && pickedIn(ids, 'part').includes('risk') && typeof userMessage.risk_text === 'string') {
+    const before = s.profile;
+    s.profile = withEditedRiskText(s.profile, userMessage.risk_text);
+    riskEdited = s.profile !== before;
   }
   s.summary = syncFromProfile(s.summary, s.profile);
 
@@ -1717,7 +1627,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
   };
 
   // A card built by code from the current one: same prose, current must-haves,
-  // must-avoids and risk lines. No model call.
+  // must-avoids and risk block. No model call.
   const codeCard = (round: number, offerRisk: boolean): TurnRun => {
     const fresh: SummaryCard = {
       ...card,
@@ -1725,6 +1635,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       intro: CARD_INTRO,
       must_haves: card.must_haves,
       must_avoids: card.must_avoids,
+      risk: cardRisk(s.profile),
     };
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
     return {
@@ -1740,8 +1651,9 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       const verdict = pickedIn(ids, 'verdict')[0];
       if (verdict === 'right') {
         // Changed risk and time answers: show the updated card once more before
-        // confirming (Miroslav, 2026-11-06), built by code.
-        if (riskChanged) return codeCard(cardState.round + 1, false);
+        // confirming (Miroslav, 2026-11-06), built by code; the same for an
+        // edited risk text.
+        if (riskChanged || riskEdited) return codeCard(cardState.round + 1, false);
         // Confirmed: no model call and no message (brief 168-options, Part B
         // item 1). The phase moves to options; the generation is started after
         // this commit (lib/path-options.ts) and its options arrive as the reply.
@@ -1867,28 +1779,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       direction = dir.direction ?? null;
     }
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
-    // Step 3: a line whose value and whose fact didn't change keeps exactly the
-    // note it had (or none); only a changed line gets the new card's note. A
-    // regenerated note once carried a doubt from another section onto a line
-    // the correction never touched.
-    const previous = card.risk;
-    const now = cardRisk(s.profile);
-    const factsNow = s.profile.risk_time.value?.line_facts ?? {};
-    const notes: Partial<Record<RiskLine, string>> = {};
-    for (const l of RISK_LINES) {
-      const sameValue = l === 'deadline' ? previous.deadline === now.deadline : previous[l] === now[l];
-      // Field by field: a stored fact comes back from jsonb with its keys
-      // reordered, and a correction now rebuilds every fact (brief
-      // 168-card-items, decision 1), so whole-object JSON never matched.
-      const fact = (f: unknown) => {
-        const o = f && typeof f === 'object' ? (f as Record<string, unknown>) : null;
-        return o ? [o.ref ?? null, o.text ?? null, o.quote ?? null] : null;
-      };
-      const sameFact = JSON.stringify(fact(factsBefore[l])) === JSON.stringify(fact(factsNow[l]));
-      const lineNote = sameValue && sameFact ? previous.notes?.[l] : prose.notes[l];
-      if (lineNote) notes[l] = lineNote;
-    }
-    const fresh = buildCard(round, { ...prose, notes }, s.profile, direction);
+    const fresh = buildCard(round, prose, s.profile, direction);
     return {
       ok: true,
       assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },

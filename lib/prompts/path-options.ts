@@ -11,7 +11,8 @@ export const PATH_OPTIONS_PROMPT = `You are Zyrro. The user has just confirmed Z
 
 WHAT YOU RECEIVE
 - UNDERSTANDING: the main input. The tension that brought the user and the pattern behind it, as they confirmed it in the conversation: how Zyrro sees them on the card they confirmed, the tensions, and the pattern and connections, with what the pattern means for them (the source of the tension, where they are heading, or both).
-- CARD: the summary the user confirmed: how Zyrro sees them, what they want, their direction, their must-haves and must-avoids (each with an id: h1, h2 and so on for must-haves, a1, a2 and so on for must-avoids), and their risk, limits, hours and any deadline. This is the ground truth: it overrides anything older.
+- CARD: the summary the user confirmed: how Zyrro sees them, what they want, their direction, their must-haves and must-avoids (each with an id: h1, h2 and so on for must-haves, a1, a2 and so on for must-avoids), and their risk, limits, hours and any deadline, with a note on what they said about them. This is the ground truth: it overrides anything older.
+- RISK TEXT: what they wrote about their readiness, risk, limits, time and timing, in their own words, each with the ref of its message.
 - DIRECTION: the level, LEVEL FOR OPTIONS (clear; rough, specific enough to build on; rough, still vague; or none yet), and when they have one, their direction in their own words. ASIDE, when present, is something they named about their free time: it is recorded, but it is never the basis of an option.
 - SUMMARY: what is pushing them, and the questions Zyrro still had.
 - ATTEMPTS: things they have tried before to change their situation, and why each did not stick, from their questionnaire answers.

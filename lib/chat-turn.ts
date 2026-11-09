@@ -34,7 +34,9 @@ export type StoredMessage = {
 // note: Path's optional note sent with a tap. Already part of `content`; passed
 // on separately so the turn can tell the user's own words from the tapped
 // labels. Not stored on its own. Mentor never sets it.
-export type NewUserMessage = { content: string; selected_choice_ids: string[] | null; note?: string | null };
+// risk_text: what the user saved in the summary card's risk field (brief
+// 168-risk-note); kept in the Path profile with this message as its ref.
+export type NewUserMessage = { content: string; selected_choice_ids: string[] | null; note?: string | null; risk_text?: string | null };
 
 export type TurnFailure = { ok: false; status: number; error: string };
 export type TurnResult = { ok: true; messages: StoredMessage[] } | TurnFailure;

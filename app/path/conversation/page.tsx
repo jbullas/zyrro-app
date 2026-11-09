@@ -261,7 +261,7 @@ export default function PathConversationPage() {
     if (!ok) setInput(text);
   }
 
-  function handleChoice(message: PathMessage, choiceIds: string[], note: string | null) {
+  function handleChoice(message: PathMessage, choiceIds: string[], note: string | null, riskText?: string) {
     if (sending || !message.choices) return;
     const purpose = message.choices.purpose;
     const statusLine =
@@ -273,7 +273,7 @@ export default function PathConversationPage() {
                 : purpose === 'naming' ? 'Saving…'
                   : 'Reading your answer…';
     sendTurn(
-      { action: 'choice', message_id: message.id, choice_ids: choiceIds, note },
+      { action: 'choice', message_id: message.id, choice_ids: choiceIds, note, ...(riskText !== undefined && { risk_text: riskText }) },
       { id: 'pending', role: 'user', content: choiceContent(message.choices, choiceIds, note), choices: null, selected_choice_ids: choiceIds },
       statusLine,
     );
@@ -374,7 +374,7 @@ export default function PathConversationPage() {
                 card={message.choices.card}
                 choices={answerable(message) ? message.choices : null}
                 disabled={sending}
-                onSubmit={(ids, note) => handleChoice(message, ids, note)}
+                onSubmit={(ids, note, riskText) => handleChoice(message, ids, note, riskText)}
               />
             </div>
           ) : message.choices?.purpose === 'options' && message.choices.options_round ? (
