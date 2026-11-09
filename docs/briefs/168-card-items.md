@@ -47,6 +47,11 @@ Commit the doc change on its own.
 - A rewording from a correction note follows the same rule: the new item's text is the note's quote with only the pronouns swapped.
 - Cap: an item whose quote is over the card's item cap is dropped and logged, not cut.
 - Remove the voice and cut code for whatever step 0 showed is no longer reachable. Keep what inferred items still need.
+- Decisions of 2026-11-09, after the first step 4 runs, which replace the model-only call on leaning quotes above:
+  - Every item, stated or inferred, carries both the quote and Zyrro's own short wording in text.
+  - Code shows the quote (first person swapped) for a stated item, unless a narrow code check finds the quote leans on something earlier: it ends with a pointing word (that, it, this, there, them), or has a linking word near the start (also, and, but, so). Then the item becomes inferred and shows Zyrro's wording, labelled. Every item the check moves is logged. Inferred items keep the existing voice checks.
+  - A stated item's quote may be two words; inferred items keep the three-word minimum.
+  - The correction-items call no longer replaces card items. A reworded item is added alongside the original, and the user removes the original with the remove control if they want. A correction never drops an item the user didn't remove.
 
 ### Step 3: notes on risk lines
 
@@ -54,6 +59,10 @@ Commit the doc change on its own.
 - Make sure call A, in `summary_correction` mode, records that part as the line's fact, with its quote checked as now.
 - Call A records the whole part of the note that qualifies the line, not only its first clause. In Miroslav's run the readiness fact kept only "ready to ask about a smaller role before I renew" and lost the rest (decision of 2026-11-09).
 - Notes on unchanged risk lines are still kept exactly (decision of 2026-11-07).
+- Decisions of 2026-11-09, after the first step 4 runs:
+  - "If they say no, I don't know whether I'd leave" belongs to readiness.
+  - Code never moves facts between lines, and the prompt carries no rule about whether leaving qualifies readiness.
+  - In `summary_correction` mode, call A returns all five risk lines' facts as they should now stand, and code replaces the whole risk block with them. Lines whose fact is unchanged keep their card note exactly, as now.
 
 ### Step 4: live verification
 
@@ -64,6 +73,7 @@ All through the real API, and through the real page at 1280 and 390 for anything
 - **A quote that leans on something earlier** gives an inferred item, labelled on the card, not a stated one and not a dropped one.
 - **Across personas** (the Nadia clone, Dana, Priya, the contradicting persona and one more of your choice), code asserts that every stated item on every card equals its quote with only the pronouns swapped. Report each persona's stated items so their readability can be judged. Flag any that don't read as a complete phrase.
 - **A correction note that both adds a must-item and qualifies a risk line:** each part goes to its place.
+- **A correction never drops an item the user didn't remove:** checked by code on every correction.
 - **Regression:** options still honour the must-items. Mentor, `/identity` and `/dashboard` are unchanged.
 - Delete every clone by exact id.
 
