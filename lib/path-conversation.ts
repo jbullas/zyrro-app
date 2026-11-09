@@ -1162,7 +1162,8 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
    * applied) and only adds what the note asks for. A reworded item is added
    * alongside the original, never in its place (brief 168-card-items,
    * decision 4): in a live run a rewording replaced an item the user never
-   * touched. The user removes the original with the remove control.
+   * touched. The user removes the original with the remove control. What
+   * the note asks for is added even past the cap of 5.
    * Call A's full lists are not used here; in a live run a corrected list
    * silently lost an item the user never touched.
    */
@@ -1174,8 +1175,11 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
       const checked = validateEvidenced([raw], s.ownIndex, prefix, []);
       if (checked.dropped.length) { console.warn(`[path update] note item ${key} dropped: ${checked.dropped.join('; ')}`); continue; }
       const item = checked.items[0];
+      // Always added, even past the cap: the cap of 5 is only for what Zyrro
+      // proposes itself (brief 168-card-items, decision of 2026-11-09). A
+      // full list once silently left out what the user asked for.
       if (!list.some(b => norm(b.text) === norm(item.text))) {
-        if (list.length >= SUMMARY_CAPS.must_items) { console.warn(`[path update] correction: ${key} full, not added: "${item.text}"`); continue; }
+        if (list.length >= SUMMARY_CAPS.must_items) console.info(`[path update] correction: ${key} past the cap of ${SUMMARY_CAPS.must_items}, added as the user asked: "${item.text}"`);
         list.push(item);
       }
     }

@@ -115,18 +115,17 @@ export function directionLineProblem(line: string, sources: string[]): string | 
 
 // Brief 168-card-items, decision 2: a quote that leans on something said
 // before it can't stand on the card. Narrow on purpose: a pointing word at the
-// end, or a linking word among the first few words.
+// end, or a linking word as the first word (among the first three it also
+// caught "cost targets and firefighting", which leans on nothing).
 const POINTING_END = new Set(['that', 'it', 'this', 'there', 'them']);
 const LINKING_START = new Set(['also', 'and', 'but', 'so']);
-const LINKING_WITHIN = 3;
 
 /** Why a stated item's quote leans on something earlier, or null. */
 export function leansOnEarlier(quote: string): string | null {
   const words = quote.toLowerCase().replace(/[‘’]/g, "'").split(/\s+/).map(w => w.replace(/[^\p{L}']/gu, '')).filter(Boolean);
   const last = words[words.length - 1];
   if (last && POINTING_END.has(last)) return `ends with "${last}"`;
-  const linking = words.slice(0, LINKING_WITHIN).find(w => LINKING_START.has(w));
-  return linking ? `"${linking}" near the start` : null;
+  return words[0] && LINKING_START.has(words[0]) ? `starts with "${words[0]}"` : null;
 }
 
 /** "I'd like…" as "You'd like…": pronouns swapped, nothing else changed. */
