@@ -52,6 +52,9 @@ Commit the doc change on its own.
   - Code shows the quote (first person swapped) for a stated item, unless a narrow code check finds the quote leans on something earlier: it ends with a pointing word (that, it, this, there, them), or has a linking word near the start (also, and, but, so). Then the item becomes inferred and shows Zyrro's wording, labelled. Every item the check moves is logged. Inferred items keep the existing voice checks.
   - A stated item's quote may be two words; inferred items keep the three-word minimum.
   - The correction-items call no longer replaces card items. A reworded item is added alongside the original, and the user removes the original with the remove control if they want. A correction never drops an item the user didn't remove.
+- Decisions of 2026-11-09, after step 4 first passed:
+  - Items a correction note asks for are always added, even past 5. The cap of 5 applies only to items Zyrro proposes itself (the seed and call A).
+  - The "around it" false positive in the leaning check ("knowledge circulating freely, and people meeting around it" shown as inferred) is accepted.
 
 ### Step 3: notes on risk lines
 
@@ -63,6 +66,10 @@ Commit the doc change on its own.
   - "If they say no, I don't know whether I'd leave" belongs to readiness.
   - Code never moves facts between lines, and the prompt carries no rule about whether leaving qualifies readiness.
   - In `summary_correction` mode, call A returns all five risk lines' facts as they should now stand, and code replaces the whole risk block with them. Lines whose fact is unchanged keep their card note exactly, as now.
+- Decisions of 2026-11-09, after step 4 first passed:
+  - The readiness note wording "…while leaving open whether you'd leave the partnership if the firm says no" is accepted. The step 4 check stays at the wording that accepts it ("open whether"), no wider.
+  - In `summary_correction` mode, the risk block moves out of call A into its own small call, run alongside call A like the correction-items call. It sees the note, the parts marked, the card's risk lines and the current facts. It returns all five lines as they should now stand, each thing the user said on one line only, and code replaces the block with them as now.
+  - The risk-block retry and the risk rules in call A's correction section are removed. Call A's risk_time rule for conversation mode stays as it is.
 
 ### Step 4: live verification
 
@@ -74,6 +81,7 @@ All through the real API, and through the real page at 1280 and 390 for anything
 - **Across personas** (the Nadia clone, Dana, Priya, the contradicting persona and one more of your choice), code asserts that every stated item on every card equals its quote with only the pronouns swapped. Report each persona's stated items so their readability can be judged. Flag any that don't read as a complete phrase.
 - **A correction note that both adds a must-item and qualifies a risk line:** each part goes to its place.
 - **A correction never drops an item the user didn't remove:** checked by code on every correction.
+- **A correction on a full must-have list** (5 items): every item the note asks for is added, past 5. Report the exact readiness note text from each correction.
 - **Regression:** options still honour the must-items. Mentor, `/identity` and `/dashboard` are unchanged.
 - Delete every clone by exact id.
 
