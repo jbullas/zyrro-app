@@ -778,6 +778,12 @@ export async function runOptionsGeneration(artifactId: string): Promise<void> {
 
 const NONE_LABEL = 'Adjust these options';
 const FEEDBACK_TEXT = 'What feels off? For each option, tell me whether it’s close or not for you, and add anything that would help me get closer.';
+// When "Adjust these options" came with a note (brief 168-adjust-and-card A2):
+// the note is used for the next round, so this asks only for the marks and
+// anything else.
+const FEEDBACK_AFTER_NOTE_TEXT = 'Got it, I’ll use that for the next options. For each one, tell me whether it’s close or not for you.';
+const FEEDBACK_PLACEHOLDER = 'What feels off, or what would be closer?';
+const FEEDBACK_AFTER_NOTE_PLACEHOLDER = 'Anything else to add? (Optional)';
 const NEW_ROUND_TEXT = 'Here are three new options, shaped by what you told me.';
 // The what-to-do line above every round (design doc, "Say what to do").
 const GUIDE_TEXT = 'Choose the option you want to build your plan on, or ask me to adjust them. You can add a note either way. After you choose, you’ll name your path, and then we’ll build the plan.';
@@ -840,9 +846,10 @@ function optionsMessage(artifactId: string, c: OptionsContent): AssistantMessage
   return { content: optionsMarkdown(view), choices };
 }
 
-function feedbackMessage(view: OptionsRoundView): AssistantMessage {
+/** "What feels off": a different code-owned line when "Adjust these options" came with a note. */
+function feedbackMessage(view: OptionsRoundView, afterNote: boolean): AssistantMessage {
   return {
-    content: FEEDBACK_TEXT,
+    content: afterNote ? FEEDBACK_AFTER_NOTE_TEXT : FEEDBACK_TEXT,
     choices: {
       mode: 'groups',
       purpose: 'options_feedback',
@@ -852,9 +859,11 @@ function feedbackMessage(view: OptionsRoundView): AssistantMessage {
         label: o.name,
         mode: 'single' as const,
         required: false,
-        options: [{ id: 'close', label: 'Close' }, { id: 'not_for_me', label: 'Not for me' }],
+        // "Close" alone read as "close this" (brief 168-adjust-and-card A3).
+        options: [{ id: 'close', label: 'Yes, that’s close' }, { id: 'not_for_me', label: 'Not for me' }],
       })),
-      note: { placeholder: 'What feels off, or what would be closer?', required_unless_picked: true },
+      // At least one mark or a note, with or without a first note.
+      note: { placeholder: afterNote ? FEEDBACK_AFTER_NOTE_PLACEHOLDER : FEEDBACK_PLACEHOLDER, required_unless_picked: true },
     },
   };
 }
@@ -929,7 +938,8 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
       const pick = ids.find(id => id.startsWith('pick:'))?.slice(5);
       if (pick === 'none') {
         if (view.last_round) return refuse(400, 'invalid_choice');
-        return { ok: true, assistant: feedbackMessage(view), tokens: 0, commit: async () => {} };
+        // The note sent with this tap feeds the next round (pendingFeedback).
+        return { ok: true, assistant: feedbackMessage(view, !!note), tokens: 0, commit: async () => {} };
       }
       const { data: art, error } = await supabase.from('artifacts').select('id, status, content')
         .eq('id', view.artifact_id).eq('conversation_id', conversation.id).eq('type', OPTIONS_TYPE).single();
