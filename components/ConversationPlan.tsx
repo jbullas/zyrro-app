@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import PrimaryButton from '@/components/PrimaryButton';
+import LinkButton from '@/components/LinkButton';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import type { PlanView } from '@/lib/path-plan-generation';
@@ -9,7 +10,9 @@ import type { PlanView } from '@/lib/path-plan-generation';
 // #169, brief 169-plan-page: /plan for a user whose path was chosen in the
 // Path conversation. The server route (/api/path-plan) owns the state; this
 // polls it while the Plan is generating, so a refresh mid-generation picks up
-// where it is. Existing classes and states only.
+// where it is. Existing classes and states only. Brief 169-plan-layers: three
+// layers, this week (with effort, the first action dated), after that, and the
+// milestones under a code-written go line.
 
 const POLL_MS = 3000;
 
@@ -105,19 +108,7 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
         </div>
 
         <div className="section">
-          <p className="eyebrow">MILESTONES</p>
-          <div className="card">
-            <ol className="mentor-md-ol">
-              {plan.milestones.map((m, i) => (
-                <li key={i} className="mentor-md-li">{m}</li>
-              ))}
-            </ol>
-          </div>
-        </div>
-
-        <div className="section">
-          <p className="eyebrow">FIRST STRETCH</p>
-          <p className="cover-context-line">{plan.span_line}</p>
+          <p className="eyebrow">THIS WEEK</p>
           <div className="card">
             {plan.actions.map(a => (
               <div key={a.index} className="start-here-action">
@@ -130,6 +121,33 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
                 <p className="start-here-action-why"><strong>Done when:</strong> {a.done_when}</p>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="section">
+          <p className="eyebrow">AFTER THAT</p>
+          <div className="card">
+            <ol className="mentor-md-ol">
+              {plan.after_that.map((s, i) => (
+                <li key={i} className="mentor-md-li">{s}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+
+        <div className="section">
+          <p className="eyebrow">MILESTONES</p>
+          {/* Code-written, not the model's: milestones assume the path is a go. */}
+          <p className="cover-context-line">
+            These apply once you know it’s a go. If it’s a no-go, your other two options are saved in Path.
+          </p>
+          <LinkButton href="/path">See your other options</LinkButton>
+          <div className="card">
+            <ol className="mentor-md-ol">
+              {plan.milestones.map((m, i) => (
+                <li key={i} className="mentor-md-li">{m}</li>
+              ))}
+            </ol>
           </div>
         </div>
       </div>

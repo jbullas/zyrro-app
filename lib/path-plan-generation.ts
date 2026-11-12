@@ -12,17 +12,15 @@ import { withPipelineDeadline } from '@/lib/llm';
 import { FLIP_GUARD_MS, GENERATION_BUDGET_MS } from '@/lib/generation-budget';
 import { createServiceClient, listConversationMessages, type ConversationRow } from '@/lib/chat-turn';
 import { chatJson, getProfileRow } from '@/lib/path-conversation';
-import { parsePlan, planInput, planShape, type DraftPlan } from '@/lib/path-conversation-plan';
+import { isCurrentPlan, parsePlan, planInput, planShape, type DraftPlan } from '@/lib/path-conversation-plan';
 import { PATH_CONVERSATION_PLAN_PROMPT } from '@/lib/prompts/path-conversation-plan';
-import { HOURS_BANDS, withMetaDefaults, type PathProfile } from '@/lib/path-profile';
+import { withMetaDefaults, type PathProfile } from '@/lib/path-profile';
 import type { PathChoiceContent } from '@/lib/path-options';
 import type { ChatChoiceSet, SummaryCard } from '@/lib/chat-choices';
 
 export const PLAN_TYPE = 'path_conversation_plan';
 const CHOICE_TYPE = 'path_choice';
 const PLAN_MODEL = 'gpt-6.1-sol';
-// The lowest band's hours, for a profile with no hours recorded.
-const FALLBACK_HOURS = HOURS_BANDS[0].hours;
 
 // artifacts.content, jsonb (no migration beyond the type and its policies).
 export type PlanContent = {
@@ -88,8 +86,10 @@ export async function ensurePlanGeneration(
   await flipStranded(supabase, rows);
   if (rows.some(r => r.status === 'generating')) return 'running';
   const forChoice = rows.filter(r => r.content?.choice_id === choice.id);
-  if (forChoice.some(r => r.status === 'ready')) return 'ready';
-  if (forChoice.some(r => r.status === 'failed') && !opts.retry) return 'failed';
+  if (forChoice.some(r => r.status === 'ready' && isCurrentPlan(r.content.plan))) return 'ready';
+  // A Plan from before 169-plan-layers counts as failed: it is rebuilt on
+  // retry, never on its own.
+  if (forChoice.some(r => r.status === 'failed' || r.status === 'ready') && !opts.retry) return 'failed';
 
   const { data, error } = await supabase.from('artifacts').insert({
     user_id: conversation.user_id,
@@ -129,7 +129,7 @@ export async function runPlanGeneration(artifactId: string): Promise<void> {
     const card = (row?.summary as { card?: SummaryCard } | null)?.card;
     if (!choiceRow || !row || !card) throw new Error('no chosen path or confirmed card');
     const profile = withMetaDefaults(row.profile as PathProfile);
-    const shape = planShape(profile.risk_time.value?.hours_per_week ?? FALLBACK_HOURS);
+    const shape = planShape(profile.risk_time.value?.hours_band);
     const input = planInput(choiceRow.content as PathChoiceContent, profile, card, shape);
     const base = [
       { role: 'system' as const, content: PATH_CONVERSATION_PLAN_PROMPT },
@@ -188,9 +188,10 @@ export async function planView(supabase: SupabaseClient, conversationId: string)
   };
   const rows = (await planRows(supabase, conversationId)).filter(r => r.content?.choice_id === choice.id);
   const latest = rows[rows.length - 1];
-  const ready = [...rows].reverse().find(r => r.status === 'ready');
+  const ready = [...rows].reverse().find(r => r.status === 'ready' && isCurrentPlan(r.content.plan));
   if (latest?.status === 'generating') return { status: 'generating', path, plan: null, generated_at: null };
   if (ready?.content.plan) return { status: 'ready', path, plan: ready.content.plan, generated_at: ready.created_at };
-  if (latest?.status === 'failed') return { status: 'failed', path, plan: null, generated_at: null };
+  // A failed generation, or only a Plan from before 169-plan-layers: offer the retry.
+  if (latest?.status === 'failed' || latest?.status === 'ready') return { status: 'failed', path, plan: null, generated_at: null };
   return { status: (await namingPending(supabase, conversationId)) ? 'naming' : 'generating', path, plan: null, generated_at: null };
 }

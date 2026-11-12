@@ -1,45 +1,59 @@
-// #169, brief 169-plan: the Plan for the path chosen in the Path conversation.
-// Code owns the structure (decisions of 2026-11-09): how many milestones (an
-// ordered list of outcomes, no dates), how many first-stretch actions and the
-// effort of each, the first action's due day, and the stretch's span at the
-// user's pace from the hours band's lower bound. The model fills in the
-// content; its prose never states effort, days or weeks, and never quotes the
-// user. Draft for step 1: no page and no saving yet.
+// #169, briefs 169-plan and 169-plan-layers: the Plan for the path chosen in
+// the Path conversation, in three layers. This week: concrete actions the
+// model decides first and then estimates honestly. After that: a lighter
+// outline up to the point where the user knows whether the path is a go.
+// Milestones: the whole path, from "it's a go" to where it leads.
+// Code owns no fixed count or effort; it checks bounds only (lengths, counts,
+// this week's total against the user's hours band, a small first action), and
+// shows the effort and the first action's due day itself. The model's prose
+// never states effort, days, weeks or dates, and never quotes the user.
 
 import type { PathChoiceContent } from '@/lib/path-options';
 import type { PathProfile } from '@/lib/path-profile';
 import type { SummaryCard } from '@/lib/chat-choices';
 
-export const PLAN_MILESTONES = 4;
-// The first stretch: a fixed amount of effort in a fixed number of actions,
-// the first one small so it can be done within a day.
-const ACTION_EFFORT_HOURS = [1, 2, 2, 2.5, 2.5];
-export const FIRST_STRETCH_EFFORT_HOURS = ACTION_EFFORT_HOURS.reduce((a, b) => a + b, 0);
 const FIRST_ACTION_DUE_DAY = 1;
 
-// Lengths, checked in code (decision of 2026-11-09).
-export const PLAN_LIMITS = { frame: 300, milestone: 250, title: 60, what: 200, done_when: 150 } as const;
+// Lengths, checked in code (decision of 2026-11-09; after_that and the
+// milestone's 300 from 169-plan-layers, 2026-11-12).
+export const PLAN_LIMITS = { frame: 300, milestone: 300, after_that: 250, title: 60, what: 200, done_when: 150 } as const;
+
+// Bounds, set from 15 generated Plans for five personas (approved 2026-11-12).
+// No fixed count or effort: only what a sensible Plan stays within.
+export const PLAN_BOUNDS = {
+  actions: { min: 1, max: 7 },
+  after_that: { min: 3, max: 8 },
+  milestones: { min: 3, max: 7 },
+  // Each action at least half an hour, in half hours; the first one small.
+  effort_step: 0.5,
+  first_action_max_hours: 2,
+  // This week's total: at least this share of the band's lower end, at most
+  // its upper end (or this, for the top band).
+  week_total_min_share: 0.75,
+  week_total_cap: 40,
+} as const;
+
+// The hours a week each band stands for, as a range. The lower bound of the
+// top band is its stored hours; it has no upper bound.
+const WEEK_HOURS: Record<string, { from: number; to: number | null }> = {
+  under_3: { from: 1, to: 3 },
+  '3_5': { from: 3, to: 5 },
+  '6_10': { from: 6, to: 10 },
+  '11_20': { from: 11, to: 20 },
+  over_20: { from: 21, to: null },
+};
+const FALLBACK_BAND = 'under_3';
 
 export type PlanShape = {
-  hours_per_week: number;
-  milestones: number;
-  actions: Array<{ index: number; effort_hours: number }>;
+  hours_band: string;
+  week_hours: { from: number; to: number | null };
   first_action_due_day: number;
-  // The code-written line for the stretch's span at the user's pace.
-  span_line: string;
 };
 
-/** The plan's shape from the hours a week (the band's lower bound). */
-export function planShape(hoursPerWeek: number): PlanShape {
-  const h = Math.max(1, hoursPerWeek);
-  const weeks = Math.max(1, Math.round(FIRST_STRETCH_EFFORT_HOURS / h));
-  return {
-    hours_per_week: h,
-    milestones: PLAN_MILESTONES,
-    actions: ACTION_EFFORT_HOURS.map((effort, i) => ({ index: i + 1, effort_hours: effort })),
-    first_action_due_day: FIRST_ACTION_DUE_DAY,
-    span_line: weeks === 1 ? 'About a week at your pace' : `About ${weeks} weeks at your pace`,
-  };
+/** What code knows before the model writes: the user's week, from their hours band. */
+export function planShape(hoursBand: string | null | undefined): PlanShape {
+  const band = hoursBand && WEEK_HOURS[hoursBand] ? hoursBand : FALLBACK_BAND;
+  return { hours_band: band, week_hours: WEEK_HOURS[band], first_action_due_day: FIRST_ACTION_DUE_DAY };
 }
 
 /** What the model sees (decision of 2026-11-09): no Identity report; the deadline is context only. */
@@ -70,34 +84,36 @@ export function planInput(choice: PathChoiceContent, profile: PathProfile, card:
       must_haves: card.must_haves.map(i => i.text),
       must_avoids: card.must_avoids.map(i => i.text),
     },
-    shape: {
-      hours_per_week: shape.hours_per_week,
-      milestones: shape.milestones,
-      first_stretch: shape.actions,
-    },
+    hours_this_week: shape.week_hours,
   };
 }
 
+export type PlanAction = { index: number; effort_hours: number; due_day: number | null; title: string; what: string; done_when: string };
+
 export type DraftPlan = {
   frame: string;
+  // This week.
+  actions: PlanAction[];
+  after_that: string[];
   milestones: string[];
-  span_line: string;
-  actions: Array<{ index: number; effort_hours: number; due_day: number | null; title: string; what: string; done_when: string }>;
 };
 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
+const list = (v: unknown) => (Array.isArray(v) ? v : []);
 
 /**
- * The model's content on code's shape, with every length checked. Returns the
- * plan (code's effort, due day and span added) and the list of problems; the
- * plan is null when the counts don't fit.
+ * The model's three layers, with every length checked. Returns the plan
+ * (code's index and due day added) and the list of problems; the plan is null
+ * when a layer is missing.
  */
 export function parsePlan(parsed: Record<string, unknown> | null, shape: PlanShape): { plan: DraftPlan | null; problems: string[] } {
   const problems: string[] = [];
-  const ms = Array.isArray(parsed?.milestones) ? (parsed!.milestones as unknown[]) : [];
-  const as = Array.isArray(parsed?.actions) ? (parsed!.actions as Array<Record<string, unknown>>) : [];
-  if (ms.length !== shape.milestones) problems.push(`${ms.length} milestones, not ${shape.milestones}`);
-  if (as.length !== shape.actions.length) problems.push(`${as.length} actions, not ${shape.actions.length}`);
+  const as = list(parsed?.this_week) as Array<Record<string, unknown>>;
+  const at = list(parsed?.after_that);
+  const ms = list(parsed?.milestones);
+  if (!as.length) problems.push('no actions this week');
+  if (!at.length) problems.push('no after-that steps');
+  if (!ms.length) problems.push('no milestones');
   if (problems.length) return { plan: null, problems };
   const over = (label: string, text: string, max: number) => {
     if (!text) problems.push(`${label} empty`);
@@ -105,19 +121,52 @@ export function parsePlan(parsed: Record<string, unknown> | null, shape: PlanSha
   };
   const frame = str(parsed?.frame);
   over('frame', frame, PLAN_LIMITS.frame);
-  const milestones = ms.map((m, i) => {
-    const text = str(typeof m === 'string' ? m : (m as Record<string, unknown>)?.outcome);
-    over(`milestone ${i + 1}`, text, PLAN_LIMITS.milestone);
+  const texts = (items: unknown[], label: string, max: number) => items.map((m, i) => {
+    const text = str(typeof m === 'string' ? m : (m as Record<string, unknown>)?.text ?? (m as Record<string, unknown>)?.outcome);
+    over(`${label} ${i + 1}`, text, max);
     return text;
   });
-  const actions = shape.actions.map((a, i) => {
-    const title = str(as[i]?.title);
-    const what = str(as[i]?.what);
-    const done = str(as[i]?.done_when);
+  const actions = as.map((a, i) => {
+    const title = str(a?.title);
+    const what = str(a?.what);
+    const done = str(a?.done_when);
+    const effort = Number(a?.effort_hours);
     over(`action ${i + 1} title`, title, PLAN_LIMITS.title);
     over(`action ${i + 1} what`, what, PLAN_LIMITS.what);
     over(`action ${i + 1} done_when`, done, PLAN_LIMITS.done_when);
-    return { ...a, due_day: i === 0 ? shape.first_action_due_day : null, title, what, done_when: done };
+    if (!Number.isFinite(effort) || effort <= 0) problems.push(`action ${i + 1} effort_hours missing`);
+    else if (!Number.isInteger(effort / PLAN_BOUNDS.effort_step)) problems.push(`action ${i + 1} effort_hours ${effort} is not in half hours`);
+    return { index: i + 1, effort_hours: effort, due_day: i === 0 ? shape.first_action_due_day : null, title, what, done_when: done };
   });
-  return { plan: { frame, milestones, span_line: shape.span_line, actions }, problems };
+  const after_that = texts(at, 'after-that step', PLAN_LIMITS.after_that);
+  const milestones = texts(ms, 'milestone', PLAN_LIMITS.milestone);
+  problems.push(...boundProblems(actions, after_that.length, milestones.length, shape));
+  return { plan: { frame, actions, after_that, milestones }, problems };
+}
+
+/** The bounds (PLAN_BOUNDS): counts, a small first action, and this week's total against the hours band. */
+function boundProblems(actions: PlanAction[], afterThat: number, milestones: number, shape: PlanShape): string[] {
+  const b = PLAN_BOUNDS;
+  const problems: string[] = [];
+  const count = (label: string, n: number, r: { min: number; max: number }) => {
+    if (n < r.min || n > r.max) problems.push(`${n} ${label} (between ${r.min} and ${r.max})`);
+  };
+  count('actions this week', actions.length, b.actions);
+  count('after-that steps', afterThat, b.after_that);
+  count('milestones', milestones, b.milestones);
+  const efforts = actions.map(a => a.effort_hours);
+  if (!efforts.every(e => Number.isFinite(e) && e > 0)) return problems;
+  if (efforts[0] > b.first_action_max_hours) problems.push(`the first action takes ${efforts[0]} hours (at most ${b.first_action_max_hours})`);
+  const total = efforts.reduce((a, e) => a + e, 0);
+  const min = shape.week_hours.from * b.week_total_min_share;
+  const max = shape.week_hours.to ?? b.week_total_cap;
+  if (total < min) problems.push(`this week's actions take ${total} hours in all (at least ${min} for their hours)`);
+  if (total > max) problems.push(`this week's actions take ${total} hours in all (at most ${max} for their hours)`);
+  return problems;
+}
+
+/** A stored Plan in this shape (Plans from before 169-plan-layers are not). */
+export function isCurrentPlan(plan: unknown): plan is DraftPlan {
+  const p = plan as Partial<DraftPlan> | null | undefined;
+  return !!p && Array.isArray(p.actions) && Array.isArray(p.after_that) && Array.isArray(p.milestones);
 }
