@@ -6,12 +6,13 @@ import Link from 'next/link';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import type { PlanView } from '@/lib/path-plan-generation';
+import { milestoneRows } from '@/lib/path-conversation-plan';
 
 // #169, brief 169-plan-page: /plan for a user whose path was chosen in the
 // Path conversation. The server route (/api/path-plan) owns the state; this
 // polls it while the Plan is generating, so a refresh mid-generation picks up
 // where it is. Existing classes and states only. Brief 169-plan-layers: three
-// layers, this week (with effort, the first action dated), after that, and the
+// layers, this week (with effort, no due date), after that, and the
 // milestones under a code-written go line.
 
 const POLL_MS = 3000;
@@ -23,13 +24,6 @@ function effortLabel(hours: number): string {
   const h = whole ? `${whole} ${whole === 1 ? 'hour' : 'hours'}` : '';
   const m = minutes ? `${minutes} minutes` : '';
   return [h, m].filter(Boolean).join(' ');
-}
-
-/** The first action's due day as a date in the browser's time zone, counted from generation. */
-function dueDate(generatedAt: string, dueDay: number): string {
-  const d = new Date(generatedAt);
-  d.setDate(d.getDate() + dueDay);
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 export default function ConversationPlan({ initial }: { initial: PlanView }) {
@@ -119,7 +113,7 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
               <div key={a.index} className="start-here-action">
                 <p className="start-here-action-text">{a.title}</p>
                 <p className="cover-context-line">
-                  {a.due_day !== null && view.generated_at ? `Due ${dueDate(view.generated_at, a.due_day)} · ` : ''}
+                  {/* Effort only: no due date, even on stored Plans that have a due_day. */}
                   {effortLabel(a.effort_hours)}
                 </p>
                 <p className="mentor-md-p">{a.what}</p>
@@ -148,9 +142,15 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
             <Link href="/path" className="inline-link">See your other options</Link>
           </p>
           <div className="card">
+            {/* Like the actions: a bold title, the description beneath, a divider
+                between items. The last is headed by code (milestoneRows); stored
+                plain-string milestones have no title. */}
             <ol className="mentor-md-ol">
-              {plan.milestones.map((m, i) => (
-                <li key={i} className="mentor-md-li">{m}</li>
+              {milestoneRows(plan.milestones).map((m, i) => (
+                <li key={i} className="start-here-action">
+                  {m.title && <p className="start-here-action-text">{m.title}</p>}
+                  <p className="mentor-md-p">{m.description}</p>
+                </li>
               ))}
             </ol>
           </div>

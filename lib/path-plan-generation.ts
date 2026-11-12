@@ -169,7 +169,7 @@ export type PlanView = {
   status: 'no_choice' | 'naming' | 'generating' | 'failed' | 'ready';
   path: { name: string; what_it_is: string | null; in_your_words: string | null } | null;
   plan: DraftPlan | null;
-  // When the Plan was generated: the first action's due day counts from it.
+  // When the Plan was generated (no longer used for a due date).
   generated_at: string | null;
 };
 

@@ -5,18 +5,19 @@
 // Milestones: the whole path, from "it's a go" to where it leads.
 // Code owns no fixed count or effort; it checks bounds only (lengths, counts,
 // this week's total against the user's hours band, a small first action), and
-// shows the effort and the first action's due day itself. The model's prose
-// never states effort, days, weeks or dates, and never quotes the user.
+// shows the effort itself. The model's prose never states effort, days, weeks
+// or dates, and never quotes the user. The last milestone's heading is code's.
 
 import type { PathChoiceContent } from '@/lib/path-options';
 import type { PathProfile } from '@/lib/path-profile';
 import type { SummaryCard } from '@/lib/chat-choices';
 
-const FIRST_ACTION_DUE_DAY = 1;
+// The fixed heading of the last milestone, the life the path leads to.
+export const LAST_MILESTONE_HEADING = 'Where this leads';
 
 // Lengths, checked in code (decision of 2026-11-09; after_that and the
-// milestone's 300 from 169-plan-layers, 2026-11-12).
-export const PLAN_LIMITS = { frame: 300, milestone: 300, after_that: 250, title: 60, what: 200, done_when: 150 } as const;
+// milestone's 300 from 169-plan-layers, 2026-11-12; milestone_title 2026-11-12).
+export const PLAN_LIMITS = { frame: 300, milestone_title: 50, milestone: 300, after_that: 250, title: 60, what: 200, done_when: 150 } as const;
 
 // Bounds, set from 15 generated Plans for five personas (approved 2026-11-12).
 // No fixed count or effort: only what a sensible Plan stays within.
@@ -47,13 +48,12 @@ const FALLBACK_BAND = 'under_3';
 export type PlanShape = {
   hours_band: string;
   week_hours: { from: number; to: number | null };
-  first_action_due_day: number;
 };
 
 /** What code knows before the model writes: the user's week, from their hours band. */
 export function planShape(hoursBand: string | null | undefined): PlanShape {
   const band = hoursBand && WEEK_HOURS[hoursBand] ? hoursBand : FALLBACK_BAND;
-  return { hours_band: band, week_hours: WEEK_HOURS[band], first_action_due_day: FIRST_ACTION_DUE_DAY };
+  return { hours_band: band, week_hours: WEEK_HOURS[band] };
 }
 
 /** What the model sees (decision of 2026-11-09): no Identity report; the deadline is context only. */
@@ -88,22 +88,41 @@ export function planInput(choice: PathChoiceContent, profile: PathProfile, card:
   };
 }
 
-export type PlanAction = { index: number; effort_hours: number; due_day: number | null; title: string; what: string; done_when: string };
+// due_day: only on Plans stored before the due date was dropped (2026-11-12);
+// it is no longer computed, stored or shown.
+export type PlanAction = { index: number; effort_hours: number; due_day?: number | null; title: string; what: string; done_when: string };
 
 export type DraftPlan = {
   frame: string;
   // This week.
   actions: PlanAction[];
   after_that: string[];
-  milestones: string[];
+  // A plain string is a milestone stored before milestones had titles: it
+  // is shown as its description, without a title.
+  milestones: Array<PlanMilestone | string>;
 };
+
+// title is null on the last milestone: code heads it (LAST_MILESTONE_HEADING).
+export type PlanMilestone = { title: string | null; description: string };
+
+/**
+ * The milestones as shown: each one's title, the fixed heading on the last,
+ * and plain-string milestones (stored before titles) with no title at all.
+ */
+export function milestoneRows(milestones: Array<PlanMilestone | string>): Array<{ title: string | null; description: string }> {
+  return milestones.map((m, i) => {
+    if (typeof m === 'string') return { title: null, description: m };
+    const last = i === milestones.length - 1;
+    return { title: last ? LAST_MILESTONE_HEADING : m.title || null, description: m.description };
+  });
+}
 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
 const list = (v: unknown) => (Array.isArray(v) ? v : []);
 
 /**
  * The model's three layers, with every length checked. Returns the plan
- * (code's index and due day added) and the list of problems; the plan is null
+ * (code's index added) and the list of problems; the plan is null
  * when a layer is missing.
  */
 export function parsePlan(parsed: Record<string, unknown> | null, shape: PlanShape): { plan: DraftPlan | null; problems: string[] } {
@@ -122,7 +141,7 @@ export function parsePlan(parsed: Record<string, unknown> | null, shape: PlanSha
   const frame = str(parsed?.frame);
   over('frame', frame, PLAN_LIMITS.frame);
   const texts = (items: unknown[], label: string, max: number) => items.map((m, i) => {
-    const text = str(typeof m === 'string' ? m : (m as Record<string, unknown>)?.text ?? (m as Record<string, unknown>)?.outcome);
+    const text = str(typeof m === 'string' ? m : (m as Record<string, unknown>)?.text);
     over(`${label} ${i + 1}`, text, max);
     return text;
   });
@@ -136,10 +155,20 @@ export function parsePlan(parsed: Record<string, unknown> | null, shape: PlanSha
     over(`action ${i + 1} done_when`, done, PLAN_LIMITS.done_when);
     if (!Number.isFinite(effort) || effort <= 0) problems.push(`action ${i + 1} effort_hours missing`);
     else if (!Number.isInteger(effort / PLAN_BOUNDS.effort_step)) problems.push(`action ${i + 1} effort_hours ${effort} is not in half hours`);
-    return { index: i + 1, effort_hours: effort, due_day: i === 0 ? shape.first_action_due_day : null, title, what, done_when: done };
+    return { index: i + 1, effort_hours: effort, title, what, done_when: done };
   });
   const after_that = texts(at, 'after-that step', PLAN_LIMITS.after_that);
-  const milestones = texts(ms, 'milestone', PLAN_LIMITS.milestone);
+  // Every milestone but the last has a title; the last's heading is code's,
+  // so any title the model gives it is dropped.
+  const milestones: PlanMilestone[] = ms.map((m, i) => {
+    const r = (m ?? {}) as Record<string, unknown>;
+    const description = str(typeof m === 'string' ? m : r.description);
+    over(`milestone ${i + 1} description`, description, PLAN_LIMITS.milestone);
+    if (i === ms.length - 1) return { title: null, description };
+    const title = str(r.title);
+    over(`milestone ${i + 1} title`, title, PLAN_LIMITS.milestone_title);
+    return { title, description };
+  });
   problems.push(...boundProblems(actions, after_that.length, milestones.length, shape));
   return { plan: { frame, actions, after_that, milestones }, problems };
 }
