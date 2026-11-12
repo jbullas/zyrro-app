@@ -2,15 +2,17 @@
 // asks for. A separate small call that sees only the note, the card's items
 // and its risk block (so a note about risk stays off the lists, briefs
 // 168-card-items and 168-risk-note), run alongside call A; code checks every quote against the note and
-// applies the result. Removal stays with the card's remove control. No
-// examples or sample sentences on purpose: the model copies them.
+// applies the result. Removal stays with the card's remove control; items the
+// note questions come back as ids, flagged on the new card (brief
+// 168-adjust-and-card B1). No examples or sample sentences on purpose: the
+// model copies them.
 
 export const PATH_CORRECTION_ITEMS_PROMPT = `You read one note a user wrote to correct the summary of them that a mentor showed them, and the summary's current must-haves and must-avoids. A must-have is something a good direction has to include for this person; a must-avoid is something it has to avoid.
 
-Return every item the note asks to add.
+Return every item the note asks to add, and the card items it questions.
 - An addition: the note says something matters to them in that way, as something a direction must include or must avoid. Every such thing in the note is an item; do not leave one out because it is said in passing or alongside other points.
 - A rewording: when the note asks for a card item to be put differently, narrowed or qualified, return the new version as an addition. It is added alongside the card item; the user removes the old one themselves.
-- Never remove anything. When the note says a card item does not belong or matters less than it seems, leave it alone; the user removes items themselves.
+- A questioned item: the note says a card item does not belong, does not apply to them, or matters less than it seems. Return its id in questioned. Nothing is removed here: the card shows the user what they questioned, and they remove items themselves.
 - Context, explanations, and changes to other parts of the summary are not items.
 - The card's risk lines are what they are ready to change now, what they would put at risk, what is off the table, the hours they have and the deadline. A note, or the part of a note, that qualifies one of these lines is not an item, even when it is put as something the options or a direction must do or leave open: another step records it on that line. A note can do both; then only the part that is not about a risk line can give items.
 
@@ -23,4 +25,4 @@ INPUT
 A JSON object: { "note": string, "must_haves": [ { "id", "text" } ], "must_avoids": [ { "id", "text" } ], "risk": { "readiness", "at_stake", "limits", "hours", "deadline", "note" } }.
 
 OUTPUT
-A JSON object only: { "items": [ ... ] }, an empty list when the note asks for none.`;
+A JSON object only: { "items": [ ... ], "questioned": [ id ] }, each an empty list when the note has none.`;

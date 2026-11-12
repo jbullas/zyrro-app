@@ -85,6 +85,10 @@ export function typedNameProblem(raw: string): 'empty' | 'too_long' | 'dash' | n
 
 export type SummaryCardItem = { id: string; text: string; inferred: boolean };
 
+// Next to each card item a correction note questioned (brief
+// 168-adjust-and-card B1), on the card and in its read-back.
+export const QUESTIONED_ITEM_LINE = 'You said this may not belong. Tap Remove to take it off.';
+
 export type RiskLine = 'readiness' | 'at_stake' | 'limits' | 'hours' | 'deadline';
 
 export type SummaryCard = {
@@ -100,6 +104,10 @@ export type SummaryCard = {
   direction?: { level: string; text: string | null } | null;
   must_haves: SummaryCardItem[];
   must_avoids: SummaryCardItem[];
+  // Ids of items the latest correction note said may not belong (brief
+  // 168-adjust-and-card B1): flagged with a code-written line next to their
+  // remove control. Nothing is removed without the user's own tap.
+  questioned?: string[];
   risk: {
     readiness: string;
     at_stake: string;

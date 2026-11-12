@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import ChatChoices from '@/components/ChatChoices';
-import { NOTE_MAX_CHARS, type ChatChoiceSet, type RiskLine, type SummaryCard, type SummaryCardItem } from '@/lib/chat-choices';
+import { NOTE_MAX_CHARS, QUESTIONED_ITEM_LINE, type ChatChoiceSet, type RiskLine, type SummaryCard, type SummaryCardItem } from '@/lib/chat-choices';
 
 // The label of the card's risk field (brief 168-risk-note; Miroslav, 2026-11-09).
 const RISK_FIELD_LABEL = 'Your words about risk and time. Edit them here.';
@@ -35,6 +35,7 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
   const removable = new Set(
     choices?.mode === 'groups' ? choices.groups.find(g => g.id === 'remove')?.options.map(o => o.id) ?? [] : [],
   );
+  const questioned = new Set(card.questioned ?? []);
   const removed = (id: string) => selected.includes(`remove:${id}`);
   const toggleRemove = (id: string) =>
     setSelected(prev => (removed(id) ? prev.filter(x => x !== `remove:${id}`) : [...prev, `remove:${id}`]));
@@ -48,6 +49,9 @@ export default function PathSummaryCard({ card, choices, disabled, onSubmit }: P
             <span className="flex-1">
               {item.text}
               {item.inferred && <span className="path-inferred-tag">Zyrro’s guess</span>}
+              {/* An item the correction note questioned (brief 168-adjust-and-card B1),
+                  while the card is waiting for an answer. */}
+              {choices && questioned.has(item.id) && <span className="path-risk-note block">{QUESTIONED_ITEM_LINE}</span>}
             </span>
             {choices && removable.has(item.id) && (
               <button

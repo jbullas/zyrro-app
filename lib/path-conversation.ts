@@ -4,7 +4,7 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
 import type { ConversationRow, RunTurn, StoredMessage, TurnContext, TurnRun } from '@/lib/chat-turn';
 import { addTokens, listConversationMessages } from '@/lib/chat-turn';
-import { noteFromContent, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
+import { noteFromContent, QUESTIONED_ITEM_LINE, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
 import { mergeAnswersWithQuestions } from '@/lib/identity-questions';
 import { getChatCompletionDetailed, isRateLimitError, PATH_RETRY } from '@/lib/llm';
 import {
@@ -816,6 +816,40 @@ type CardProse = { seen_as: string; wants: string; direction: string | null };
 
 // Fix 1: every card after the first opens with this line (code-owned).
 export const CARD_INTRO = 'Here’s the updated summary with your changes. Your earlier answers are already filled in, so just check it and confirm, or change anything that’s still off.';
+// A correction that changed nothing on the card (brief 168-adjust-and-card
+// B1): the intro says so instead of claiming changes. With items the note
+// questioned, it points to them; only the user removes items.
+export const CARD_INTRO_UNCHANGED = 'Nothing on the summary changed with that. Check it and confirm, or tell me what’s still off.';
+export const CARD_INTRO_QUESTIONED = 'I haven’t taken anything off the summary: only you remove items. I’ve marked what you said may not belong. Tap Remove next to it to take it off, then confirm.';
+
+/**
+ * The new card after a correction: the items the note questioned flagged by
+ * id (found by text, since ids are reassigned), and an honest intro when
+ * nothing on the card changed.
+ */
+function withQuestioned(fresh: SummaryCard, before: SummaryCard, questionedTexts: string[]): SummaryCard {
+  const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const wanted = new Set(questionedTexts.map(t => norm(fixDashes(t))));
+  const questioned = [...fresh.must_haves, ...fresh.must_avoids].filter(i => wanted.has(norm(i.text))).map(i => i.id);
+  // Key order independent: the card before comes back from jsonb, which
+  // reorders object keys.
+  const stable = (v: unknown): unknown => Array.isArray(v) ? v.map(stable)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().filter(k => (v as Record<string, unknown>)[k] !== undefined).map(k => [k, stable((v as Record<string, unknown>)[k])]))
+    : v;
+  const content = (c: SummaryCard) => JSON.stringify(stable({
+    seen_as: c.seen_as, wants: c.wants, direction: c.direction ?? null,
+    must_haves: c.must_haves.map(i => [i.text, i.inferred]), must_avoids: c.must_avoids.map(i => [i.text, i.inferred]),
+    risk: c.risk,
+  }));
+  const unchanged = content(fresh) === content(before);
+  if (!unchanged) {
+    const a = JSON.parse(content(fresh)) as Record<string, unknown>;
+    const b = JSON.parse(content(before)) as Record<string, unknown>;
+    console.info(`[path card] correction changed: ${Object.keys(a).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).join(', ')}`);
+  }
+  const intro = unchanged ? (questioned.length ? CARD_INTRO_QUESTIONED : CARD_INTRO_UNCHANGED) : fresh.intro;
+  return { ...fresh, intro, ...(questioned.length && { questioned }) };
+}
 
 function buildCard(round: number, prose: CardProse, profile: PathProfile, direction: SummaryCard['direction']): SummaryCard {
   const toItems = (items: EvidencedItem[] = []) => items.map(i => ({ id: i.id, text: fixDashes(i.text), inferred: i.basis === 'inferred' }));
@@ -832,7 +866,10 @@ function buildCard(round: number, prose: CardProse, profile: PathProfile, direct
 }
 
 function cardChoices(card: SummaryCard, profile: PathProfile, offerRisk: boolean): ChatChoiceSet {
-  const removable = [...card.must_haves, ...card.must_avoids];
+  // Items the note questioned come first (brief 168-adjust-and-card B1).
+  const flagged = new Set(card.questioned ?? []);
+  const all = [...card.must_haves, ...card.must_avoids];
+  const removable = [...all.filter(i => flagged.has(i.id)), ...all.filter(i => !flagged.has(i.id))];
   const groups: ChoiceGroup[] = [
     {
       id: 'verdict', label: 'Does this summary sound right?', mode: 'single', required: true,
@@ -863,8 +900,9 @@ function cardChoices(card: SummaryCard, profile: PathProfile, offerRisk: boolean
 
 /** The card as plain markdown: the message's content, for read-back anywhere. */
 function cardMarkdown(card: SummaryCard): string {
+  const flagged = new Set(card.questioned ?? []);
   const list = (items: SummaryCard['must_haves']) =>
-    items.length ? items.map(i => `- ${i.text}${i.inferred ? ' (Zyrro’s guess)' : ''}`).join('\n') : '- None recorded';
+    items.length ? items.map(i => `- ${i.text}${i.inferred ? ' (Zyrro’s guess)' : ''}${flagged.has(i.id) ? ` (${QUESTIONED_ITEM_LINE})` : ''}`).join('\n') : '- None recorded';
   const r = card.risk;
   const line = (label: string, value: string) => `- ${label}: ${value}`;
   const d = card.direction;
@@ -1060,6 +1098,17 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     }
     console.info(`[path update] correction items asked for by the note: ${JSON.stringify(noteItems)}`);
   }
+  // Card items the note questions (brief 168-adjust-and-card B1), as their
+  // texts: ids are reassigned on the new card. Only ids on the card count.
+  const questioned: string[] = [];
+  if (input.mode === 'summary_correction' && input.correction && Array.isArray(noteCall?.parsed?.questioned)) {
+    const onCard = [...input.correction.card.must_haves, ...input.correction.card.must_avoids];
+    for (const id of noteCall.parsed.questioned as unknown[]) {
+      const item = onCard.find(i => i.id === id);
+      if (item && !questioned.includes(item.text)) questioned.push(item.text);
+    }
+    console.info(`[path update] correction: items the note questions: ${JSON.stringify(questioned)}`);
+  }
   const withRequested = (key: 'must_haves' | 'must_avoids', prefix: 'h' | 'a') => {
     if (input.mode === 'summary_correction') return correctedList(key, prefix);
     const base = pick(key, prefix);
@@ -1219,6 +1268,7 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
     insights: validInsights(out.turn_insights, s.index),
     contradiction,
     needsClarification: out.needs_clarification === true,
+    questioned,
   };
 }
 
@@ -1697,7 +1747,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
 
       // One clarifying question per correction, only when Zyrro can't tell what to change.
       if (a.needsClarification) return await clarify(correction);
-      return await newCard(cardState.round + 1, parts.includes('risk') && !offeredRisk(answeredChoices), parts, directionChanged);
+      return await newCard(cardState.round + 1, parts.includes('risk') && !offeredRisk(answeredChoices), parts, directionChanged, a.questioned);
     }
 
     if (answeredChoices?.purpose === 'summary_clarify' && cardState.clarify_pending) {
@@ -1715,7 +1765,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       s.profile = a.profile;
       s.summary = a.summary;
       const priorParts = prior?.parts ?? [];
-      return await newCard(cardState.round + 1, priorParts.includes('risk'), priorParts, noteChangesDirection(priorParts, directionBefore));
+      return await newCard(cardState.round + 1, priorParts.includes('risk'), priorParts, noteChangesDirection(priorParts, directionBefore), a.questioned);
     }
 
     return { ok: false, status: 409, error: 'stale_choice', tokens };
@@ -1764,7 +1814,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
    * the read and what they want are written again; the direction still stands
    * unless the correction changed it.
    */
-  async function newCard(round: number, offerRisk: boolean, parts: string[], directionChanged: boolean): Promise<TurnRun> {
+  async function newCard(round: number, offerRisk: boolean, parts: string[], directionChanged: boolean, questioned: string[] = []): Promise<TurnRun> {
     const b = await runReply(s, { kind: 'card' }, null, [], latestOwn, conversation.id);
     tokens += b.tokens;
     const written = cardProse(b.parsed);
@@ -1783,7 +1833,8 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
       direction = dir.direction ?? null;
     }
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: { kind: 'card' } } };
-    const fresh = buildCard(round, prose, s.profile, direction);
+    const built = buildCard(round, prose, s.profile, direction);
+    const fresh = withQuestioned(built, card, questioned);
     return {
       ok: true,
       assistant: { content: cardMarkdown(fresh), choices: cardChoices(fresh, s.profile, offerRisk) },
