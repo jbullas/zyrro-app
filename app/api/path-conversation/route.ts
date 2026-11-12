@@ -134,7 +134,7 @@ async function retryOptions() {
   if (!existing) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
   const state = await optionsStateView(supabase, existing.conversation.id);
   if (state.status !== 'failed') return NextResponse.json({ error: 'nothing_to_retry' }, { status: 409 });
-  // At most OPTIONS_RETRY_LIMIT failed generations an hour (brief 168-guardrails-redo).
+  // At most OPTIONS_RETRY_LIMIT failed generations in 10 minutes (brief 168-guardrails-redo).
   const wait = await optionsRetryWait(supabase, existing.conversation.id);
   if (wait !== null) return NextResponse.json({ error: 'retry_limited', retry_in_minutes: wait }, { status: 429 });
   await ensureOptionsGeneration(supabase, existing.conversation, { retry: true });

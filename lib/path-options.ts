@@ -1148,9 +1148,10 @@ export async function redoStateView(supabase: SupabaseClient, conversationId: st
 }
 
 // Options retries (brief 168-guardrails-redo): each costs a full round, so at
-// most this many failed generations in the window; after that the retry waits.
+// most this many failed generations in 10 minutes; after that the retry
+// waits until the oldest of them is 10 minutes old (Miroslav, 2026-11-12).
 export const OPTIONS_RETRY_LIMIT = 3;
-const OPTIONS_RETRY_WINDOW_MS = 60 * 60_000;
+const OPTIONS_RETRY_WINDOW_MS = 10 * 60_000;
 
 /** Minutes until an options retry is allowed again, or null when it is allowed now. */
 export async function optionsRetryWait(supabase: SupabaseClient, conversationId: string): Promise<number | null> {
