@@ -16,8 +16,13 @@ import type { PlanView } from '@/lib/path-plan-generation';
 
 const POLL_MS = 3000;
 
+/** Effort in half hours: whole hours as hours, a half hour as minutes ("1 hour 30 minutes"). */
 function effortLabel(hours: number): string {
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  const whole = Math.floor(hours);
+  const minutes = Math.round((hours - whole) * 60);
+  const h = whole ? `${whole} ${whole === 1 ? 'hour' : 'hours'}` : '';
+  const m = minutes ? `${minutes} minutes` : '';
+  return [h, m].filter(Boolean).join(' ');
 }
 
 /** The first action's due day as a date in the browser's time zone, counted from generation. */
