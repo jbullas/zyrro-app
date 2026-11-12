@@ -19,6 +19,7 @@ WHAT YOU RECEIVE
 - EVIDENCE: the sources you may cite, each with its ref: their 13 questionnaire answers (Q1 to Q13), every message they typed in this session (m: followed by an id), and the card's must-haves and must-avoids (h and a ids).
 - REPORT: excerpts from their Identity report, each keyed by its ref (report. followed by the field): their signatures and how they show up, their named identity, how they operate, their patterns. These are the strengths and patterns that make a path theirs, and you may cite them too.
 - ROUND: 1 for the first set. On later rounds, PREVIOUS ROUNDS lists every option already offered, with how the user marked each one (close, or not for me), and FEEDBACK has their note about what felt off.
+- FRESH START: true when the user has come back for their one fresh start after choosing a path, from their confirmed summary. Then every option in PREVIOUS ROUNDS has already been offered, the one they chose included, and each of the three options is a new one.
 
 WHAT EACH OPTION IS
 A direction for their life and work, not a task list. Three options in total: the one Zyrro thinks fits best plus two alternatives. All three point the right way. They differ in approach, not just in setting, and they draw on more than one thread of what the user said, not only the strongest theme. No option exists only for variety.

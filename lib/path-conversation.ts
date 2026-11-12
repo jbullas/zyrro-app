@@ -3,7 +3,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { getCurrentArtifact } from '@/lib/artifacts';
 import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
 import type { ConversationRow, RunTurn, StoredMessage, TurnContext, TurnRun } from '@/lib/chat-turn';
-import { addTokens, listConversationMessages } from '@/lib/chat-turn';
+import { addTokens, insertAssistantMessage, listConversationMessages } from '@/lib/chat-turn';
 import { noteFromContent, QUESTIONED_ITEM_LINE, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
 import { mergeAnswersWithQuestions } from '@/lib/identity-questions';
 import { getChatCompletionDetailed, isRateLimitError, PATH_RETRY } from '@/lib/llm';
@@ -103,10 +103,36 @@ const UPDATE_REPORT_EXCERPT_CHARS = 400;
 const REPLY_RECENT_MESSAGES = 4;
 
 // Guardrails (step 0, approved 2026-11-06). Five exchanges is the target; the
-// stall rule and the cap are safety nets.
+// stall rule and the cap are safety nets. The cap was 12; taps count as
+// turns and a real user reached 11, so 20 (brief 168-guardrails-redo): the
+// token budget is the real limit.
 const STALL_TURNS = 2;
-const MAX_USER_TURNS = 12;
-export const MESSAGE_MAX_CHARS = 1500;
+const MAX_USER_TURNS = 20;
+// The typed-message cap lives with the choices, so the page can show it.
+export { MESSAGE_MAX_CHARS } from '@/lib/chat-choices';
+
+// Token budget (brief 168-guardrails-redo, approved 2026-11-12), counted in
+// conversations.tokens_used (every call's input and output, the Plan's too).
+// Measured: at most 217k through options round 1, 192k for a real user. A
+// null token_budget means this default, so no backfill is needed; a redo
+// raises it to tokens_used + PATH_REDO_BUDGET. The budget never refuses a
+// turn: it wraps up (brief 168-guardrails-redo, step 1):
+// - conversation: from budget minus the reserve, the next turn is the card;
+// - card corrections: from budget minus CORRECTION_RESERVE, a correction is
+//   applied in code (removals, risk taps) with no model call;
+// - options: round 1 always runs; from the budget on, no further adjustment;
+// - choosing, naming and the Plan are never limited.
+export const PATH_TOKEN_BUDGET = 300_000;
+export const PATH_REDO_BUDGET = 100_000;
+// Kept back for one call A, the card and one round of options with its retry.
+export const PATH_WRAP_RESERVE = 40_000;
+// Kept back for one round of options with its retry.
+export const PATH_CORRECTION_RESERVE = 25_000;
+
+/** The conversation's token ceiling: its own (raised by the redo), else the default. */
+export function pathBudget(conversation: Pick<ConversationRow, 'token_budget'>): number {
+  return conversation.token_budget ?? PATH_TOKEN_BUDGET;
+}
 
 // Models. Seeding and call A (update) use the default (OPENAI_MODEL, else
 // gpt-4o). Call B (reply) is switchable on its own: change PATH_REPLY_MODEL
@@ -149,9 +175,11 @@ export type PathProfileRow = {
   turns: number;
   turns_since_progress: number;
   reflections: Reflection[];
+  // Set when the one redo starts (brief 168-guardrails-redo); null: not used.
+  redo_started_at: string | null;
 };
 
-const PROFILE_SELECT = 'conversation_id, user_id, phase, profile, context_digest, summary, summary_confirmed_at, turns, turns_since_progress, reflections';
+const PROFILE_SELECT = 'conversation_id, user_id, phase, profile, context_digest, summary, summary_confirmed_at, turns, turns_since_progress, reflections, redo_started_at';
 
 // ── Context: the 13 answers and a digest of the Identity report ─────────────
 
@@ -584,12 +612,14 @@ const MAX_DEEPEN_STREAK = 2;
  */
 function computeNext(
   profile: PathProfile,
-  state: { opening: boolean; turns: number; turnsSinceProgress: number },
+  state: { opening: boolean; turns: number; turnsSinceProgress: number; wrapUp?: boolean },
 ): Next {
   if (state.opening) {
     const p = profile.pushing_now.value;
     return { kind: 'open_read', deadline: p?.urgency === 'deadline' ? p.deadline ?? 'a decision they are putting off' : null, urgency_unknown: !p?.urgency };
   }
+  // The budget is near its end: wrap up with what Zyrro has (brief 168-guardrails-redo).
+  if (state.wrapUp) return { kind: 'card' };
   const clarify = profile.meta.pending_clarify;
   if (clarify) return { kind: 'clarify', item: clarify.item, contradiction: { text: clarify.text, refs: clarify.refs } };
   if (state.turns >= MAX_USER_TURNS || state.turnsSinceProgress >= STALL_TURNS) return { kind: 'card' };
@@ -819,6 +849,11 @@ export const CARD_INTRO = 'Here’s the updated summary with your changes. Your 
 // A correction that changed nothing on the card (brief 168-adjust-and-card
 // B1): the intro says so instead of claiming changes. With items the note
 // questioned, it points to them; only the user removes items.
+// A correction near the end of the token budget (brief 168-guardrails-redo):
+// applied in code, without the model.
+export const CARD_INTRO_BUDGET = 'You’ve used this session’s room for changes. Remove anything that doesn’t fit, or confirm the summary as it is.';
+// The card the redo opens with (brief 168-guardrails-redo).
+export const CARD_INTRO_REDO = 'Here’s the summary you confirmed. Change anything that’s different now, or confirm it to get new options.';
 export const CARD_INTRO_UNCHANGED = 'Nothing on the summary changed with that. Check it and confirm, or tell me what’s still off.';
 export const CARD_INTRO_QUESTIONED = 'I’ve marked what you said may not belong. Tap Remove next to it to take it off, then confirm.';
 
@@ -1553,7 +1588,11 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
     const progress = itemsSnapshot(s.profile) !== itemsSnapshot(withMetaDefaults(row.profile as PathProfile))
       || understandingSnapshot(s.summary) !== understandingBefore;
     const turnsSinceProgress = userMessage ? (progress ? 0 : row.turns_since_progress + 1) : row.turns_since_progress;
-    const next = computeNext(s.profile, { opening: !userMessage, turns, turnsSinceProgress });
+    // Wrap-up: from the budget minus the reserve, the next turn is the card
+    // (brief 168-guardrails-redo), counting this turn's tokens so far.
+    const wrapUp = conversation.tokens_used + tokens >= pathBudget(conversation) - PATH_WRAP_RESERVE;
+    if (wrapUp && userMessage) console.info(`[path budget] conversation ${conversation.id}: ${conversation.tokens_used + tokens} tokens used, wrapping up with the card`);
+    const next = computeNext(s.profile, { opening: !userMessage, turns, turnsSinceProgress, wrapUp });
     // Deepen turns in a row; a practical question or the card resets it.
     s.profile = { ...s.profile, meta: { ...s.profile.meta, deepen_streak: next.kind === 'deepen' ? (s.profile.meta.deepen_streak ?? 0) + 1 : 0 } };
 
@@ -1680,13 +1719,20 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     if (error) console.error('Path profile update failed:', error);
   };
 
+  // Card corrections stop calling the model once only the options' reserve is left.
+  const correctionsSpent = () => {
+    const spent = conversation.tokens_used >= pathBudget(conversation) - PATH_CORRECTION_RESERVE;
+    if (spent) console.info(`[path budget] conversation ${conversation.id}: ${conversation.tokens_used} tokens used, the correction is applied in code`);
+    return spent;
+  };
+
   // A card built by code from the current one: same prose, current must-haves,
   // must-avoids and risk block. No model call.
-  const codeCard = (round: number, offerRisk: boolean): TurnRun => {
+  const codeCard = (round: number, offerRisk: boolean, intro: string = CARD_INTRO): TurnRun => {
     const fresh: SummaryCard = {
       ...card,
       round,
-      intro: CARD_INTRO,
+      intro,
       must_haves: card.must_haves,
       must_avoids: card.must_avoids,
       risk: cardRisk(s.profile),
@@ -1720,6 +1766,13 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
         };
       }
       if (verdict !== 'mostly' && verdict !== 'not_it') return { ok: false, status: 400, error: 'invalid_choice', tokens: 0 };
+      // Near the end of the budget, a correction runs no model call: the
+      // removals and risk taps above are applied, and a code line says so
+      // (brief 168-guardrails-redo). Confirming is always possible.
+      if (correctionsSpent()) {
+        const parts = pickedIn(ids, 'part');
+        return codeCard(cardState.round + 1, parts.includes('risk') && !offeredRisk(answeredChoices), CARD_INTRO_BUDGET);
+      }
       const parts = pickedIn(ids, 'part');
       const correction = { verdict, parts, note } as const;
       const riskOnly = parts.length > 0 && parts.every(p => p === 'risk');
@@ -1751,6 +1804,7 @@ async function runSummaryTurn(ctx: TurnContext, row: PathProfileRow): Promise<Tu
     }
 
     if (answeredChoices?.purpose === 'summary_clarify' && cardState.clarify_pending) {
+      if (correctionsSpent()) return codeCard(cardState.round + 1, false, CARD_INTRO_BUDGET);
       const prior = cardState.correction;
       const directionBefore = directionKey(s.profile);
       const a = await runUpdate(s, {
@@ -1856,6 +1910,8 @@ export const PATH_TURN_CONFIG: RunTurn = {
   kind: 'path',
   entitlement: PATH_ENTITLEMENT,
   recentLimit: REPLY_RECENT_MESSAGES,
+  // The budget wraps up instead of refusing (PATH_TOKEN_BUDGET).
+  ownsBudget: true,
   run: runPathTurn,
 };
 
@@ -1879,6 +1935,73 @@ export function toMessageView(m: StoredMessage): PathMessageView {
   };
 }
 
-export function pathState(row: PathProfileRow | null): { phase: PathPhase; summary_confirmed: boolean } {
-  return { phase: row?.phase ?? 'seeding', summary_confirmed: !!row?.summary_confirmed_at };
+export function pathState(row: PathProfileRow | null): { phase: PathPhase; summary_confirmed: boolean; redo_used: boolean } {
+  return { phase: row?.phase ?? 'seeding', summary_confirmed: !!row?.summary_confirmed_at, redo_used: !!row?.redo_started_at };
+}
+
+// ── Rate limit (brief 168-guardrails-redo) ──────────────────────────────────
+
+// Sends a user may make in the window, counted from their saved Path messages.
+export const PATH_SENDS_PER_WINDOW = 20;
+const PATH_SEND_WINDOW_MS = 10 * 60_000;
+
+/** True when the user has sent PATH_SENDS_PER_WINDOW messages in the window. */
+export async function overSendLimit(supabase: SupabaseClient, conversationId: string): Promise<boolean> {
+  const since = new Date(Date.now() - PATH_SEND_WINDOW_MS).toISOString();
+  const { count, error } = await supabase.from('messages').select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId).eq('role', 'user').gte('created_at', since);
+  if (error) throw error;
+  return (count ?? 0) >= PATH_SENDS_PER_WINDOW;
+}
+
+// ── The one redo (brief 168-guardrails-redo) ────────────────────────────────
+
+export type RedoResult = { ok: true } | { ok: false; status: number; error: 'redo_used' | 'redo_not_available' };
+
+/**
+ * Starts the one redo, holding the turn claim: from the confirmed card, with
+ * its own budget. Allowed once options have been generated and before any
+ * redo. Sets redo_started_at (a conditional update, so it can happen only
+ * once), moves the phase back to summary with the confirmed card unconfirmed
+ * (summary_confirmed_at cleared, or read-back would move straight on to
+ * options), raises the budget to tokens_used + PATH_REDO_BUDGET and posts the
+ * card again with a code-owned line. The chosen path, its name and its Plan,
+ * the profile, the messages and every options round are kept.
+ */
+export async function startRedo(supabase: SupabaseClient, conversation: ConversationRow): Promise<RedoResult> {
+  const row = await getProfileRow(supabase, conversation.id);
+  if (!row) return { ok: false, status: 409, error: 'redo_not_available' };
+  if (row.redo_started_at) return { ok: false, status: 409, error: 'redo_used' };
+  const cardState = row.summary;
+  if (!['options', 'chosen'].includes(row.phase) || !cardState?.confirmed) return { ok: false, status: 409, error: 'redo_not_available' };
+  const { data: rounds, error: rErr } = await supabase.from('artifacts').select('status')
+    .eq('conversation_id', conversation.id).eq('type', 'path_conversation_options');
+  if (rErr) throw rErr;
+  if (!(rounds ?? []).some(r => r.status === 'ready') || (rounds ?? []).some(r => r.status === 'generating')) {
+    return { ok: false, status: 409, error: 'redo_not_available' };
+  }
+  const profile = withMetaDefaults(row.profile as PathProfile);
+  const round = cardState.round + 1;
+  const { questioned: _q, ...confirmedCard } = cardState.card;
+  const card: SummaryCard = { ...confirmedCard, round, intro: CARD_INTRO_REDO };
+  const next: CardState = { round, card, correction: null, clarify_pending: false, confirmed: false };
+  const startedAt = new Date().toISOString();
+  const { data: claimed, error } = await supabase.from('path_profiles')
+    .update({
+      redo_started_at: startedAt,
+      phase: 'summary',
+      summary: next,
+      summary_confirmed_at: null,
+      profile: { ...profile, meta: { ...profile.meta, last_asked: { kind: 'card' } } },
+    })
+    .eq('conversation_id', conversation.id).is('redo_started_at', null).in('phase', ['options', 'chosen'])
+    .select('conversation_id');
+  if (error) throw error;
+  if (!claimed?.length) return { ok: false, status: 409, error: 'redo_used' };
+  const { error: bErr } = await supabase.from('conversations')
+    .update({ token_budget: conversation.tokens_used + PATH_REDO_BUDGET }).eq('id', conversation.id);
+  if (bErr) throw bErr;
+  await insertAssistantMessage(supabase, conversation, { content: cardMarkdown(card), choices: cardChoices(card, profile, false) });
+  console.info(`[path redo] conversation ${conversation.id}: redo started at ${startedAt}; budget ${conversation.tokens_used + PATH_REDO_BUDGET}`);
+  return { ok: true };
 }

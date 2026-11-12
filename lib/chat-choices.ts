@@ -146,6 +146,32 @@ export type ChatChoiceSet =
   | (ChoiceBase & { mode: 'note' });
 
 export const NOTE_MAX_CHARS = 1500;
+// A typed message in the Path conversation (checked on the server, capped and
+// counted in the box: brief 168-guardrails-redo).
+export const MESSAGE_MAX_CHARS = 1500;
+
+// Code-owned lines for each refusal of a Path send (brief 168-guardrails-redo).
+// No em or en dashes.
+export const PATH_REFUSAL_TEXT: Record<string, string> = {
+  message_too_long: 'That message is too long. Keep it under 1,500 characters.',
+  note_too_long: 'That note is too long. Keep it under 1,500 characters.',
+  rate_limited: 'You’re sending faster than I can keep up. Give it a minute, then send again.',
+  turn_in_progress: 'Zyrro is still working on your last message. Wait for it to finish, then send again.',
+  stale_choice: 'This step has already moved on. Refresh the page to see where you are.',
+  not_in_conversation: 'This step has already moved on. Refresh the page to see where you are.',
+  choices_expected: 'This step has already moved on. Refresh the page to see where you are.',
+  note_required: 'Add a note, or pick one of the answers.',
+  invalid_name: 'That name doesn’t work. Keep it to 50 characters, without dashes.',
+  busy: 'Zyrro is busy right now. Try again in a moment.',
+  redo_used: 'You’ve already used your one fresh start.',
+  redo_not_available: 'A fresh start isn’t available right now. Refresh the page to see where you are.',
+};
+export const PATH_REFUSAL_FALLBACK = 'Couldn’t send that. Try again.';
+
+/** The options retry limit's line (brief 168-guardrails-redo). */
+export function optionsRetryLimitText(minutes: number): string {
+  return `Something went wrong on my side, and I couldn’t build your options. You can try again in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`;
+}
 
 export type ChoiceValidation =
   | { ok: true; ids: string[]; note: string | null }

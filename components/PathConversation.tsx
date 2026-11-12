@@ -12,7 +12,17 @@ import PathNaming from '@/components/PathNaming';
 import PathStart from '@/components/PathStart';
 import PathChosen, { type ChosenPath } from '@/components/PathChosen';
 import SecondaryButton from '@/components/SecondaryButton';
-import { choiceAnswerRows, choiceContent, noteFromContent, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
+import {
+  choiceAnswerRows,
+  choiceContent,
+  MESSAGE_MAX_CHARS,
+  noteFromContent,
+  optionsRetryLimitText,
+  PATH_REFUSAL_FALLBACK,
+  PATH_REFUSAL_TEXT,
+  type ChatChoiceSet,
+  type ChoicePurpose,
+} from '@/lib/chat-choices';
 
 // #168: the Path conversation, the paid home of /path (Miroslav, 2026-11-09).
 // /path renders this once its own gates have passed (signed in, report
@@ -36,10 +46,21 @@ type PathPhase = 'seeding' | 'conversation' | 'summary' | 'options' | 'chosen';
 // The options generation's state (brief 168-options): generating, failed or ready.
 type OptionsState = { status: 'generating' | 'failed' | 'ready' | null; round: number | null };
 
+// The one redo (brief 168-guardrails-redo): used once started; in progress
+// until a path is chosen in it.
+type RedoState = { used: boolean; in_progress: boolean };
+
 type ConversationResponse = {
-  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState; chosen?: ChosenPath | null };
+  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState; chosen?: ChosenPath | null; redo?: RedoState };
   messages: PathMessage[];
 };
+
+/** The code-owned line for a refused send (brief 168-guardrails-redo). */
+async function refusalText(res: Response): Promise<string> {
+  const body = await res.json().catch(() => ({})) as { error?: string; retry_in_minutes?: number };
+  if (body.error === 'retry_limited' && typeof body.retry_in_minutes === 'number') return optionsRetryLimitText(body.retry_in_minutes);
+  return (body.error && PATH_REFUSAL_TEXT[body.error]) || PATH_REFUSAL_FALLBACK;
+}
 
 type TurnResponse = { messages: PathMessage[]; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState };
 
@@ -130,9 +151,13 @@ export default function PathConversation() {
   const [sendError, setSendError] = useState('');
   const [options, setOptions] = useState<OptionsState>({ status: null, round: null });
   const [retrying, setRetrying] = useState(false);
+  const [redo, setRedo] = useState<RedoState>({ used: false, in_progress: false });
+  const [redoStarting, setRedoStarting] = useState(false);
+  const [redoError, setRedoError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   function showConversation(data: ConversationResponse) {
+    setRedo(data.conversation.redo ?? { used: false, in_progress: false });
     setConversationId(data.conversation.id);
     setPhase(data.conversation.phase);
     setConfirmed(data.conversation.summary_confirmed);
@@ -173,13 +198,42 @@ export default function PathConversation() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'options_retry', conversation_id: conversationId }),
       });
-      if (!res.ok) throw new Error(`retry failed: ${res.status}`);
+      if (!res.ok) {
+        setSendError(res.status === 429 ? await refusalText(res) : 'Couldn’t start that again. Try again in a moment.');
+        return;
+      }
       showConversation(await res.json() as ConversationResponse);
     } catch (err) {
       console.error(err);
       setSendError('Couldn’t start that again. Try again in a moment.');
     } finally {
       setRetrying(false);
+    }
+  }
+
+  // The one redo, from "Your path" (brief 168-guardrails-redo): it opens on
+  // the confirmed summary in the conversation.
+  async function handleRedo() {
+    setRedoStarting(true);
+    setRedoError('');
+    try {
+      const res = await fetch('/api/path-conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'redo', conversation_id: conversationId }),
+      });
+      if (!res.ok) {
+        setRedoError(await refusalText(res));
+        return;
+      }
+      showConversation(await res.json() as ConversationResponse);
+      setView('conversation');
+      window.scrollTo(0, 0);
+    } catch (err) {
+      console.error(err);
+      setRedoError(PATH_REFUSAL_FALLBACK);
+    } finally {
+      setRedoStarting(false);
     }
   }
 
@@ -207,7 +261,11 @@ export default function PathConversation() {
     let cancelled = false;
     fetch('/api/path-conversation')
       .then(res => (res.ok ? res.json() as Promise<ConversationResponse> : null))
-      .then(data => { if (data && !cancelled) setChosen(data.conversation.chosen ?? null); })
+      .then(data => {
+        if (!data || cancelled) return;
+        setChosen(data.conversation.chosen ?? null);
+        setRedo(data.conversation.redo ?? { used: false, in_progress: false });
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [namingDone, chosen]);
@@ -245,7 +303,12 @@ export default function PathConversation() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, conversation_id: conversationId }),
       });
-      if (!res.ok) throw new Error(`turn failed: ${res.status}`);
+      if (!res.ok) {
+        // A refusal: its own line (brief 168-guardrails-redo). Nothing was saved.
+        setMessages(prev => prev.filter(m => m !== pending));
+        setSendError(await refusalText(res));
+        return false;
+      }
       const data = await res.json() as TurnResponse;
       setMessages(prev => [...prev.filter(m => m !== pending), ...data.messages]);
       setPhase(data.phase);
@@ -311,9 +374,21 @@ export default function PathConversation() {
     return <PathStart onStart={handleStart} starting={sending} error={sendError} />;
   }
 
-  // Chosen and named: "Your path" first; the conversation stays readable from there.
-  if (namingDone && chosen && view === 'path') {
-    return <PathChosen chosen={chosen} onViewConversation={() => { setView('conversation'); window.scrollTo(0, 0); }} />;
+  // Chosen and named: "Your path" first; the conversation stays readable from
+  // there. While the one redo is unfinished, the path chosen before it is
+  // still the user's path (brief 168-guardrails-redo).
+  const showPath = !!chosen && (namingDone || redo.in_progress);
+  if (showPath && view === 'path') {
+    return (
+      <PathChosen
+        chosen={chosen!}
+        onViewConversation={() => { setView('conversation'); window.scrollTo(0, 0); }}
+        redo={{ ...redo, available: namingDone && !redo.used }}
+        onRedo={handleRedo}
+        redoStarting={redoStarting}
+        redoError={redoError}
+      />
+    );
   }
 
   const latest = messages[messages.length - 1];
@@ -342,9 +417,10 @@ export default function PathConversation() {
         onSend={handleSend}
         placeholder="Type your answer…"
         inputRef={inputRef}
+        maxLength={MESSAGE_MAX_CHARS}
         header={
           <>
-            {namingDone && chosen && (
+            {showPath && (
               <div className="mb-8">
                 <LinkButton onClick={() => setView('path')}>Back to your path</LinkButton>
               </div>

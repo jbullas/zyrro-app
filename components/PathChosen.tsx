@@ -20,7 +20,29 @@ export type ChosenPath = {
   others: Array<{ option: PathOptionView; strongest: boolean }>;
 };
 
-export default function PathChosen({ chosen, onViewConversation }: { chosen: ChosenPath; onViewConversation: () => void }) {
+// The one redo (brief 168-guardrails-redo). available: a path is chosen and
+// named and the redo is unused; in_progress: started, no path chosen in it yet.
+export type PathRedo = { available: boolean; used: boolean; in_progress: boolean };
+
+const REDO_LINE = 'You can do this once. You’ll start from the summary you confirmed, change what’s different now and get new options. Your current path and plan stay until you choose a new one.';
+const REDO_IN_PROGRESS_LINE = 'Your current path and plan stay until you choose a new one.';
+const REDO_USED_LINE = 'You’ve used your one fresh start.';
+
+export default function PathChosen({
+  chosen,
+  onViewConversation,
+  redo,
+  onRedo,
+  redoStarting,
+  redoError,
+}: {
+  chosen: ChosenPath;
+  onViewConversation: () => void;
+  redo?: PathRedo;
+  onRedo?: () => void;
+  redoStarting?: boolean;
+  redoError?: string;
+}) {
   const [othersOpen, setOthersOpen] = useState(false);
   return (
     <div className="flow-container">
@@ -59,6 +81,27 @@ export default function PathChosen({ chosen, onViewConversation }: { chosen: Cho
                 onChoose={null}
               />
             ))}
+          </div>
+        )}
+
+        {redo && (redo.available || redo.used) && (
+          <div className="section flex flex-col gap-16">
+            {redo.in_progress ? (
+              <>
+                <p className="mentor-md-p">{REDO_IN_PROGRESS_LINE}</p>
+                <SecondaryButton onClick={onViewConversation}>Continue your fresh start</SecondaryButton>
+              </>
+            ) : redo.used ? (
+              <p className="mentor-md-p">{REDO_USED_LINE}</p>
+            ) : (
+              <>
+                <p className="mentor-md-p">{REDO_LINE}</p>
+                <SecondaryButton onClick={onRedo} disabled={redoStarting}>
+                  {redoStarting ? 'Starting…' : 'Start again from your summary'}
+                </SecondaryButton>
+              </>
+            )}
+            {redoError && <p className="form-error">{redoError}</p>}
           </div>
         )}
 

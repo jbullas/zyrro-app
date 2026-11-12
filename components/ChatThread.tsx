@@ -38,6 +38,9 @@ type ChatThreadProps<M extends ChatThreadMessage> = {
   statusText?: string;
   // hideComposer: one input at a time; Path hides the free-text box on turns with choices.
   hideComposer?: boolean;
+  // maxLength: caps the free-text box and shows a count while typing (Path,
+  // brief 168-guardrails-redo). Mentor passes none: its box is unchanged.
+  maxLength?: number;
 };
 
 // #168 step 2: the chat body shared by Mentor and Path: message list,
@@ -59,6 +62,7 @@ export default function ChatThread<M extends ChatThreadMessage>({
   renderUser,
   statusText,
   hideComposer,
+  maxLength,
 }: ChatThreadProps<M>) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -142,7 +146,13 @@ export default function ChatThread<M extends ChatThreadMessage>({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className="input-field flex-1"
+            {...(maxLength !== undefined && { maxLength })}
           />
+          {maxLength !== undefined && input.length > 0 && (
+            <span className="path-risk-note self-center whitespace-nowrap" aria-live="polite">
+              {input.length.toLocaleString('en-US')} / {maxLength.toLocaleString('en-US')}
+            </span>
+          )}
           <button
             onClick={onSend}
             disabled={loading || !input.trim()}

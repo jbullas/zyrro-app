@@ -10,7 +10,7 @@ import { after } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { withPipelineDeadline } from '@/lib/llm';
 import { FLIP_GUARD_MS, GENERATION_BUDGET_MS } from '@/lib/generation-budget';
-import { createServiceClient, listConversationMessages, type ConversationRow } from '@/lib/chat-turn';
+import { addTokens, createServiceClient, listConversationMessages, type ConversationRow } from '@/lib/chat-turn';
 import { chatJson, getProfileRow } from '@/lib/path-conversation';
 import { isCurrentPlan, parsePlan, planInput, planShape, type DraftPlan } from '@/lib/path-conversation-plan';
 import { PATH_CONVERSATION_PLAN_PROMPT } from '@/lib/prompts/path-conversation-plan';
@@ -137,6 +137,9 @@ export async function runPlanGeneration(artifactId: string): Promise<void> {
     ];
 
     const first = await chatJson(base, undefined, 'path plan', PLAN_MODEL, conversationId);
+    // Counted for visibility only: nothing about the Plan waits on the token
+    // budget (brief 168-guardrails-redo).
+    await addTokens(supabase, conversationId, first.tokens);
     let result = parsePlan(first.parsed, shape);
     const checks = { attempts: 1, problems_first: result.problems, problems_kept: result.problems };
     if (!result.plan || result.problems.length) {
@@ -148,6 +151,7 @@ export async function runPlanGeneration(artifactId: string): Promise<void> {
         { role: 'assistant', content: JSON.stringify(first.parsed ?? {}) },
         { role: 'system', content: `Your plan was not usable: ${result.problems.join('; ')}. Return the full JSON again with these fixed. Every other rule still applies.` },
       ], undefined, 'path plan (retry)', PLAN_MODEL, conversationId);
+      await addTokens(supabase, conversationId, retry.tokens);
       result = parsePlan(retry.parsed, shape);
       checks.problems_kept = result.problems;
     }

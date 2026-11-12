@@ -143,6 +143,10 @@ type ChatTurnBase = {
   kind: ConversationKind;
   entitlement: EntitlementProduct;
   recentLimit: number;
+  // The turn applies its own budget rules (Path, brief 168-guardrails-redo:
+  // a used-up budget wraps up instead of refusing). Without it, a turn is
+  // refused once tokens_used reaches token_budget, as before.
+  ownsBudget?: boolean;
 };
 
 export type AssistantMessage = { content: string; choices: unknown | null };
@@ -189,7 +193,7 @@ export async function runClaimedTurn<P>(
   conversation: ConversationRow,
   userMessage: NewUserMessage | null,
 ): Promise<TurnResult> {
-  if (conversation.token_budget !== null && conversation.tokens_used >= conversation.token_budget) {
+  if (!config.ownsBudget && conversation.token_budget !== null && conversation.tokens_used >= conversation.token_budget) {
     return { ok: false, status: 409, error: 'budget_exhausted' };
   }
 

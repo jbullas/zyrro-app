@@ -31,6 +31,7 @@ import {
   firstNameOf,
   fixDashes,
   getProfileRow,
+  pathBudget,
   ownIndexFor,
   ownMessages,
   PATH_TURN_CONFIG,
@@ -157,8 +158,13 @@ type CheckLog = {
 };
 
 export type OptionsContent = {
+  // In a redo, rounds count from 1 again (brief 168-guardrails-redo).
   round: number;
   adjustment: Adjustment | null;
+  // A round of the redo; every earlier round counts as already offered.
+  redo?: boolean;
+  // The token budget was reached with this round: no further adjustment.
+  budget_reached?: boolean;
   options?: StoredOption[];
   strongest_fit_id?: string;
   why_strongest?: string;
@@ -277,9 +283,14 @@ export async function ensureOptionsGeneration(
   }
   if (phase !== 'options') return 'none';
 
-  const rows = await optionsRows(supabase, conversation.id);
-  await flipStranded(supabase, rows);
-  if (rows.some(r => r.status === 'generating')) return 'running';
+  const allRows = await optionsRows(supabase, conversation.id);
+  await flipStranded(supabase, allRows);
+  if (allRows.some(r => r.status === 'generating')) return 'running';
+  // In a redo, this sitting's rounds are the ones since it started; the
+  // earlier ones stay in the generation's input as already offered.
+  const redo = !!row.redo_started_at;
+  const redoStart = redo ? new Date(row.redo_started_at!).getTime() : 0;
+  const rows = redo ? allRows.filter(r => new Date(r.created_at).getTime() >= redoStart) : allRows;
 
   const ready = rows.filter(r => r.status === 'ready');
   let wanted: { round: number; adjustment: Adjustment | null } | null;
@@ -301,7 +312,7 @@ export async function ensureOptionsGeneration(
       conversation_id: conversation.id,
       type: OPTIONS_TYPE,
       status: 'generating',
-      content: { round: wanted.round, adjustment: wanted.adjustment } satisfies OptionsContent,
+      content: { round: wanted.round, adjustment: wanted.adjustment, ...(redo && { redo: true }) } satisfies OptionsContent,
     })
     .select('id')
     .single();
@@ -333,6 +344,8 @@ type GenContext = {
   firstName: string;
   ownIndex: RefIndex;
   notForMe: string[];
+  // In a redo, every option offered before it (normalised names): none returns.
+  alreadyOffered: string[];
   conversationId: string;
   // The numbers in their hours band (the card's Time line), for the hours check.
   hoursNumbers: string[];
@@ -359,6 +372,7 @@ function buildInputs(
   round: number,
   previous: Array<{ round: number; options: StoredOption[]; marks: Record<string, OptionMark> }>,
   adjustment: Adjustment | null,
+  freshStart = false,
 ) {
   const answerRefs = digest.answers.map(a => `Q${a.number}`);
   const messageRefs = [...ownIndex.keys()].filter(r => r.startsWith('m:'));
@@ -414,6 +428,8 @@ function buildInputs(
       })),
     }),
     ...(adjustment && { feedback: { note: adjustment.note } }),
+    // The one redo (brief 168-guardrails-redo): every earlier option was offered.
+    ...(freshStart && { fresh_start: true }),
   };
 }
 
@@ -588,6 +604,7 @@ function setProblems(set: ParsedSet, ctx: GenContext): string[] {
   problems.push(...startsAlike(set.options));
   for (const o of set.options) {
     if (ctx.notForMe.includes(norm(o.name))) problems.push(`${o.id}: "${o.name}" was marked not for me and must not return`);
+    else if (ctx.alreadyOffered.includes(norm(o.name))) problems.push(`${o.id}: "${o.name}" was already offered before this fresh start; offer a new option`);
   }
   return problems;
 }
@@ -688,6 +705,7 @@ async function generateSet(
             ...(candidate.kind !== f.kind ? [`kind changed from ${f.kind} to ${candidate.kind}`] : []),
             ...(candidate.form !== f.form ? [`form changed from ${f.form} to ${candidate.form}`] : []),
             ...(ctx.notForMe.includes(norm(candidate.name)) ? ['a not for me option returned'] : []),
+            ...(ctx.alreadyOffered.includes(norm(candidate.name)) ? ['an option offered before the fresh start returned'] : []),
             ...startsAlike(current.options.map(o => (o.id === f.id ? candidate : o))),
           ]
         : ['unusable output'];
@@ -714,7 +732,7 @@ async function generateSet(
 export async function runOptionsGeneration(artifactId: string): Promise<void> {
   const supabase = createServiceClient();
   try {
-    const { data: art, error } = await supabase.from('artifacts').select('id, user_id, conversation_id, status, content').eq('id', artifactId).single();
+    const { data: art, error } = await supabase.from('artifacts').select('id, user_id, conversation_id, status, content, created_at').eq('id', artifactId).single();
     if (error || !art) throw error ?? new Error('options row missing');
     if (art.status !== 'generating') return;
     const content = art.content as OptionsContent;
@@ -738,18 +756,28 @@ export async function runOptionsGeneration(artifactId: string): Promise<void> {
     // Earlier rounds, each with the marks the user gave it.
     const marksFor = new Map<string, Record<string, OptionMark>>();
     for (const r of rows) if (r.content?.adjustment) marksFor.set(r.content.adjustment.from_artifact_id, r.content.adjustment.marks);
+    // Every ready round before this one, in order: in a redo, the rounds
+    // before it too, so the redo's options are new (brief 168-guardrails-redo).
+    // Numbered in that order for the model.
+    const createdAt = new Date(art.created_at as string).getTime();
     const previous = rows
-      .filter(r => r.status === 'ready' && r.content.options && r.content.round < content.round)
-      .map(r => ({ round: r.content.round, options: r.content.options!, marks: marksFor.get(r.id) ?? {} }));
+      .filter(r => r.status === 'ready' && r.content.options && new Date(r.created_at).getTime() < createdAt)
+      .map((r, i) => ({ round: i + 1, options: r.content.options!, marks: marksFor.get(r.id) ?? {} }));
     const notForMe = previous.flatMap(p => p.options.filter(o => p.marks[o.id] === 'not_for_me').map(o => norm(o.name)));
+    const freshStart = !!content.redo;
+    const alreadyOffered = freshStart ? previous.flatMap(p => p.options.map(o => norm(o.name))) : [];
 
     const ctx: GenContext = {
-      digest, card, level: directionLevel(profile), firstName: firstNameOf(digest), ownIndex, notForMe, conversationId,
+      digest, card, level: directionLevel(profile), firstName: firstNameOf(digest), ownIndex, notForMe, alreadyOffered, conversationId,
       hoursNumbers: card.risk.hours.match(/\d+/g) ?? [],
     };
-    const inputs = buildInputs(digest, profile, card, summary, ownIndex, content.round, previous, content.adjustment);
+    const inputs = buildInputs(digest, profile, card, summary, ownIndex, previous.length + 1, previous, content.adjustment, freshStart);
     const result = await generateSet(inputs, ctx);
     if (!result) throw new Error('no usable options after the retry');
+    // From the token budget on, no further adjustment (brief 168-guardrails-redo).
+    const { data: conv } = await supabase.from('conversations').select('tokens_used, token_budget').eq('id', conversationId).single();
+    const budgetReached = !!conv && conv.tokens_used + result.log.tokens >= pathBudget(conv);
+    if (budgetReached) console.info(`[path budget] conversation ${conversationId}: budget reached with round ${content.round}; no further adjustment`);
 
     const done: OptionsContent = {
       ...content,
@@ -761,6 +789,7 @@ export async function runOptionsGeneration(artifactId: string): Promise<void> {
       profile_snapshot: profile,
       model: PATH_OPTIONS_MODEL,
       checks: result.log,
+      ...(budgetReached && { budget_reached: true }),
     };
     // The message first: a round marked ready always has its message.
     await insertAssistantMessage(supabase, { id: conversationId, user_id: art.user_id }, optionsMessage(artifactId, done));
@@ -796,7 +825,8 @@ function toView(o: StoredOption): PathOptionView {
 }
 
 function roundView(artifactId: string, c: OptionsContent): OptionsRoundView {
-  const lastRound = c.round >= MAX_OPTIONS_ROUNDS;
+  // The last round: the third, or the one that reached the token budget.
+  const lastRound = c.round >= MAX_OPTIONS_ROUNDS || !!c.budget_reached;
   const intro = [...(c.round > 1 ? [NEW_ROUND_TEXT] : []), lastRound ? LAST_ROUND_TEXT : GUIDE_TEXT].join(' ');
   return {
     artifact_id: artifactId,
@@ -1102,6 +1132,36 @@ export async function chosenPathView(supabase: SupabaseClient, conversationId: s
     why_strongest: c.why_strongest,
     others: (content?.options ?? []).filter(o => o.id !== c.option.id).map(o => ({ option: toView(o), strongest: o.id === content?.strongest_fit_id })),
   };
+}
+
+/**
+ * The one redo for read-back (brief 168-guardrails-redo): used once it has
+ * started; in progress until a path is chosen in it. While it is in progress,
+ * the path chosen before it stays the user's path.
+ */
+export async function redoStateView(supabase: SupabaseClient, conversationId: string, redoStartedAt: string | null): Promise<{ used: boolean; in_progress: boolean }> {
+  if (!redoStartedAt) return { used: false, in_progress: false };
+  const { count, error } = await supabase.from('artifacts').select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId).eq('type', CHOICE_TYPE).eq('status', 'ready').gte('created_at', redoStartedAt);
+  if (error) throw error;
+  return { used: true, in_progress: (count ?? 0) === 0 };
+}
+
+// Options retries (brief 168-guardrails-redo): each costs a full round, so at
+// most this many failed generations in the window; after that the retry waits.
+export const OPTIONS_RETRY_LIMIT = 3;
+const OPTIONS_RETRY_WINDOW_MS = 60 * 60_000;
+
+/** Minutes until an options retry is allowed again, or null when it is allowed now. */
+export async function optionsRetryWait(supabase: SupabaseClient, conversationId: string): Promise<number | null> {
+  const since = new Date(Date.now() - OPTIONS_RETRY_WINDOW_MS).toISOString();
+  const { data, error } = await supabase.from('artifacts').select('created_at')
+    .eq('conversation_id', conversationId).eq('type', OPTIONS_TYPE).eq('status', 'failed').gte('created_at', since)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  if ((data ?? []).length < OPTIONS_RETRY_LIMIT) return null;
+  const freeAt = new Date(data![data!.length - OPTIONS_RETRY_LIMIT].created_at as string).getTime() + OPTIONS_RETRY_WINDOW_MS;
+  return Math.max(1, Math.ceil((freeAt - Date.now()) / 60_000));
 }
 
 /** The options state for read-back: no model call. */

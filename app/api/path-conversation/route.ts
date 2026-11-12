@@ -20,13 +20,15 @@ import {
   getPathConversation,
   getProfileRow,
   MESSAGE_MAX_CHARS,
+  overSendLimit,
   PATH_ENTITLEMENT,
   PATH_TURN_CONFIG,
   pathState,
+  startRedo,
   toMessageView,
 } from '@/lib/path-conversation';
 import { choiceContent, NOTE_MAX_CHARS, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
-import { chosenPathView, ensureOptionsGeneration, optionsStateView, PATH_FLOW_TURN_CONFIG } from '@/lib/path-options';
+import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsStateView, PATH_FLOW_TURN_CONFIG, redoStateView } from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
 // the conversation id and the new message, or the tapped choices plus an
@@ -47,8 +49,9 @@ async function conversationView(supabase: SupabaseClient, conversation: Conversa
     optionsStateView(supabase, conversation.id),
     chosenPathView(supabase, conversation.id),
   ]);
+  const redo = await redoStateView(supabase, conversation.id, profileRow?.redo_started_at ?? null);
   return {
-    conversation: { id: conversation.id, ...pathState(profileRow), options, chosen },
+    conversation: { id: conversation.id, ...pathState(profileRow), options, chosen, redo },
     messages: messages.map(toMessageView),
   };
 }
@@ -75,7 +78,8 @@ type PostBody =
   | { action: 'start' }
   | { action: 'message'; conversation_id: string; text: string }
   | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string; risk_text?: string }
-  | { action: 'options_retry'; conversation_id: string };
+  | { action: 'options_retry'; conversation_id: string }
+  | { action: 'redo'; conversation_id: string };
 
 export async function POST(req: NextRequest) {
   let body: PostBody;
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
   try {
     if (body.action === 'start') return await start();
     if (body.action === 'options_retry') return await retryOptions();
+    if (body.action === 'redo') return await redo();
 
     if (body.action === 'message' || body.action === 'choice') {
       if (typeof body.conversation_id !== 'string' || !body.conversation_id) {
@@ -129,6 +134,9 @@ async function retryOptions() {
   if (!existing) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
   const state = await optionsStateView(supabase, existing.conversation.id);
   if (state.status !== 'failed') return NextResponse.json({ error: 'nothing_to_retry' }, { status: 409 });
+  // At most OPTIONS_RETRY_LIMIT failed generations an hour (brief 168-guardrails-redo).
+  const wait = await optionsRetryWait(supabase, existing.conversation.id);
+  if (wait !== null) return NextResponse.json({ error: 'retry_limited', retry_in_minutes: wait }, { status: 429 });
   await ensureOptionsGeneration(supabase, existing.conversation, { retry: true });
   return NextResponse.json(await conversationView(supabase, existing.conversation));
 }
@@ -162,6 +170,28 @@ async function start() {
   return NextResponse.json(await conversationView(supabase, conversation));
 }
 
+// The one redo (brief 168-guardrails-redo), from "Your path": holds the turn
+// claim, so it can't run alongside a turn or a second redo.
+async function redo() {
+  const auth = await requireEntitledUser(PATH_ENTITLEMENT);
+  if (!auth.ok) return failure(auth);
+  const supabase = createServiceClient();
+  const existing = await getPathConversation(supabase, auth.userId);
+  if (!existing) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  const conversation = existing.conversation;
+  if (!(await claimTurn(supabase, conversation.id))) {
+    return NextResponse.json({ error: 'turn_in_progress' }, { status: 409 });
+  }
+  try {
+    const result = await startRedo(supabase, conversation);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  } finally {
+    await releaseTurn(supabase, conversation.id);
+  }
+  const fresh = await getPathConversation(supabase, auth.userId);
+  return NextResponse.json(await conversationView(supabase, fresh!.conversation));
+}
+
 const refuse = (status: number, error: string): TurnFailure => ({ ok: false, status, error });
 
 // Typed text: conversation phase only, and only when the latest message asks
@@ -173,6 +203,8 @@ async function prepareMessage(
 ): Promise<NewUserMessage | TurnFailure> {
   const content = typeof text === 'string' ? text.trim() : '';
   if (!content) return refuse(400, 'Empty message');
+  // At most PATH_SENDS_PER_WINDOW sends in the window (brief 168-guardrails-redo).
+  if (await overSendLimit(supabase, conversation.id)) return refuse(429, 'rate_limited');
   if (content.length > MESSAGE_MAX_CHARS) return refuse(400, 'message_too_long');
   const row = await getProfileRow(supabase, conversation.id);
   if (row?.phase !== 'conversation') return refuse(409, 'not_in_conversation');
@@ -192,6 +224,7 @@ async function prepareChoice(
   note: unknown,
   riskText: unknown,
 ): Promise<NewUserMessage | TurnFailure> {
+  if (await overSendLimit(supabase, conversation.id)) return refuse(429, 'rate_limited');
   const row = await getProfileRow(supabase, conversation.id);
   const laterPurposes: ChoicePurpose[] | null = row?.phase === 'options' ? ['options', 'options_feedback']
     : row?.phase === 'chosen' ? ['naming'] : null;
