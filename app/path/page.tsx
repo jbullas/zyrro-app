@@ -21,7 +21,6 @@ export default function PathPage() {
   const [entryRetryKey, setEntryRetryKey]     = useState(0);
   const [userId, setUserId]                   = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [grantLoading, setGrantLoading]       = useState(false);
   const [reframeTeaser, setReframeTeaser]     = useState<ReframeTeaser | null>(null);
   const [primaryConstellation, setPrimaryConstellation] = useState<{ name: string }[]>([]);
 
@@ -163,19 +162,6 @@ export default function PathPage() {
     }
   }
 
-  // DEV ONLY — remove before go-live
-  async function handleDevGrant() {
-    if (!userId) return;
-    setGrantLoading(true);
-    await fetch('/api/dev/grant-entitlement', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId }),
-    });
-    setGrantLoading(false);
-    window.location.reload();
-  }
-
   // ── Loading / Verifying ───────────────────────────────────────────
   if (pageState === 'loading' || pageState === 'verifying') {
     return (
@@ -245,18 +231,6 @@ export default function PathPage() {
             onCheckout={handleCheckout}
             checkoutLoading={checkoutLoading}
           />
-
-          {/* DEV ONLY — remove before go-live */}
-          <div style={{ marginTop: '32px', textAlign: 'center' }}>
-            <button
-              onClick={handleDevGrant}
-              disabled={grantLoading}
-              className="btn-link"
-              style={{ fontSize: '12px', color: '#999' }}
-            >
-              {grantLoading ? 'Granting…' : 'DEV: Grant entitlement'}
-            </button>
-          </div>
         </div>
       </div>
     );

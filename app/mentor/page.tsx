@@ -27,7 +27,6 @@ export default function MentorPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
-  const [grantLoading, setGrantLoading] = useState(false);
   const [view, setView] = useState<View>("list");
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
@@ -239,20 +238,6 @@ export default function MentorPage() {
     }
   }
 
-  // DEV ONLY — remove before go-live
-  async function handleDevGrant() {
-    setGrantLoading(true);
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setGrantLoading(false); return; }
-    await fetch('/api/dev/grant-entitlement', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user.id, product: 'subscription_payment' }),
-    });
-    window.location.reload();
-  }
-
   if (!authChecked) return null;
 
   if (!isAuthenticated) {
@@ -277,18 +262,6 @@ export default function MentorPage() {
         <button className="btn-primary btn-disabled" aria-disabled="true">
           Start your subscription →
         </button>
-
-        {/* DEV ONLY — remove before go-live */}
-        <div style={{ marginTop: '32px', textAlign: 'center' }}>
-          <button
-            onClick={handleDevGrant}
-            disabled={grantLoading}
-            className="btn-link"
-            style={{ fontSize: '12px', color: '#999' }}
-          >
-            {grantLoading ? 'Granting…' : 'DEV: grant subscription'}
-          </button>
-        </div>
       </div>
     );
   }
