@@ -820,7 +820,7 @@ export const CARD_INTRO = 'Here’s the updated summary with your changes. Your 
 // B1): the intro says so instead of claiming changes. With items the note
 // questioned, it points to them; only the user removes items.
 export const CARD_INTRO_UNCHANGED = 'Nothing on the summary changed with that. Check it and confirm, or tell me what’s still off.';
-export const CARD_INTRO_QUESTIONED = 'I haven’t taken anything off the summary: only you remove items. I’ve marked what you said may not belong. Tap Remove next to it to take it off, then confirm.';
+export const CARD_INTRO_QUESTIONED = 'I’ve marked what you said may not belong. Tap Remove next to it to take it off, then confirm.';
 
 /**
  * The new card after a correction: the items the note questioned flagged by
