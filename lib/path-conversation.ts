@@ -1982,8 +1982,8 @@ export async function startRedo(supabase: SupabaseClient, conversation: Conversa
   }
   const profile = withMetaDefaults(row.profile as PathProfile);
   const round = cardState.round + 1;
-  const { questioned: _q, ...confirmedCard } = cardState.card;
-  const card: SummaryCard = { ...confirmedCard, round, intro: CARD_INTRO_REDO };
+  // The confirmed card, without the flags of an earlier correction.
+  const card: SummaryCard = { ...cardState.card, round, intro: CARD_INTRO_REDO, questioned: undefined };
   const next: CardState = { round, card, correction: null, clarify_pending: false, confirmed: false };
   const startedAt = new Date().toISOString();
   const { data: claimed, error } = await supabase.from('path_profiles')
