@@ -27,7 +27,7 @@ import {
   startRedo,
   toMessageView,
 } from '@/lib/path-conversation';
-import { choiceContent, NOTE_MAX_CHARS, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
+import { choiceContent, NOTE_MAX_CHARS, SUMMARY_TAP_ID, SUMMARY_TAP_LABEL, SUMMARY_TAP_TURN, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
 import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsStateView, PATH_FLOW_TURN_CONFIG, redoStateView } from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
@@ -233,6 +233,14 @@ async function prepareChoice(
   }
 
   const [latest] = await listConversationMessages(supabase, conversation.id, 1);
+  // "See your summary": in the conversation phase from SUMMARY_TAP_TURN user
+  // turns, on the latest reply, whether or not it has choices of its own.
+  if (Array.isArray(choiceIds) && choiceIds.length === 1 && choiceIds[0] === SUMMARY_TAP_ID) {
+    if (row.phase !== 'conversation') return refuse(409, 'not_in_conversation');
+    if (row.turns < SUMMARY_TAP_TURN) return refuse(409, 'summary_not_yet');
+    if (!latest || latest.id !== messageId || latest.role !== 'assistant') return refuse(409, 'stale_choice');
+    return { content: SUMMARY_TAP_LABEL, selected_choice_ids: [SUMMARY_TAP_ID], note: null };
+  }
   const choices = latest?.choices as ChatChoiceSet | null | undefined;
   if (!latest || latest.id !== messageId || latest.role !== 'assistant' || !choices) return refuse(409, 'stale_choice');
   if (laterPurposes) {

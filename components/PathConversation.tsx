@@ -20,6 +20,9 @@ import {
   optionsRetryLimitText,
   PATH_REFUSAL_FALLBACK,
   PATH_REFUSAL_TEXT,
+  SUMMARY_TAP_ID,
+  SUMMARY_TAP_LABEL,
+  SUMMARY_TAP_TURN,
   type ChatChoiceSet,
   type ChoicePurpose,
 } from '@/lib/chat-choices';
@@ -51,7 +54,7 @@ type OptionsState = { status: 'generating' | 'failed' | 'ready' | null; round: n
 type RedoState = { used: boolean; in_progress: boolean };
 
 type ConversationResponse = {
-  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState; chosen?: ChosenPath | null; redo?: RedoState };
+  conversation: { id: string; phase: PathPhase; summary_confirmed: boolean; turns?: number; options?: OptionsState; chosen?: ChosenPath | null; redo?: RedoState };
   messages: PathMessage[];
 };
 
@@ -62,7 +65,7 @@ async function refusalText(res: Response): Promise<string> {
   return (body.error && PATH_REFUSAL_TEXT[body.error]) || PATH_REFUSAL_FALLBACK;
 }
 
-type TurnResponse = { messages: PathMessage[]; phase: PathPhase; summary_confirmed: boolean; options?: OptionsState };
+type TurnResponse = { messages: PathMessage[]; phase: PathPhase; summary_confirmed: boolean; turns?: number; options?: OptionsState };
 
 // Choices still answerable once the summary is confirmed.
 const AFTER_SUMMARY: ChoicePurpose[] = ['options', 'options_feedback', 'naming'];
@@ -70,6 +73,7 @@ const AFTER_SUMMARY: ChoicePurpose[] = ['options', 'options_feedback', 'naming']
 const OPTIONS_POLL_MS = 3000;
 const OPTIONS_STATUS = 'Putting your three path options together. This takes about half a minute…';
 const NEW_OPTIONS_STATUS = 'Putting three new options together. This takes about half a minute…';
+const SUMMARY_TAP_STATUS = 'Putting your summary together…';
 
 type PageState = 'loading' | 'not-started' | 'chat' | 'error';
 
@@ -152,12 +156,15 @@ export default function PathConversation() {
   const [options, setOptions] = useState<OptionsState>({ status: null, round: null });
   const [retrying, setRetrying] = useState(false);
   const [redo, setRedo] = useState<RedoState>({ used: false, in_progress: false });
+  // User turns so far: "See your summary" shows from SUMMARY_TAP_TURN.
+  const [turns, setTurns] = useState(0);
   const [redoStarting, setRedoStarting] = useState(false);
   const [redoError, setRedoError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   function showConversation(data: ConversationResponse) {
     setRedo(data.conversation.redo ?? { used: false, in_progress: false });
+    setTurns(data.conversation.turns ?? 0);
     setConversationId(data.conversation.id);
     setPhase(data.conversation.phase);
     setConfirmed(data.conversation.summary_confirmed);
@@ -313,6 +320,7 @@ export default function PathConversation() {
       setMessages(prev => [...prev.filter(m => m !== pending), ...data.messages]);
       setPhase(data.phase);
       setConfirmed(data.summary_confirmed);
+      setTurns(data.turns ?? 0);
       if (data.options) setOptions(data.options);
       return true;
     } catch (err) {
@@ -344,7 +352,8 @@ export default function PathConversation() {
     const purpose = message.choices.purpose;
     if (purpose === 'naming') setChosen(null);
     const statusLine =
-      purpose === 'summary' && choiceIds.includes('verdict:right') ? OPTIONS_STATUS
+      choiceIds.includes(SUMMARY_TAP_ID) ? SUMMARY_TAP_STATUS
+      : purpose === 'summary' && choiceIds.includes('verdict:right') ? OPTIONS_STATUS
         : purpose === 'summary' || purpose === 'summary_clarify' ? 'Updating your summary…'
           : purpose === 'risk_time' ? 'Putting your summary together…'
             : purpose === 'options' ? (choiceIds.includes('pick:none') ? 'One moment…' : 'Saving your choice and finding names for this path…')
@@ -355,6 +364,16 @@ export default function PathConversation() {
       { action: 'choice', message_id: message.id, choice_ids: choiceIds, note, ...(riskText !== undefined && { risk_text: riskText }) },
       { id: 'pending', role: 'user', content: choiceContent(message.choices, choiceIds, note), choices: null, selected_choice_ids: choiceIds },
       statusLine,
+    );
+  }
+
+  // "See your summary" as a link, on a reply without a list of options of its own.
+  function handleSummaryTap(message: PathMessage) {
+    if (sending) return;
+    sendTurn(
+      { action: 'choice', message_id: message.id, choice_ids: [SUMMARY_TAP_ID] },
+      { id: 'pending', role: 'user', content: SUMMARY_TAP_LABEL, choices: null, selected_choice_ids: [SUMMARY_TAP_ID] },
+      SUMMARY_TAP_STATUS,
     );
   }
 
@@ -399,6 +418,10 @@ export default function PathConversation() {
   // One input at a time: the free-text box only on an open question in the conversation phase.
   const showComposer = phase === 'conversation' && !(latest?.role === 'assistant' && latest.choices);
   const optionsFailed = phase === 'options' && options.status === 'failed' && latest?.role === 'user';
+  // From SUMMARY_TAP_TURN: a link under the text box, or under grouped choices;
+  // a list of options carries it as one more option (server).
+  const summaryLink = phase === 'conversation' && turns >= SUMMARY_TAP_TURN && latest?.role === 'assistant'
+    && (!latest.choices || latest.choices.mode === 'groups') && !sending;
   const waitingStatus = (options.round ?? 1) > 1 ? NEW_OPTIONS_STATUS : OPTIONS_STATUS;
 
   return (
@@ -487,6 +510,11 @@ export default function PathConversation() {
             )
         }
       />
+      {summaryLink && (
+        <div className="flex-shrink-0 pb-16">
+          <LinkButton onClick={() => handleSummaryTap(latest)}>{SUMMARY_TAP_LABEL}</LinkButton>
+        </div>
+      )}
       {optionsFailed && (
         <div className="mentor-composer path-options-retry">
           <p className="flex-1">We couldn’t put your options together this time.</p>

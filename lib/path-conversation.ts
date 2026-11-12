@@ -4,7 +4,7 @@ import { getCurrentArtifact } from '@/lib/artifacts';
 import type { IdentitySignatureReportArtifactContent } from '@/lib/artifact-schemas';
 import type { ConversationRow, RunTurn, StoredMessage, TurnContext, TurnRun } from '@/lib/chat-turn';
 import { addTokens, insertAssistantMessage, listConversationMessages } from '@/lib/chat-turn';
-import { noteFromContent, QUESTIONED_ITEM_LINE, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
+import { noteFromContent, QUESTIONED_ITEM_LINE, SUMMARY_TAP_ID, SUMMARY_TAP_LABEL, SUMMARY_TAP_TURN, type ChatChoiceSet, type ChoiceGroup, type SummaryCard } from '@/lib/chat-choices';
 import { mergeAnswersWithQuestions } from '@/lib/identity-questions';
 import { getChatCompletionDetailed, isRateLimitError, PATH_RETRY } from '@/lib/llm';
 import {
@@ -612,7 +612,7 @@ const MAX_DEEPEN_STREAK = 2;
  */
 function computeNext(
   profile: PathProfile,
-  state: { opening: boolean; turns: number; turnsSinceProgress: number; wrapUp?: boolean },
+  state: { opening: boolean; turns: number; turnsSinceProgress: number; wrapUp?: boolean; toSummary?: boolean },
 ): Next {
   if (state.opening) {
     const p = profile.pushing_now.value;
@@ -620,6 +620,8 @@ function computeNext(
   }
   // The budget is near its end: wrap up with what Zyrro has (brief 168-guardrails-redo).
   if (state.wrapUp) return { kind: 'card' };
+  // The user tapped "See your summary".
+  if (state.toSummary) return { kind: 'card' };
   const clarify = profile.meta.pending_clarify;
   if (clarify) return { kind: 'clarify', item: clarify.item, contradiction: { text: clarify.text, refs: clarify.refs } };
   if (state.turns >= MAX_USER_TURNS || state.turnsSinceProgress >= STALL_TURNS) return { kind: 'card' };
@@ -718,6 +720,17 @@ function riskPreselected(profile: PathProfile): string[] {
     ...(v.no_limits ? ['limits:none'] : v.limits.map(l => `limits:${l}`)),
     ...(v.hours_band ? [`hours:${v.hours_band}`] : []),
   ];
+}
+
+/**
+ * From SUMMARY_TAP_TURN, "See your summary" on a list of options as one more
+ * option. A grouped set or a reply with no choices gets it as a link on the
+ * page instead (components/PathConversation.tsx).
+ */
+function withSummaryTap(choices: ChatChoiceSet | null): ChatChoiceSet | null {
+  if (!choices || choices.mode === 'groups' || choices.mode === 'note') return choices;
+  if (choices.options.some(o => o.id === SUMMARY_TAP_ID)) return choices;
+  return { ...choices, options: [...choices.options, { id: SUMMARY_TAP_ID, label: SUMMARY_TAP_LABEL }] };
 }
 
 function fixedChoices(next: Next, profile: PathProfile): ChatChoiceSet | null {
@@ -1516,9 +1529,12 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
   let insights: Insight[] = [];
   const turns = row.turns + (userMessage ? 1 : 0);
   const understandingBefore = understandingSnapshot(s.summary);
+  // "See your summary" (SUMMARY_TAP_TURN): nothing new to read, so no call A;
+  // the card comes next.
+  const toSummary = !!userMessage?.selected_choice_ids?.includes(SUMMARY_TAP_ID);
 
   try {
-    if (userMessage) {
+    if (userMessage && !toSummary) {
       const asked = s.profile.meta.last_asked;
       const answeredMsg = [...s.all].reverse().find(m => m.role === 'assistant');
       const answeredChoices = answeredMsg?.choices as ChatChoiceSet | null | undefined;
@@ -1595,7 +1611,8 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
     // (brief 168-guardrails-redo), counting this turn's tokens so far.
     const wrapUp = conversation.tokens_used + tokens >= pathBudget(conversation) - PATH_WRAP_RESERVE;
     if (wrapUp && userMessage) console.info(`[path budget] conversation ${conversation.id}: ${conversation.tokens_used + tokens} tokens used, wrapping up with the card`);
-    const next = computeNext(s.profile, { opening: !userMessage, turns, turnsSinceProgress, wrapUp });
+    if (toSummary) console.info(`[path summary tap] conversation ${conversation.id}: "${SUMMARY_TAP_LABEL}" at turn ${turns}; the card comes next, no update call`);
+    const next = computeNext(s.profile, { opening: !userMessage, turns, turnsSinceProgress, wrapUp, toSummary });
     // Deepen turns in a row; a practical question or the card resets it.
     s.profile = { ...s.profile, meta: { ...s.profile.meta, deepen_streak: next.kind === 'deepen' ? (s.profile.meta.deepen_streak ?? 0) + 1 : 0 } };
 
@@ -1625,7 +1642,8 @@ async function runConversationTurn(ctx: TurnContext, row: PathProfileRow): Promi
       // where code attaches choices, never on a follow-up that asks for
       // something only the user can put in words, and never on a deepen turn.
       const modelChoicesAllowed = next.kind === 'item' || (next.kind === 'follow_up' && next.item !== 'opening_read' && next.item !== 'direction');
-      assistant = { content: text, choices: fixed ?? (modelChoicesAllowed ? normalizeChoices(b.parsed?.choices) : null) };
+      const choices = fixed ?? (modelChoicesAllowed ? normalizeChoices(b.parsed?.choices) : null);
+      assistant = { content: text, choices: turns >= SUMMARY_TAP_TURN ? withSummaryTap(choices) : choices };
     }
     s.profile = { ...s.profile, meta: { ...s.profile.meta, last_asked: asAsked(next) } };
 
@@ -1938,8 +1956,8 @@ export function toMessageView(m: StoredMessage): PathMessageView {
   };
 }
 
-export function pathState(row: PathProfileRow | null): { phase: PathPhase; summary_confirmed: boolean; redo_used: boolean } {
-  return { phase: row?.phase ?? 'seeding', summary_confirmed: !!row?.summary_confirmed_at, redo_used: !!row?.redo_started_at };
+export function pathState(row: PathProfileRow | null): { phase: PathPhase; summary_confirmed: boolean; redo_used: boolean; turns: number } {
+  return { phase: row?.phase ?? 'seeding', summary_confirmed: !!row?.summary_confirmed_at, redo_used: !!row?.redo_started_at, turns: row?.turns ?? 0 };
 }
 
 // ── Rate limit (brief 168-guardrails-redo) ──────────────────────────────────

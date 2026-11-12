@@ -150,6 +150,14 @@ export const NOTE_MAX_CHARS = 1500;
 // counted in the box: brief 168-guardrails-redo).
 export const MESSAGE_MAX_CHARS = 1500;
 
+// "See your summary" (Miroslav, 2026-11-12): from this many user turns, every
+// conversation reply carries a code-written tap that moves straight to the
+// card (as an extra option in a list of options, else as a link under the
+// text box or the grouped choices). The stall rule and the cap are unchanged.
+export const SUMMARY_TAP_TURN = 10;
+export const SUMMARY_TAP_ID = 'to_summary';
+export const SUMMARY_TAP_LABEL = 'See your summary';
+
 // Code-owned lines for each refusal of a Path send (brief 168-guardrails-redo).
 // No em or en dashes.
 export const PATH_REFUSAL_TEXT: Record<string, string> = {
@@ -165,6 +173,7 @@ export const PATH_REFUSAL_TEXT: Record<string, string> = {
   busy: 'I can’t reply right now. Try again in a moment.',
   redo_used: 'You’ve already used your one fresh start.',
   redo_not_available: 'A fresh start isn’t available right now. Refresh the page to see where you are.',
+  summary_not_yet: 'Your summary isn’t ready yet. Keep going a little longer.',
 };
 export const PATH_REFUSAL_FALLBACK = 'Couldn’t send that. Try again.';
 

@@ -601,6 +601,11 @@ function setProblems(set: ParsedSet, ctx: GenContext): string[] {
   const problems = set.options.flatMap(o => optionProblems(o, ctx, o.id === set.strongest_fit_id ? set.why_strongest : null));
   const kind = kindProblem(set.options, ctx.level);
   if (kind) problems.push(kind);
+  // Three options of one form (Miroslav, 2026-11-12, at every direction
+  // level): a problem for the whole-set retry; still one form after it, the
+  // set is kept and the problem logged, like any kept problem.
+  const forms = set.options.map(o => o.form);
+  if (forms.length === 3 && forms[0] && forms.every(f => f === forms[0])) problems.push(`all three options are ${forms[0]}; offer them in different forms`);
   problems.push(...startsAlike(set.options));
   for (const o of set.options) {
     if (ctx.notForMe.includes(norm(o.name))) problems.push(`${o.id}: "${o.name}" was marked not for me and must not return`);
