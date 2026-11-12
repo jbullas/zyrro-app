@@ -1086,6 +1086,9 @@ async function runUpdate(s: TurnState, input: CallAInput, conversationId: string
             role: 'user',
             content: JSON.stringify({
               note: correctionNote,
+              // The parts the user ticked under "What's off?": a note under
+              // one of the lists belongs on it (Miroslav, 2026-11-12).
+              parts_marked_off: input.correction.parts,
               must_haves: input.correction.card.must_haves.map(({ id, text }) => ({ id, text })),
               must_avoids: input.correction.card.must_avoids.map(({ id, text }) => ({ id, text })),
               // The call can only tell a note about risk from an item if it
