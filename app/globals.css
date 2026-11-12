@@ -2496,3 +2496,13 @@ p {
   font-size: 14px;
   color: var(--color-text-secondary);
 }
+
+
+/* A link inside running text: the surrounding text's size and weight, in
+   .btn-link's brand colour (#169, the go line on /plan). At file end so it
+   wins cascade ties. */
+.inline-link {
+  color: var(--color-grad-2);
+  font: inherit;
+  text-decoration: none;
+}

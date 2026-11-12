@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import PrimaryButton from '@/components/PrimaryButton';
-import LinkButton from '@/components/LinkButton';
+import Link from 'next/link';
 import MessageState from '@/components/MessageState';
 import GeneratingState from '@/components/GeneratingState';
 import type { PlanView } from '@/lib/path-plan-generation';
@@ -144,9 +144,9 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
           <p className="eyebrow">MILESTONES</p>
           {/* Code-written, not the model's: milestones assume the path is a go. */}
           <p className="cover-context-line">
-            These apply once you know it’s a go. If it’s a no-go, your other two options are saved in Path.
+            These apply once you know it’s a go. If it’s a no-go, your other two options are saved in Path.{' '}
+            <Link href="/path" className="inline-link">See your other options</Link>
           </p>
-          <LinkButton href="/path">See your other options</LinkButton>
           <div className="card">
             <ol className="mentor-md-ol">
               {plan.milestones.map((m, i) => (
