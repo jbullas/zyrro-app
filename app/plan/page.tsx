@@ -1,46 +1,19 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useAuthUser } from '@/lib/use-auth-user';
 import GatedState from '@/components/GatedState';
 import PrimaryButton from '@/components/PrimaryButton';
 import MessageState from '@/components/MessageState';
-import GeneratingState from '@/components/GeneratingState';
-import ConstellationCard from '@/components/ConstellationCard';
-import ChipRow from '@/components/ChipRow';
-import LimitsBlock from '@/components/LimitsBlock';
-import type { PathPlanArtifactContent } from '@/lib/artifact-schemas';
-import { useGenerationStatus } from '@/lib/generation-status';
-import { getCurrentArtifact } from '@/lib/artifacts';
 import ConversationPlan from '@/components/ConversationPlan';
 import type { PlanView } from '@/lib/path-plan-generation';
 
-type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'has-artifact' | 'new-flow';
+type PageState = 'loading' | 'anonymous' | 'unpaid' | 'no-selection' | 'new-flow';
 
 export default function PlanPage() {
   const [pageState, setPageState]     = useState<PageState>('loading');
-  const [userId, setUserId]           = useState<string | null>(null);
-  const [artifactId, setArtifactId]   = useState<string | null>(null);
-  const [activeSelection, setActiveSelection] = useState<{
-    path_options_artifact_id: string;
-    path_id: string;
-  } | null>(null);
-  const [retrying, setRetrying]       = useState(false);
   const [conversationPlan, setConversationPlan] = useState<PlanView | null>(null);
-  // Used only to retry the initial artifact-ID lookup in the edge case where the
-  // row hasn't committed yet when the page first loads.
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current !== null) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const genPhase = useGenerationStatus(artifactId);
-  const plan     = genPhase.phase === 'ready' ? genPhase.content as PathPlanArtifactContent : null;
 
   const { user: authUser, loading: authLoading } = useAuthUser();
 
@@ -49,39 +22,6 @@ export default function PlanPage() {
     const supabase = createClient();
     let cancelled = false;
 
-    async function loadPlanArtifact(
-      uid: string,
-      pathOptionsArtifactId: string,
-      pathId: string,
-    ) {
-      const { data } = await getCurrentArtifact<{ id: string }>(
-        supabase,
-        uid,
-        'path_plan',
-        {
-          match: { path_options_artifact_id: pathOptionsArtifactId, path_id: pathId },
-          select: 'id',
-        },
-      );
-
-      if (cancelled) return;
-
-      if (!data) {
-        // select-path always creates the artifact before redirect; this retry handles
-        // the edge case where the commit hasn't landed yet.
-        if (pollRef.current === null) {
-          pollRef.current = setInterval(() => {
-            if (!cancelled) loadPlanArtifact(uid, pathOptionsArtifactId, pathId);
-          }, 3000);
-        }
-        return;
-      }
-
-      stopPolling();
-      setArtifactId(data.id as string);
-      setPageState('has-artifact');
-    }
-
     async function init() {
       const user = authUser;
 
@@ -89,8 +29,6 @@ export default function PlanPage() {
         if (!cancelled) setPageState('anonymous');
         return;
       }
-
-      if (!cancelled) setUserId(user.id);
 
       if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
         const { data: entitlement } = await supabase
@@ -107,8 +45,8 @@ export default function PlanPage() {
         }
       }
 
-      // #169: a path chosen in the Path conversation wins over the old flow
-      // (brief 169-plan-page). The server route owns that state.
+      // #169: the Plan for the path chosen in the Path conversation. The
+      // server route owns that state.
       const planRes = await fetch('/api/path-plan');
       if (planRes.ok) {
         const view = await planRes.json() as PlanView;
@@ -117,61 +55,14 @@ export default function PlanPage() {
           return;
         }
       }
-      if (cancelled) return;
-
-      // The old flow (until #170): the latest path selection
-      const { data: selection } = await supabase
-        .from('path_selections')
-        .select('path_options_artifact_id, path_id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (!selection) {
-        setPageState('no-selection');
-        return;
-      }
-
-      setActiveSelection({
-        path_options_artifact_id: selection.path_options_artifact_id as string,
-        path_id: selection.path_id as string,
-      });
-
-      await loadPlanArtifact(
-        user.id,
-        selection.path_options_artifact_id as string,
-        selection.path_id as string,
-      );
+      if (!cancelled) setPageState('no-selection');
     }
 
     init();
     return () => {
       cancelled = true;
-      stopPolling();
     };
-  }, [stopPolling, authLoading, authUser]);
-
-  async function handleRetry() {
-    if (!userId || !activeSelection) return;
-    setRetrying(true);
-    setArtifactId(null);
-    const res = await fetch('/api/select-path', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        path_options_artifact_id: activeSelection.path_options_artifact_id,
-        path_id: activeSelection.path_id,
-      }),
-    });
-    setRetrying(false);
-    if (res.ok) {
-      const { artifact_id } = await res.json() as { artifact_id: string };
-      setArtifactId(artifact_id);
-    }
-  }
+  }, [authLoading, authUser]);
 
   // ── Loading ───────────────────────────────────────────────────────
   if (pageState === 'loading') return null;
@@ -204,128 +95,6 @@ export default function PlanPage() {
     return <ConversationPlan initial={conversationPlan} />;
   }
 
-  // ── No plan in either flow: the new empty state (brief 169-plan-page, decision 2)
-  if (pageState === 'no-selection') {
-    return <ConversationPlan initial={{ status: 'no_choice', path: null, plan: null, generated_at: null }} />;
-  }
-
-  // ── has-artifact: hook-driven generation states ───────────────────
-  if (genPhase.phase === 'idle') {
-    return (
-      <GeneratingState
-        heading="Your Plan is being prepared."
-        description="This usually takes about a minute."
-      />
-    );
-  }
-
-  if (genPhase.phase === 'spinner') {
-    return (
-      <GeneratingState
-        heading="Your Plan is being prepared."
-        description={
-          genPhase.variant === 'early'
-            ? 'This usually takes about a minute.'
-            : 'Still working — this is taking a little longer than usual…'
-        }
-      />
-    );
-  }
-
-  if (genPhase.phase === 'come-back-later') {
-    return (
-      <GeneratingState
-        spinner={false}
-        description="Your plan is still being prepared. This is taking longer than expected — you can leave this page and come back in a few minutes. It’ll be here when it’s ready."
-      />
-    );
-  }
-
-  if (genPhase.phase === 'failed') {
-    return (
-      <MessageState
-        eyebrow="YOUR PLAN"
-        heading="Something went wrong."
-        body="We couldn’t generate your Plan. Please try again."
-        cta={
-          <PrimaryButton onClick={handleRetry} disabled={retrying}>
-            {retrying ? 'Retrying…' : 'Try again'}
-          </PrimaryButton>
-        }
-      />
-    );
-  }
-
-  // ── Ready ─────────────────────────────────────────────────────────
-  if (!plan) return null;
-
-  const { plan_frame, full_path, start_here, implement_bridge } = plan;
-
-  return (
-    <div className="flow-container">
-      <div className="scroll">
-
-        <div className="section cover">
-          <p className="eyebrow">Your Path Plan</p>
-        </div>
-
-        {/* Plan Frame */}
-        <div className="section">
-          <p className="eyebrow">PLAN FRAME</p>
-          <p>{plan_frame}</p>
-        </div>
-
-        {/* Full Path */}
-        <div className="section">
-            <p className="eyebrow">THE FULL PATH</p>
-            {full_path.map(phase => (
-              <ConstellationCard
-                key={phase.phase_number}
-                badge={phase.phase_number}
-                title={phase.name}
-                meta={phase.estimated_duration}
-              >
-                <p className="core-statement">{phase.outcome}</p>
-                <p className="evidence-analysis">{phase.body}</p>
-                {phase.milestones.length > 0 && (
-                  <div className="phase-milestones">
-                    <p className="card-sub-label">Milestones</p>
-                    {phase.milestones.map((m, mi) => (
-                      <div key={mi} className="phase-milestone-item">
-                        <span className="phase-milestone-dot" />
-                        <span>{m}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {phase.signatures_leaned_on.length > 0 && (
-                  <ChipRow items={phase.signatures_leaned_on} wrapperClassName="option-card-sigs" />
-                )}
-              </ConstellationCard>
-            ))}
-        </div>
-
-        {/* Start Here */}
-        <div className="section">
-          <p className="eyebrow">START HERE</p>
-          <div className="card">
-            {start_here.map((item, i) => (
-              <div key={i} className="start-here-action">
-                <p className="start-here-action-text">{item.action}</p>
-                <p className="start-here-action-why">{item.why}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Now Let's Implement It */}
-        <LimitsBlock
-          eyebrow="NOW LET’S IMPLEMENT IT"
-          body={implement_bridge}
-          cta={<PrimaryButton href="/mentor">Open the Mentor →</PrimaryButton>}
-        />
-
-      </div>
-    </div>
-  );
+  // ── No Plan yet: the empty state (brief 169-plan-page, decision 2)
+  return <ConversationPlan initial={{ status: 'no_choice', path: null, plan: null, generated_at: null }} />;
 }
