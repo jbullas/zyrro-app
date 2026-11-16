@@ -30,19 +30,17 @@ export default function PlanPage() {
         return;
       }
 
-      if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
-        const { data: entitlement } = await supabase
-          .from('entitlements')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product', 'onetime_payment')
-          .eq('status', 'active')
-          .maybeSingle();
+      const { data: entitlement } = await supabase
+        .from('entitlements')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('product', 'onetime_payment')
+        .eq('status', 'active')
+        .maybeSingle();
 
-        if (!entitlement) {
-          if (!cancelled) setPageState('unpaid');
-          return;
-        }
+      if (!entitlement) {
+        if (!cancelled) setPageState('unpaid');
+        return;
       }
 
       // #169: the Plan for the path chosen in the Path conversation. The

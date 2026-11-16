@@ -106,28 +106,26 @@ export default function PathPage() {
           return;
         }
 
-        if (process.env.NEXT_PUBLIC_OPEN_ACCESS !== 'true') {
-          const { data: entitlement } = await supabase
-            .from('entitlements')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('product', 'onetime_payment')
-            .eq('status', 'active')
-            .maybeSingle();
+        const { data: entitlement } = await supabase
+          .from('entitlements')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('product', 'onetime_payment')
+          .eq('status', 'active')
+          .maybeSingle();
 
-          if (!entitlement) {
-            if (!cancelled) {
-              // A locked projection (#162) carries reframe_teaser and the
-              // primary names in its hero; the full report has them as before.
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const content = reportArtifact.content as any;
-              setReframeTeaser(content?.reframe_teaser ?? null);
-              const primaries = reportArtifact.locked ? content?.hero?.primary : content?.primary_constellation;
-              setPrimaryConstellation(Array.isArray(primaries) ? primaries : []);
-              setPageState('unpaid');
-            }
-            return;
+        if (!entitlement) {
+          if (!cancelled) {
+            // A locked projection (#162) carries reframe_teaser and the
+            // primary names in its hero; the full report has them as before.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const content = reportArtifact.content as any;
+            setReframeTeaser(content?.reframe_teaser ?? null);
+            const primaries = reportArtifact.locked ? content?.hero?.primary : content?.primary_constellation;
+            setPrimaryConstellation(Array.isArray(primaries) ? primaries : []);
+            setPageState('unpaid');
           }
+          return;
         }
 
         if (!cancelled) setPageState('conversation');

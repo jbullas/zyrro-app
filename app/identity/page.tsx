@@ -147,14 +147,9 @@ export default function IdentityPage() {
         .eq('user_id', uid);
     }
 
-    // Mirrors app/path/page.tsx's entitlement gate exactly, including the
-    // NEXT_PUBLIC_OPEN_ACCESS bypass. Read-only: entitlement and checkout
-    // logic are unchanged.
+    // Mirrors app/path/page.tsx's entitlement gate exactly. Read-only:
+    // entitlement and checkout logic are unchanged.
     async function loadEntitlement(uid: string) {
-      if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') {
-        if (!cancelled) setEntitled(true);
-        return;
-      }
       const { data: entitlement } = await supabase
         .from('entitlements')
         .select('id')

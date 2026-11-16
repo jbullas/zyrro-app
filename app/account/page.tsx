@@ -143,30 +143,26 @@ export default function AccountPage() {
       const displayName = meta?.full_name ?? meta?.display_name ?? meta?.name ?? user.email ?? '';
       setName(displayName);
 
-      if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') {
-        setIsPaid(true);
-      } else {
-        // #162: with Path off, "paid" means holding the full Identity report,
-        // which the $49 entitlement also grants. Two products can both match,
-        // so limit(1) before maybeSingle().
-        const { data: entitlement } = PATH_ENABLED
-          ? await supabase
-              .from('entitlements')
-              .select('id')
-              .eq('user_id', user.id)
-              .eq('product', 'onetime_payment')
-              .eq('status', 'active')
-              .maybeSingle()
-          : await supabase
-              .from('entitlements')
-              .select('id')
-              .eq('user_id', user.id)
-              .in('product', ['identity_unlock', 'onetime_payment'])
-              .eq('status', 'active')
-              .limit(1)
-              .maybeSingle();
-        setIsPaid(!!entitlement);
-      }
+      // #162: with Path off, "paid" means holding the full Identity report,
+      // which the $49 entitlement also grants. Two products can both match,
+      // so limit(1) before maybeSingle().
+      const { data: entitlement } = PATH_ENABLED
+        ? await supabase
+            .from('entitlements')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product', 'onetime_payment')
+            .eq('status', 'active')
+            .maybeSingle()
+        : await supabase
+            .from('entitlements')
+            .select('id')
+            .eq('user_id', user.id)
+            .in('product', ['identity_unlock', 'onetime_payment'])
+            .eq('status', 'active')
+            .limit(1)
+            .maybeSingle();
+      setIsPaid(!!entitlement);
 
       setLoaded(true);
     }

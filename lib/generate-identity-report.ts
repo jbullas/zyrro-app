@@ -606,8 +606,6 @@ const LAYER_3_MAX_EVIDENCE_ITEMS = 3;
 const LAYER_3_SIGNATURE_MAX_TOKENS = 3000;
 const LAYER_3_REPORT_LEVEL_MAX_TOKENS = 2000;
 
-/** Layer 3 fields, also stripped from the generate-path-plan input (see omitLayer3Fields). */
-export const LAYER_3_FIELDS = ['signature_deep_dives', 'pairings', 'distinctive_pattern', 'pattern_to_notice'] as const;
 
 type EvidenceUnit = {
   quote_or_paraphrase?: unknown;

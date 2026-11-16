@@ -11,8 +11,6 @@ function createServiceClient() {
 }
 
 export async function hasEntitlement(userId: string, product: EntitlementProduct): Promise<boolean> {
-  // NEVER set NEXT_PUBLIC_OPEN_ACCESS on the production environment.
-  if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') return true;
   const supabase = createServiceClient();
   const { data, error } = await withDbRetry('hasEntitlement', () =>
     supabase
@@ -36,8 +34,6 @@ export async function hasPaidEntitlement(userId: string): Promise<boolean> {
 // #162: the full Identity report comes with either the $19 identity_unlock or
 // the $49 onetime_payment. Both rows can exist, so limit(1) before maybeSingle().
 export async function hasFullIdentityReport(userId: string): Promise<boolean> {
-  // NEVER set NEXT_PUBLIC_OPEN_ACCESS on the production environment.
-  if (process.env.NEXT_PUBLIC_OPEN_ACCESS === 'true') return true;
   const supabase = createServiceClient();
   const { data, error } = await withDbRetry('hasFullIdentityReport', () =>
     supabase
