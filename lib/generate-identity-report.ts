@@ -609,18 +609,6 @@ const LAYER_3_REPORT_LEVEL_MAX_TOKENS = 2000;
 /** Layer 3 fields, also stripped from the generate-path-plan input (see omitLayer3Fields). */
 export const LAYER_3_FIELDS = ['signature_deep_dives', 'pairings', 'distinctive_pattern', 'pattern_to_notice'] as const;
 
-/**
- * #154: copy of an identity report without the Layer 3 fields, for consumers
- * that send the whole report to a prompt and shouldn't grow by Layer 3's
- * size (generate-path-plan). Non-object input is returned unchanged.
- */
-export function omitLayer3Fields<T>(report: T): T {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return report;
-  const copy = { ...(report as Record<string, unknown>) };
-  for (const field of LAYER_3_FIELDS) delete copy[field];
-  return copy as T;
-}
-
 type EvidenceUnit = {
   quote_or_paraphrase?: unknown;
   source_question?: unknown;
