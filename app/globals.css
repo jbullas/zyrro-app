@@ -574,75 +574,6 @@ p {
   color: var(--color-text-secondary);
 }
 
-/* ── PATH OPTION CARD ── */
-.option-card-sigs {
-  padding: 10px 16px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.option-card-footer {
-  padding: 14px 16px;
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-}
-
-/* #143: checkbox-style select toggle, replacing the old select/deselect
-   button — reuses .btn-link's brand color (var(--color-grad-2)) via
-   accent-color rather than introducing a new color token. */
-.option-select-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-grad-2);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.option-select-toggle input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--color-grad-2);
-  cursor: pointer;
-}
-
-/* #143: inline comment + confirm section inside the selected candidate's
-   own card, replacing the old separate bottom-of-page card. */
-.option-card-confirm {
-  padding: 14px 16px;
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* ── PLAN PHASE CARD ── */
-.phase-milestones {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.phase-milestone-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-
-.phase-milestone-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  flex-shrink: 0;
-  margin-top: 7px;
-}
-
 /* ── START HERE ACTIONS ── */
 .start-here-action {
   padding-bottom: 14px;
@@ -1134,42 +1065,6 @@ p {
   border-bottom: 0.5px solid rgba(0,0,0,0.07);
 }
 
-.constellation-badge {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--gradient);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.constellation-badge-muted {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #6E6E6E;
-  flex-shrink: 0;
-}
-
-.constellation-header-info { flex: 1; min-width: 0; }
-
-.constellation-sig-meta {
-  font-size: 12px;
-  color: #6E6E6E;
-  margin-top: 2px;
-}
-
 .score-band-pill {
   font-size: 10px;
   font-weight: 700;
@@ -1195,143 +1090,11 @@ p {
   font-weight: 600;
 }
 
-.core-statement {
-  margin: 0 16px; /* was: 14px 16px 0 — vertical spacing now owned by .constellation-card-body > * + * */
-  padding: 12px 14px;
-  border-left: 3px solid #C60567;
-  background: #F7F6F3;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: #1E1E1E;
-  line-height: 1.45;
-}
-
-.evidence-analysis {
-  padding: 14px 16px 0;
-  font-size: 14px;
-  color: #6E6E6E;
-  line-height: 1.65;
-  /* no margin declared — horizontal inset already comes from the padding
-     above; margin-top is left to .constellation-card-body > * + * to own
-     when this isn't the first card child (an explicit margin: 0 here
-     would collide at equal specificity and win on source order, same
-     issue fixed for .tension-block/.scoring-chips). Falls back to the
-     initial 0 when it is the first child (e.g. /path), same net result. */
-}
-
-.tension-block {
-  margin-left: 16px; /* no margin-top declared — .constellation-card-body > * + *
-                         owns that; a `margin: 0 16px` shorthand here would set
-                         margin-top:0 at equal specificity and win on source order */
-  margin-right: 16px;
-  padding: 12px 14px;
-  border-left: 3px solid #FE5618;
-  background: rgba(254,86,24,0.05);
-  border-radius: 0 8px 8px 0;
-}
-
-.tension-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: #FE5618;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  display: block;
-  margin: 0 0 4px;
-}
-
 .tension-text {
   font-size: 13px;
   color: #6E6E6E;
   line-height: 1.55;
   margin: 0;
-}
-
-/* #145: Open Directions redesign — live_options previously rendered as a
-   .card-sub-label (tiny uppercase) + .evidence-analysis (muted) pair, both
-   styles meant for secondary/citation-style content. Now real primary
-   content the user has to read and compare, so it gets its own bordered
-   box instead. Not the bare .card class: nesting a full .card (white bg +
-   border + shadow) inside ConstellationCard's own .card would stack two
-   shadows on the same white background and look redundant. This scoped
-   variant keeps the same bordered-box language (border-radius, hairline
-   border, same border opacity .card itself uses) with a faint background
-   tint instead of a shadow, so it reads as nested rather than duplicated.
-   Horizontal margin matches the 16px inset already used by this card's
-   sibling elements (why_it_matters, the OPEN DIRECTIONS label) — vertical
-   spacing between boxes is left to .constellation-card-body > * + * (16px),
-   same as before. */
-.live-option-card {
-  margin: 0 16px;
-  padding: 12px 14px;
-  border: 0.5px solid rgba(0,0,0,0.07);
-  border-radius: 10px;
-  background: rgba(0,0,0,0.02);
-}
-
-.live-option-label {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  line-height: 1.45;
-  margin: 0 0 4px;
-}
-
-.live-option-context {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin: 0;
-}
-
-/* Shared stat-row base — display/gap/padding/border-top are identical
-   regardless of column count. Originally duplicated verbatim into a
-   separate .fit-stat-row class (#138 §6) rather than extracted, which was
-   the wrong call: caught during this session's own commit-prep review and
-   extracted here instead. .fit-stat-row below sets ONLY
-   grid-template-columns, a property .stat-row never touches — so there's no
-   cascade-tie risk between them (that risk is specifically about two
-   same-specificity classes fighting over the SAME property; these don't
-   overlap). Always combined with .stat-row in markup, never used alone. */
-.stat-row {
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  /* no margin-top declared — .constellation-card-body > * + * owns that;
-     an explicit margin-top: 0 here would win on source order at equal
-     specificity and cancel it. The border-top still provides its own
-     visual divider on top of that spacing. */
-  border-top: 0.5px solid rgba(0,0,0,0.07);
-}
-
-/* #138 §6: option cards' 2-box "Overall fit"/"Confidence" stat row —
-   combined with .stat-row in markup (`className="stat-row fit-stat-row"`). */
-.fit-stat-row { grid-template-columns: repeat(2, 1fr); }
-
-.score-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  background: rgba(0,0,0,0.04);
-  border-radius: 10px;
-}
-
-.score-chip-label {
-  font-size: 9px;
-  font-weight: 600;
-  color: #6E6E6E;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-align: center;
-}
-
-.score-chip-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1E1E1E;
 }
 
 /* ── How You Operate ── */
@@ -1389,18 +1152,6 @@ p {
 }
 .documentation em {
   font-style: italic;
-}
-
-/* ── Limits block ── */
-
-.limits-block {
-  background: #2D0A45;
-  border-radius: 14px;
-  margin: 20px 18px 24px;
-  padding: 24px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
 }
 
 /* ── ReframeCtaBlock — see
@@ -1474,54 +1225,6 @@ p {
   font-size: 20px;
   line-height: 1.4;
   color: #ffffff;
-}
-
-.limits-eyebrow {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.5);
-  margin: 0;
-}
-
-.limits-heading {
-  font-size: 20px;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.3;
-  margin: 0;
-}
-
-.limits-body {
-  font-size: 14px;
-  color: rgba(255,255,255,0.75);
-  line-height: 1.6;
-  margin: 0;
-}
-
-.limits-bullets {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.limits-bullet {
-  font-size: 14px;
-  color: rgba(255,255,255,0.75);
-  line-height: 1.5;
-  padding-left: 14px;
-  position: relative;
-}
-
-.limits-bullet::before {
-  content: '·';
-  position: absolute;
-  left: 0;
-  color: rgba(255,255,255,0.5);
 }
 
 /* ── MENTOR CHAT ── */
@@ -1904,13 +1607,6 @@ p {
 .selectable-row--negative.selected .selectable-row-check {
   background: var(--color-failure);
   border-color: var(--color-failure);
-}
-
-.selection-count {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin: 0;
 }
 
 /* ── HEADER NAV (#154): item states, brand, menu, avatar ── */
