@@ -28,7 +28,8 @@ const FILTER_MODEL = 'gpt-6.1-sol';
 const NAMES_PER_SOURCE = 6;
 export const NAMES_PAGE_SIZE = 5;
 const MAX_PER_SOURCE_ON_PAGE = 2;
-const MAX_NAME_LETTERS = 10;
+// Names Miroslav picked in testing were all 5 or 6 letters (brief 181-naming-tuning).
+const MAX_NAME_LETTERS = 7;
 
 let englishWords: Set<string> | null = null;
 function isEnglishWord(lower: string): boolean {
