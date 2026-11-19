@@ -1,45 +1,58 @@
-export const PROJECT_NAME_PROMPT = `You are Zyrro's Project Naming Engine.
+// #181 (brief 181-project-naming): naming the path the user chose in the Path
+// conversation. Three calls (lib/project-naming.ts): source words, names built
+// from them, and a filter. Code checks the names between the second and third
+// call and orders the survivors into pages of 5. The design comes from five
+// investigation rounds (.verification-runs/181-naming-*).
+//
+// No example names and no real brands in any prompt: examples get copied, and
+// a named brand gets imitated.
 
-You receive the user's chosen path as JSON: its name and description, exactly as already shown to them.
+/** Call 1 (gpt-6.1-sol): 4 to 6 concrete words central to the chosen path. */
+export const NAMING_SOURCE_WORDS_PROMPT = `You help name a project for a person using Zyrro. The project is the path the person has chosen for the next chapter of their working life. You receive that path as JSON: its name, what it is, what it would look like, its starting point, and anything the person asked to keep in mind about it.
 
-Your job is to generate 3 candidate names for this as a named Project — something the user can call this chapter of their life, not a tagline or slogan.
+Pick 4 to 6 concrete words central to where this person is heading on this path: things, places, activities or objects they will do or make on it.
 
-## NAMING FRAMEWORK
+Do not pick:
+- work or duties the path moves them away from, or hands to other people
+- how they are paid, or the admin around the work
+- abstract or generic words
+- words that only appear in passing
 
-Use Rich Barton's naming approach:
-- Favour rare, uncommon words over common ones. Avoid generic business or self-help vocabulary.
-- Favour high-scoring letters — x, y, z, q, j, k — where they read naturally. Do not force them in if the result sounds contrived.
-- One or two words. Should sound like something you could name a company, a project, or a chapter — not a sentence, not a slogan, not a hashtag.
-- Must be pronounceable and memorable.
+No two words may share a stem: each word must start differently from every other word in its first four letters.
 
-## EVIDENCE RULE
+Each word is a single English word. For each, give a one-line reason it is central to this path.
 
-Each name must be paired with a one-sentence rationale that ties it directly to the specific path described — what it actually is, not a generic quality anyone's path might share. The rationale must read as specific to this direction, not something that could apply to any path.
+Return valid JSON only, no commentary:
 
-## TONE
+{ "words": [ { "word": "", "reason": "" } ] }`;
 
-Precise, grounded, direct. Not mystical, not motivational, not cute.
+/** Call 2 (gpt-4.1, temperature 1.0): 6 names per source word. */
+export const NAMING_NAMES_PROMPT = `You make up names for a person's project: the path they have chosen for the next chapter of their working life. You receive a list of source words as JSON.
 
-## OUTPUT FORMAT
+For each source word, make 6 names. Build each name like this:
+- It starts with the beginning of its source word, spelled exactly as in that word. The kept part must read as the source word on its own, so a stranger can spot the word at first sight. Keep enough of the word for that: a fragment so short it could start many other words is not enough.
+- It adds only a short ending, so the result sounds like a name and is not a plain English word.
+- It is one word of two syllables or fewer.
+- The letters Z, X, Q, J and K are welcome, but only where the name still reads easily on first sight.
 
-Return valid JSON only. No markdown. No commentary outside the JSON.
+Return each name with the source word it was built from.
 
-Use this exact structure:
+Return valid JSON only, no commentary:
 
-{
-  "options": [
-    { "name": "", "rationale": "" },
-    { "name": "", "rationale": "" },
-    { "name": "", "rationale": "" }
-  ]
-}
+{ "names": [ { "name": "", "source_word": "" } ] }`;
 
-Before returning, verify:
-- options contains exactly 3 entries
-- each entry has both "name" and "rationale" present and non-empty
-- each rationale references something specific to the given description, not a generic quality
-- no two names are the same
+/** Call 3 (gpt-6.1-sol): only the names to drop, each with a reason. */
+export const NAMING_FILTER_PROMPT = `You check candidate names for a personal project before a person sees them.
 
-If any check fails: correct before returning.
+Drop a name only if:
+- it has a bad, rude or embarrassing meaning in English or in another major language, or
+- part of it reads as a rude or awkward word, or the whole name is easily misread or misheard as one, or
+- it is the same as or close to a well-known brand, company or product name.
 
-Now generate 3 Project name options from the provided path JSON.`;
+Do not judge quality, do not rank, and do not drop names for any other reason.
+
+Return valid JSON only, no commentary:
+
+{ "drop": [ { "name": "", "reason": "" } ] }
+
+Use an empty array if nothing should be dropped.`;

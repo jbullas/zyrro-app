@@ -18,9 +18,20 @@ type PathNamingProps = {
 // primary "Name this path" button and a Skip link. A suggestion is sent as its
 // tap; anything else typed is sent as the user's own name (the note), which
 // the server checks the same way (typedNameProblem) and saves on path_choice.
+//
+// #181: the message carries the whole ordered set, name only, shown 5 at a
+// time; "More names" shows the next 5 in their place and disappears when the
+// set runs out. Older messages carry 3 names with a rationale each and render
+// as before: all of them, with the rationale.
+const PAGE_SIZE = 5;
+
 export default function PathNaming({ choices, disabled, onSubmit }: PathNamingProps) {
   const [name, setName] = useState('');
+  const [page, setPage] = useState(0);
   const names = choices.names ?? [];
+  const paged = names.some(n => !n.rationale);
+  const shown = paged ? names.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) : names;
+  const hasMore = paged && (page + 1) * PAGE_SIZE < names.length;
   const skip = choices.mode === 'groups' ? choices.groups.find(g => g.id === 'name')?.options.find(o => o.id === 'skip') : undefined;
   const trimmed = name.replace(/\s+/g, ' ').trim();
   const suggestion = names.find(n => n.name === trimmed);
@@ -35,7 +46,7 @@ export default function PathNaming({ choices, disabled, onSubmit }: PathNamingPr
   return (
     <div className="flex flex-col gap-16">
       <div className="project-name-options">
-        {names.map(n => (
+        {shown.map(n => (
           <button
             key={n.id}
             type="button"
@@ -45,10 +56,15 @@ export default function PathNaming({ choices, disabled, onSubmit }: PathNamingPr
             disabled={disabled}
           >
             <div className="project-name-card-title">{n.name}</div>
-            <p className="project-name-card-rationale">{n.rationale}</p>
+            {n.rationale && <p className="project-name-card-rationale">{n.rationale}</p>}
           </button>
         ))}
       </div>
+      {hasMore && (
+        <div>
+          <LinkButton onClick={() => setPage(p => p + 1)} disabled={disabled}>More names</LinkButton>
+        </div>
+      )}
       <input
         className="input-field"
         type="text"

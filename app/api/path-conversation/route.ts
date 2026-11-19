@@ -28,7 +28,7 @@ import {
   toMessageView,
 } from '@/lib/path-conversation';
 import { choiceContent, NOTE_MAX_CHARS, SUMMARY_TAP_ID, SUMMARY_TAP_LABEL, SUMMARY_TAP_TURN, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
-import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsStateView, PATH_FLOW_TURN_CONFIG, redoStateView } from '@/lib/path-options';
+import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsStateView, PATH_FLOW_TURN_CONFIG, redoStateView, settleStrandedNaming } from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
 // the conversation id and the new message, or the tapped choices plus an
@@ -37,8 +37,9 @@ import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsState
 // card's choices and its one clarifying answer are accepted. Once the summary
 // is confirmed (brief 168-options), only taps on the options, the "what feels
 // off" question and the name suggestions are, each on the latest message.
-// The options generation runs in the background after the turn that starts
-// it (after()), so this matches the generation budget, like
+// The options generation, and the naming after a path is chosen (#181), run
+// in the background after the turn that starts them (after()), so this
+// matches the generation budget, like
 // app/api/path-options/route.ts (GENERATION_BUDGET_MS in lib/generation-budget.ts).
 export const maxDuration = 240;
 
@@ -71,6 +72,8 @@ export async function GET() {
   // Resumes a due generation that never started (a summary confirmed before
   // options existed) and flips a stranded one; never starts a second one.
   await ensureOptionsGeneration(supabase, existing.conversation);
+  // A naming run stranded past the budget ends without naming (#181).
+  await settleStrandedNaming(supabase, existing.conversation.id);
   return NextResponse.json(await conversationView(supabase, existing.conversation));
 }
 

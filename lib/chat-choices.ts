@@ -67,8 +67,10 @@ export type OptionsRoundView = {
   last_round: boolean;
 };
 
-// Name suggestions for the chosen path (purpose 'naming'); ids match the 'name' group's options.
-export type NameSuggestion = { id: string; name: string; rationale: string };
+// Name suggestions for the chosen path (purpose 'naming'); ids match the 'name'
+// group's options. Messages from #181 on carry the whole ordered set, name
+// only, shown 5 at a time; older messages carry 3 names with a rationale each.
+export type NameSuggestion = { id: string; name: string; rationale?: string };
 
 // A name the user writes themselves for the chosen path (sent as the naming
 // turn's note): trimmed, at most this long, no em or en dashes.
@@ -126,8 +128,8 @@ export type SummaryCard = {
 
 // preselected: ids already picked when the choices are shown (the card's
 // re-offered risk and time taps, filled with the current answers).
-// options_round: the options shown (purpose 'options'); names: the suggestions
-// with their rationale (purpose 'naming'). risk_text: on the summary card, the
+// options_round: the options shown (purpose 'options'); names: the name
+// suggestions (purpose 'naming'). risk_text: on the summary card, the
 // user's risk text in their own first person, prefilled in the field that
 // opens when they mark "Risk, limits and time" (brief 168-risk-note).
 type ChoiceBase = {

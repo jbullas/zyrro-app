@@ -46,8 +46,9 @@ type PathMessage = {
 
 type PathPhase = 'seeding' | 'conversation' | 'summary' | 'options' | 'chosen';
 
-// The options generation's state (brief 168-options): generating, failed or ready.
-type OptionsState = { status: 'generating' | 'failed' | 'ready' | null; round: number | null };
+// The options generation's state (brief 168-options): generating, failed or
+// ready; and the naming's after a path is chosen (#181).
+type OptionsState = { status: 'generating' | 'failed' | 'ready' | null; round: number | null; naming?: 'generating' | 'failed' | 'ready' | null };
 
 // The one redo (brief 168-guardrails-redo): used once started; in progress
 // until a path is chosen in it.
@@ -73,6 +74,7 @@ const AFTER_SUMMARY: ChoicePurpose[] = ['options', 'options_feedback', 'naming']
 const OPTIONS_POLL_MS = 3000;
 const OPTIONS_STATUS = 'Putting your three path options together. This takes about half a minute…';
 const NEW_OPTIONS_STATUS = 'Putting three new options together. This takes about half a minute…';
+const NAMES_STATUS = 'Finding names for this path. This takes about half a minute…';
 const SUMMARY_TAP_STATUS = 'Putting your summary together…';
 
 type PageState = 'loading' | 'not-started' | 'chat' | 'error';
@@ -175,26 +177,31 @@ export default function PathConversation() {
   }
 
   // While options are being put together (after "That's right" or "what
-  // feels off"), the thread shows a status line and reads the conversation
-  // back until the new round arrives. A reload lands here too and simply
-  // keeps waiting: the server never starts a second generation.
+  // feels off"), or names after a path is chosen (#181), the thread shows a
+  // status line and reads the conversation back until they arrive. A reload
+  // lands here too and simply keeps waiting: the server never starts a
+  // second generation.
   const generating = phase === 'options' && options.status === 'generating';
+  const namesComing = phase === 'chosen' && options.naming === 'generating';
+  const waiting = generating || namesComing;
   useEffect(() => {
-    if (!generating) return;
+    if (!waiting) return;
     let cancelled = false;
     const timer = setInterval(async () => {
       try {
         const res = await fetch('/api/path-conversation');
         if (!res.ok || cancelled) return;
         const data = await res.json() as ConversationResponse;
-        if (cancelled || data.conversation.options?.status === 'generating') return;
+        const c = data.conversation;
+        const still = (c.phase === 'options' && c.options?.status === 'generating') || (c.phase === 'chosen' && c.options?.naming === 'generating');
+        if (cancelled || still) return;
         showConversation(data);
       } catch {
         // Try again on the next tick.
       }
     }, OPTIONS_POLL_MS);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [generating]);
+  }, [waiting]);
 
   async function handleRetryOptions() {
     setRetrying(true);
@@ -260,9 +267,10 @@ export default function PathConversation() {
 
   // Naming just answered: the turn's reply carries no chosen path, so it is
   // read back once to show "Your path" (handleChoice drops the copy loaded
-  // before naming, which has no name yet).
+  // before naming, which has no name yet). Not while the names are still
+  // coming: the choose reply has no choices either (#181).
   const latestMessage = messages[messages.length - 1];
-  const namingDone = phase === 'chosen' && latestMessage?.role === 'assistant' && latestMessage.choices?.purpose !== 'naming';
+  const namingDone = phase === 'chosen' && !namesComing && latestMessage?.role === 'assistant' && latestMessage.choices?.purpose !== 'naming';
   useEffect(() => {
     if (!namingDone || chosen) return;
     let cancelled = false;
@@ -356,7 +364,7 @@ export default function PathConversation() {
       : purpose === 'summary' && choiceIds.includes('verdict:right') ? OPTIONS_STATUS
         : purpose === 'summary' || purpose === 'summary_clarify' ? 'Updating your summary…'
           : purpose === 'risk_time' ? 'Putting your summary together…'
-            : purpose === 'options' ? (choiceIds.includes('pick:none') ? 'One moment…' : 'Saving your choice and finding names for this path…')
+            : purpose === 'options' ? (choiceIds.includes('pick:none') ? 'One moment…' : 'Saving your choice…')
               : purpose === 'options_feedback' ? NEW_OPTIONS_STATUS
                 : purpose === 'naming' ? 'Saving…'
                   : 'Reading your answer…';
@@ -433,8 +441,8 @@ export default function PathConversation() {
       )}
       <ChatThread
         messages={messages}
-        loading={sending || generating}
-        statusText={sending ? status : waitingStatus}
+        loading={sending || waiting}
+        statusText={sending ? status : namesComing ? NAMES_STATUS : waitingStatus}
         input={input}
         onInputChange={setInput}
         onSend={handleSend}
@@ -487,7 +495,7 @@ export default function PathConversation() {
           // The end of Path: a code-owned "See your plan" button under the
           // last message once the path is chosen and named (brief
           // 169-plan-page, decision 2), old end messages included.
-          phase === 'chosen' && !message.choices && message.id === latest?.id && message.role === 'assistant' ? (
+          phase === 'chosen' && !namesComing && !message.choices && message.id === latest?.id && message.role === 'assistant' ? (
             <div className="mt-2">
               <PrimaryButton href="/plan">See your plan</PrimaryButton>
             </div>

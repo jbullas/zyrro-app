@@ -45,7 +45,7 @@ import {
 import { DIRECTION_CARD_LABELS, withMetaDefaults, type PathProfile } from '@/lib/path-profile';
 import { hasFirstPerson, pathSpecificStartWords, sentences, substanceShare, thirdPersonWord } from '@/lib/path-text-checks';
 import { PATH_OPTION_REPLACE_NOTE, PATH_OPTIONS_PROMPT } from '@/lib/prompts/path-options';
-import { PROJECT_NAME_PROMPT } from '@/lib/prompts/project-name';
+import { generateProjectNames } from '@/lib/project-naming';
 import { isCurrentSummary, loadUserSummary, quoteFound, resolveExcerpts, type RefIndex, type UserSummary } from '@/lib/user-summary';
 
 // #168, brief 168-options (Parts B, C and D): the three path options, the
@@ -66,16 +66,17 @@ import { isCurrentSummary, loadUserSummary, quoteFound, resolveExcerpts, type Re
 //   close or not for me per option, plus a note. The answer saves only the
 //   user's message and starts the next round's generation the same way.
 // - Choosing an option writes path_choice, moves the phase to chosen and
-//   offers three names (purpose 'naming', PROJECT_NAME_PROMPT) with a skip.
+//   replies at once that names are on the way. The naming runs in the
+//   background (#181, runNamingGeneration, lib/project-naming.ts), its state
+//   on path_choice.naming, and posts the names (purpose 'naming') as its own
+//   message, 5 at a time with "More names", a name of their own and a skip.
 //   The pick or skip is saved on path_choice.project_name; the reply shows
-//   the chosen path and one code-owned line that the plan comes next.
+//   the chosen path and one code-owned line that the plan comes next. If
+//   naming fails, the conversation ends without it and the Plan starts.
 
 // Model for the options (brief Part B item 8): switchable on its own.
 export const PATH_OPTIONS_MODEL = process.env.PATH_OPTIONS_MODEL || 'gpt-6.1-sol';
 const OPTIONS_TEMPERATURE = /^gpt-4/.test(PATH_OPTIONS_MODEL) ? 0.7 : undefined;
-
-// Names for the chosen path in this flow (the current /path naming route keeps its own model).
-const PATH_NAMES_MODEL = 'gpt-6.1-sol';
 
 // The first set plus two adjustment rounds (design doc, "If nothing lands").
 export const MAX_OPTIONS_ROUNDS = 3;
@@ -185,7 +186,13 @@ export type PathChoiceContent = {
   note?: string | null;
   // absent = not asked, null = skipped (same convention as path_report).
   project_name?: string | null;
+  // #181: the background naming after the choice. Absent on choices made
+  // before it (named inside the choose turn, or ended without names).
+  naming?: NamingState;
 };
+
+export type NamingStatus = 'generating' | 'ready' | 'failed';
+type NamingState = { status: NamingStatus; started_at: string };
 
 type OptionsRow = { id: string; status: string; content: OptionsContent; created_at: string };
 
@@ -926,33 +933,105 @@ function endMessage(option: StoredOption, projectName: string | null | undefined
   };
 }
 
-// ── Naming (brief Part D item 2) ───────────────────────────────────────────
+// ── Naming (#181, brief 181-project-naming) ─────────────────────────────────
+//
+// The choose turn replies at once and starts the naming in the background
+// (after()), its state on path_choice.naming: generating, then ready (the names
+// message posted) or failed (ended without naming, as when no names are
+// available, and the Plan started). Every change from generating is
+// status-guarded, so the run and the read-back's stranded flip settle it once.
 
-// The user's note with the choice goes into the description the prompt names
-// from (PROJECT_NAME_PROMPT is shared with the current /path naming, so its
-// input shape stays name and description).
-async function suggestNames(option: StoredOption, note: string | null, conversationId: string): Promise<{ names: NameSuggestion[] | null; tokens: number }> {
-  const description = [option.what_it_looks_like, option.starting_point, ...(note ? [`What they want to keep in mind about this path: ${note}`] : [])].join(' ');
-  const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: PROJECT_NAME_PROMPT },
-    { role: 'user', content: JSON.stringify({ name: option.name, description }) },
-  ];
-  let tokens = 0;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    // The newer models only accept their default temperature.
-    const r = await chatJson(messages, undefined, 'path names', PATH_NAMES_MODEL, conversationId);
-    tokens += r.tokens;
-    const list = Array.isArray(r.parsed?.options) ? r.parsed.options : [];
-    const names = list.flatMap((o, i) => {
-      const x = o && typeof o === 'object' ? (o as Record<string, unknown>) : null;
-      const name = str(x?.name);
-      const rationale = str(x?.rationale);
-      return name && rationale ? [{ id: `n${i + 1}`, name, rationale }] : [];
-    });
-    if (names.length === 3 && list.length === 3) return { names, tokens };
-    console.warn(`[path names] unusable suggestions (attempt ${attempt + 1})`);
+const NAMING_INTRO = 'Here are names you could give this path. Pick one, write your own, or skip and keep its descriptive name.';
+const NAMING_WAIT_REPLY = 'I’m putting together some names you could give it.';
+
+type ChoiceRow = { id: string; user_id: string; conversation_id: string; content: PathChoiceContent };
+
+function namingMessage(names: NameSuggestion[]): AssistantMessage {
+  return {
+    content: NAMING_INTRO,
+    choices: {
+      mode: 'groups',
+      purpose: 'naming',
+      // The whole ordered set, shown 5 at a time (components/PathNaming.tsx).
+      names,
+      // A suggestion, the skip, or a name of their own as the note
+      // (one of them; the typed name is checked in the naming turn).
+      groups: [{
+        id: 'name',
+        label: 'Which name do you want for this path?',
+        mode: 'single',
+        required: false,
+        options: [...names.map(n => ({ id: n.id, label: n.name })), { id: 'skip', label: 'Skip, keep the descriptive name' }],
+      }],
+      note: { placeholder: 'Or write your own', required_unless_picked: true },
+    } satisfies ChatChoiceSet,
+  };
+}
+
+/** Moves path_choice.naming on from generating; true when this call made the change. */
+async function settleNaming(supabase: SupabaseClient, row: ChoiceRow, status: Exclude<NamingStatus, 'generating'>): Promise<boolean> {
+  const { data, error } = await supabase.from('artifacts')
+    .update({ content: { ...row.content, naming: { ...row.content.naming!, status } } satisfies PathChoiceContent })
+    .eq('id', row.id)
+    .eq('content->naming->>status', 'generating')
+    .select('id');
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+/** Ends without naming, as when no names are available: the end message, then the Plan. Once. */
+async function endWithoutNaming(supabase: SupabaseClient, row: ChoiceRow): Promise<void> {
+  if (!(await settleNaming(supabase, row, 'failed'))) return;
+  const conversation = { id: row.conversation_id, user_id: row.user_id };
+  await insertAssistantMessage(supabase, conversation, endMessage(row.content.option, undefined));
+  await startPlan(supabase, conversation);
+  console.info(`[path names] conversation ${row.conversation_id}: ended without naming; plan start requested`);
+}
+
+/** Runs the naming for a path_choice row the choose turn created. Never throws. */
+export async function runNamingGeneration(choiceId: string): Promise<void> {
+  const supabase = createServiceClient();
+  let row: ChoiceRow | null = null;
+  try {
+    const { data, error } = await supabase.from('artifacts').select('id, user_id, conversation_id, content').eq('id', choiceId).single();
+    if (error || !data) throw error ?? new Error('path_choice row missing');
+    row = data as ChoiceRow;
+    if (row.content.naming?.status !== 'generating') return;
+    const started = Date.now();
+    const { names, tokens } = await generateProjectNames(row.content.option, row.content.note ?? null, row.conversation_id);
+    // Counted as before, outside the Path token limits.
+    try {
+      await addTokens(supabase, row.conversation_id, tokens);
+    } catch (err) {
+      console.error(`[path names] conversation ${row.conversation_id}: token count failed:`, err);
+    }
+    if (!names) return await endWithoutNaming(supabase, row);
+    // The message first: naming marked ready always has its message.
+    await insertAssistantMessage(supabase, { id: row.conversation_id, user_id: row.user_id }, namingMessage(names));
+    if (!(await settleNaming(supabase, row, 'ready'))) console.warn(`[path names] conversation ${row.conversation_id}: naming was no longer generating when its names arrived`);
+    console.info(`[path names] conversation ${row.conversation_id}: ${names.length} names posted (${tokens} tokens, ${Date.now() - started} ms)`);
+  } catch (err) {
+    console.error(`[path names] choice ${choiceId}: naming failed:`, err);
+    if (row) await endWithoutNaming(supabase, row).catch(e => console.error(`[path names] choice ${choiceId}: ending without naming failed:`, e));
   }
-  return { names: null, tokens };
+}
+
+/** Read-back: a naming run stranded past the generation budget ends without naming. */
+export async function settleStrandedNaming(supabase: SupabaseClient, conversationId: string): Promise<void> {
+  const { data, error } = await supabase.from('artifacts')
+    .select('id, user_id, conversation_id, content')
+    .eq('conversation_id', conversationId)
+    .eq('type', CHOICE_TYPE)
+    .eq('status', 'ready')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const row = data?.[0] as ChoiceRow | undefined;
+  const naming = row?.content.naming;
+  if (!row || naming?.status !== 'generating') return;
+  if (Date.now() - new Date(naming.started_at).getTime() <= GENERATION_BUDGET_MS + FLIP_GUARD_MS) return;
+  console.warn(`[path names] conversation ${conversationId}: stranded naming; ending without it`);
+  await endWithoutNaming(supabase, row);
 }
 
 // ── The turns in the options and chosen phases ─────────────────────────────
@@ -989,46 +1068,28 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
         round: content.round,
         note,
       };
-      const named = await suggestNames(option, note, conversation.id);
-      const assistant: AssistantMessage = named.names
-        ? {
-            content: `You chose **${option.name}**. Here are three names you could give this path. Pick one, or skip and keep its descriptive name.`,
-            choices: {
-              mode: 'groups',
-              purpose: 'naming',
-              names: named.names,
-              // A suggestion, the skip, or a name of their own as the note
-              // (one of them; the typed name is checked in the naming turn).
-              groups: [{
-                id: 'name',
-                label: 'Which name do you want for this path?',
-                mode: 'single',
-                required: false,
-                options: [...named.names.map(n => ({ id: n.id, label: n.name })), { id: 'skip', label: 'Skip, keep the descriptive name' }],
-              }],
-              note: { placeholder: 'Or write your own', required_unless_picked: true },
-            } satisfies ChatChoiceSet,
-          }
-        : endMessage(option, undefined);
+      // The reply comes at once; the names follow as their own message (#181).
       return {
         ok: true,
-        assistant,
-        tokens: named.tokens,
+        assistant: { content: `You chose **${option.name}**. ${NAMING_WAIT_REPLY}`, choices: null },
+        tokens: 0,
         commit: async () => {
-          const { error: insError } = await supabase.from('artifacts').insert({
+          const { data: inserted, error: insError } = await supabase.from('artifacts').insert({
             user_id: conversation.user_id,
             conversation_id: conversation.id,
             type: CHOICE_TYPE,
             status: 'ready',
             path_options_artifact_id: view.artifact_id,
-            content: choice,
-          });
+            content: { ...choice, naming: { status: 'generating', started_at: new Date().toISOString() } } satisfies PathChoiceContent,
+          }).select('id').single();
           if (insError) console.error('[path options] path_choice insert failed:', insError);
           const { error: phaseError } = await supabase.from('path_profiles').update({ phase: 'chosen' }).eq('conversation_id', conversation.id);
           if (phaseError) console.error('[path options] phase update failed:', phaseError);
-          // No name suggestions: the conversation ends here, so the Plan starts now.
-          if (!named.names) await startPlan(supabase, conversation);
-          console.info(`[path options] conversation ${conversation.id}: chose ${option.id} "${option.name}" (round ${content.round}, strongest ${choice.was_strongest_fit}); names ${named.names ? 'offered' : 'unavailable'}`);
+          if (inserted) {
+            const choiceId = inserted.id as string;
+            after(() => withPipelineDeadline(() => runNamingGeneration(choiceId)));
+          }
+          console.info(`[path options] conversation ${conversation.id}: chose ${option.id} "${option.name}" (round ${content.round}, strongest ${choice.was_strongest_fit}); naming started`);
         },
       };
     }
@@ -1107,6 +1168,8 @@ export type OptionsStateView = {
   status: 'generating' | 'failed' | 'ready' | null;
   round: number | null;
   choice: { name: string; project_name: string | null | undefined; was_strongest_fit: boolean } | null;
+  // #181: the background naming of the latest choice (null: none, or a choice made before it).
+  naming: NamingStatus | null;
 };
 
 // The "Your path" view on /path (Miroslav, 2026-11-09): the chosen option in
@@ -1178,5 +1241,6 @@ export async function optionsStateView(supabase: SupabaseClient, conversationId:
     status: (latest?.status as OptionsStateView['status']) ?? null,
     round: latest?.content?.round ?? null,
     choice: choice ? { name: choice.content.option.name, project_name: choice.content.project_name, was_strongest_fit: choice.content.was_strongest_fit } : null,
+    naming: choice?.content.naming?.status ?? null,
   };
 }
