@@ -9,6 +9,13 @@ type PathNamingProps = {
   choices: ChatChoiceSet;
   disabled?: boolean;
   onSubmit: (choiceIds: string[], note: string | null) => void;
+  // #182, naming from "Your path": the save button's label, links shown next
+  // to it (cancel, remove) and "New names" once the set runs out.
+  submitLabel?: string;
+  actions?: React.ReactNode;
+  onNewNames?: () => void;
+  // Shown instead of the cards while a fresh set is being made, or when it failed.
+  namesSlot?: React.ReactNode;
 };
 
 // #168 options (brief 168-options, Part D item 2 and Part E): naming the chosen
@@ -23,15 +30,20 @@ type PathNamingProps = {
 // time; "More names" shows the next 5 in their place and disappears when the
 // set runs out. Older messages carry 3 names with a rationale each and render
 // as before: all of them, with the rationale.
+//
+// #182: also used on "Your path" to name the project later, with its own save
+// label, cancel and remove links, and "New names" in place of "More names"
+// once the set runs out. The parent remounts it (key) for a new set.
 const PAGE_SIZE = 5;
 
-export default function PathNaming({ choices, disabled, onSubmit }: PathNamingProps) {
+export default function PathNaming({ choices, disabled, onSubmit, submitLabel, actions, onNewNames, namesSlot }: PathNamingProps) {
   const [name, setName] = useState('');
   const [page, setPage] = useState(0);
   const names = choices.names ?? [];
   const paged = names.some(n => !n.rationale);
   const shown = paged ? names.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) : names;
   const hasMore = paged && (page + 1) * PAGE_SIZE < names.length;
+  const showNewNames = !!onNewNames && !hasMore && !namesSlot;
   const skip = choices.mode === 'groups' ? choices.groups.find(g => g.id === 'name')?.options.find(o => o.id === 'skip') : undefined;
   const trimmed = name.replace(/\s+/g, ' ').trim();
   const suggestion = names.find(n => n.name === trimmed);
@@ -45,7 +57,7 @@ export default function PathNaming({ choices, disabled, onSubmit }: PathNamingPr
 
   return (
     <div className="flex flex-col gap-16">
-      <div className="project-name-options">
+      {namesSlot ?? <div className="project-name-options">
         {shown.map(n => (
           <button
             key={n.id}
@@ -59,10 +71,15 @@ export default function PathNaming({ choices, disabled, onSubmit }: PathNamingPr
             {n.rationale && <p className="project-name-card-rationale">{n.rationale}</p>}
           </button>
         ))}
-      </div>
-      {hasMore && (
+      </div>}
+      {hasMore && !namesSlot && (
         <div>
           <LinkButton onClick={() => setPage(p => p + 1)} disabled={disabled}>More names</LinkButton>
+        </div>
+      )}
+      {showNewNames && (
+        <div>
+          <LinkButton onClick={onNewNames} disabled={disabled}>New names</LinkButton>
         </div>
       )}
       <input
@@ -79,13 +96,14 @@ export default function PathNaming({ choices, disabled, onSubmit }: PathNamingPr
       {problem === 'dash' && <p className="form-error">Use a hyphen or a space instead of a long dash.</p>}
       <div className="dialog-actions">
         <PrimaryButton onClick={submit} disabled={disabled || !trimmed || !!problem}>
-          Name this path
+          {submitLabel ?? 'Name this path'}
         </PrimaryButton>
         {skip && (
           <LinkButton onClick={() => onSubmit(['name:skip'], null)} disabled={disabled}>
             {skip.label}
           </LinkButton>
         )}
+        {actions}
       </div>
     </div>
   );

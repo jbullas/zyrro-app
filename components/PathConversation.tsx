@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import MessageState from '@/components/MessageState';
 import PrimaryButton from '@/components/PrimaryButton';
 import LinkButton from '@/components/LinkButton';
@@ -16,6 +16,7 @@ import {
   choiceAnswerRows,
   choiceContent,
   MESSAGE_MAX_CHARS,
+  NAMES_STATUS,
   noteFromContent,
   optionsRetryLimitText,
   PATH_REFUSAL_FALLBACK,
@@ -74,7 +75,6 @@ const AFTER_SUMMARY: ChoicePurpose[] = ['options', 'options_feedback', 'naming']
 const OPTIONS_POLL_MS = 3000;
 const OPTIONS_STATUS = 'Putting your three path options together. This takes about half a minute…';
 const NEW_OPTIONS_STATUS = 'Putting three new options together. This takes about half a minute…';
-const NAMES_STATUS = 'Finding names for this path. This takes about half a minute…';
 const SUMMARY_TAP_STATUS = 'Putting your summary together…';
 
 type PageState = 'loading' | 'not-started' | 'chat' | 'error';
@@ -164,7 +164,8 @@ export default function PathConversation() {
   const [redoError, setRedoError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function showConversation(data: ConversationResponse) {
+  // Stable (only state setters): "Your path" naming polls with it (#182).
+  const showConversation = useCallback((data: ConversationResponse) => {
     setRedo(data.conversation.redo ?? { used: false, in_progress: false });
     setTurns(data.conversation.turns ?? 0);
     setConversationId(data.conversation.id);
@@ -174,7 +175,7 @@ export default function PathConversation() {
     setChosen(data.conversation.chosen ?? null);
     setMessages(data.messages);
     setPageState('chat');
-  }
+  }, []);
 
   // While options are being put together (after "That's right" or "what
   // feels off"), or names after a path is chosen (#181), the thread shows a
@@ -201,7 +202,7 @@ export default function PathConversation() {
       }
     }, OPTIONS_POLL_MS);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [waiting]);
+  }, [waiting, showConversation]);
 
   async function handleRetryOptions() {
     setRetrying(true);
@@ -263,7 +264,7 @@ export default function PathConversation() {
     })().catch(() => { if (!cancelled) setPageState('error'); });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [showConversation]);
 
   // Naming just answered: the turn's reply carries no chosen path, so it is
   // read back once to show "Your path" (handleChoice drops the copy loaded
@@ -414,6 +415,8 @@ export default function PathConversation() {
         onRedo={handleRedo}
         redoStarting={redoStarting}
         redoError={redoError}
+        conversationId={conversationId ?? undefined}
+        onConversation={showConversation as (data: unknown) => void}
       />
     );
   }

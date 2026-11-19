@@ -5,6 +5,7 @@ import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
 import LinkButton from '@/components/LinkButton';
 import { PathOptionCard } from '@/components/PathOptionsRound';
+import PathProjectName, { type LaterNames } from '@/components/PathProjectName';
 import type { PathOptionView } from '@/lib/chat-choices';
 
 // "Your path" on /path once a path is chosen and named (Miroslav, 2026-11-09):
@@ -12,8 +13,13 @@ import type { PathOptionView } from '@/lib/chat-choices';
 // the round it was chosen from folded away to reread, and a link to the
 // conversation. Existing components and classes only.
 
+// #182: name is the path's descriptive name (the heading); project_name the
+// user's project name on it, a line under the heading when set; later_names
+// what naming the project from here offers.
 export type ChosenPath = {
   name: string;
+  project_name: string | null;
+  later_names?: LaterNames | null;
   option: PathOptionView;
   was_strongest_fit: boolean;
   why_strongest: string | null;
@@ -35,6 +41,8 @@ export default function PathChosen({
   onRedo,
   redoStarting,
   redoError,
+  conversationId,
+  onConversation,
 }: {
   chosen: ChosenPath;
   onViewConversation: () => void;
@@ -42,6 +50,9 @@ export default function PathChosen({
   onRedo?: () => void;
   redoStarting?: boolean;
   redoError?: string;
+  // #182: naming the project from here (hidden while a fresh start is in progress).
+  conversationId?: string;
+  onConversation?: (data: unknown) => void;
 }) {
   const [othersOpen, setOthersOpen] = useState(false);
   return (
@@ -50,6 +61,17 @@ export default function PathChosen({
         <div className="section cover">
           <p className="eyebrow">YOUR PATH</p>
           <h1 className="section-title">{chosen.name}</h1>
+          <div className="flex flex-col gap-8">
+            {chosen.project_name && <p className="project-name-card-title">{chosen.project_name}</p>}
+            {conversationId && onConversation && !redo?.in_progress && (
+              <PathProjectName
+                conversationId={conversationId}
+                projectName={chosen.project_name}
+                laterNames={chosen.later_names ?? null}
+                onConversation={onConversation}
+              />
+            )}
+          </div>
         </div>
 
         <div className="section flex flex-col gap-16">

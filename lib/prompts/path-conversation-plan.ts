@@ -32,7 +32,7 @@ LENGTHS
 frame at most 300 characters. Each action: title a few words, at most 60 characters; what, the one concrete thing to do, at most 200; done_when, the real result they can point to, at most 150. Each after-that step at most 250. Each milestone: title a few words, at most 50 characters, on every milestone but the last; description at most 300.
 
 INPUT
-A JSON object: { "chosen_path": { "name", "option_name", "what_it_is", "what_it_looks_like", "why_it_fits", "starting_point", "what_it_costs", "form", "who_pays" }, "note_at_choice": string or null, "their_risk_words": [string], "tapped": { "readiness", "at_stake", "limits", "hours" }, "deadline_context": string or null, "summary": { "how_zyrro_sees_you", "what_you_want", "direction", "must_haves", "must_avoids" }, "hours_this_week": { "from": number, "to": number or null } }.
+A JSON object: { "chosen_path": { "name", "what_it_is", "what_it_looks_like", "why_it_fits", "starting_point", "what_it_costs", "form", "who_pays" }, "note_at_choice": string or null, "their_risk_words": [string], "tapped": { "readiness", "at_stake", "limits", "hours" }, "deadline_context": string or null, "summary": { "how_zyrro_sees_you", "what_you_want", "direction", "must_haves", "must_avoids" }, "hours_this_week": { "from": number, "to": number or null } }.
 
 OUTPUT
 A JSON object only: { "frame": string, "this_week": [ { "title": string, "what": string, "done_when": string, "effort_hours": number } ], "after_that": [string], "milestones": [ { "title": string, "description": string } ] }, where the last milestone is { "description": string } only. effort_hours is your honest estimate for that action, in hours, to the nearest half hour.`;

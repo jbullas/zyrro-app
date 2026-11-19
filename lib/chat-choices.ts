@@ -176,7 +176,19 @@ export const PATH_REFUSAL_TEXT: Record<string, string> = {
   redo_used: 'You’ve already used your one fresh start.',
   redo_not_available: 'A fresh start isn’t available right now. Refresh the page to see where you are.',
   summary_not_yet: 'Your summary isn’t ready yet. Keep going a little longer.',
+  names_not_available: 'Naming your project isn’t available right now. Refresh the page to see where you are.',
 };
+
+/** The waiting line while names are made: after the choice (#181) and on "Your path" (#182). */
+export const NAMES_STATUS = 'Finding names for this path. This takes about half a minute…';
+
+/** The fresh name set limit's line (#182): 3 per rolling 24 hours, with the real wait. */
+export function namesLimitText(minutes: number): string {
+  const wait = minutes >= 60
+    ? `${Math.round(minutes / 60)} ${Math.round(minutes / 60) === 1 ? 'hour' : 'hours'}`
+    : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  return `I’ve put together new names for you three times today. I can make more in about ${wait}.`;
+}
 export const PATH_REFUSAL_FALLBACK = 'Couldn’t send that. Try again.';
 
 /** The options retry limit's line (brief 168-guardrails-redo). */

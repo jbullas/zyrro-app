@@ -171,7 +171,10 @@ export async function runPlanGeneration(artifactId: string): Promise<void> {
 
 export type PlanView = {
   status: 'no_choice' | 'naming' | 'generating' | 'failed' | 'ready';
-  path: { name: string; what_it_is: string | null; in_your_words: string | null } | null;
+  // #182: name is the path's descriptive name (the heading); project_name is
+  // the user's project name, shown under it when set (read live, so a rename
+  // shows at once).
+  path: { name: string; project_name: string | null; what_it_is: string | null; in_your_words: string | null } | null;
   plan: DraftPlan | null;
   // When the Plan was generated (no longer used for a due date).
   generated_at: string | null;
@@ -184,7 +187,8 @@ export async function planView(supabase: SupabaseClient, conversationId: string)
   const c = choice.content;
   const note = c.note?.trim();
   const path = {
-    name: c.project_name || c.option.name,
+    name: c.option.name,
+    project_name: c.project_name || null,
     what_it_is: c.option.what_it_is ?? null,
     // The note at choice exactly as the user wrote it: it is written to Zyrro
     // ("Help me…"), so a pronoun swap would break it (Miroslav, 2026-11-09).

@@ -28,7 +28,19 @@ import {
   toMessageView,
 } from '@/lib/path-conversation';
 import { choiceContent, NOTE_MAX_CHARS, SUMMARY_TAP_ID, SUMMARY_TAP_LABEL, SUMMARY_TAP_TURN, validateChoiceAnswer, type ChatChoiceSet, type ChoicePurpose } from '@/lib/chat-choices';
-import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsStateView, PATH_FLOW_TURN_CONFIG, redoStateView, settleStrandedNaming } from '@/lib/path-options';
+import {
+  chosenPathView,
+  ensureOptionsGeneration,
+  laterNamesView,
+  optionsRetryWait,
+  optionsStateView,
+  PATH_FLOW_TURN_CONFIG,
+  redoStateView,
+  saveLaterProjectName,
+  settleStrandedLaterNaming,
+  settleStrandedNaming,
+  startLaterNaming,
+} from '@/lib/path-options';
 
 // #168: the Path conversation, owned by the server. The browser sends only
 // the conversation id and the new message, or the tapped choices plus an
@@ -44,15 +56,17 @@ import { chosenPathView, ensureOptionsGeneration, optionsRetryWait, optionsState
 export const maxDuration = 240;
 
 async function conversationView(supabase: SupabaseClient, conversation: ConversationRow) {
-  const [messages, profileRow, options, chosen] = await Promise.all([
+  const [messages, profileRow, options, chosen, laterNames] = await Promise.all([
     listConversationMessages(supabase, conversation.id),
     getProfileRow(supabase, conversation.id),
     optionsStateView(supabase, conversation.id),
     chosenPathView(supabase, conversation.id),
+    laterNamesView(supabase, conversation.id),
   ]);
   const redo = await redoStateView(supabase, conversation.id, profileRow?.redo_started_at ?? null);
   return {
-    conversation: { id: conversation.id, ...pathState(profileRow), options, chosen, redo },
+    // later_names (#182): the names "Your path" offers for the project name.
+    conversation: { id: conversation.id, ...pathState(profileRow), options, chosen: chosen && { ...chosen, later_names: laterNames }, redo },
     messages: messages.map(toMessageView),
   };
 }
@@ -72,8 +86,10 @@ export async function GET() {
   // Resumes a due generation that never started (a summary confirmed before
   // options existed) and flips a stranded one; never starts a second one.
   await ensureOptionsGeneration(supabase, existing.conversation);
-  // A naming run stranded past the budget ends without naming (#181).
+  // A naming run stranded past the budget ends without naming (#181); a fresh
+  // name set from "Your path" stranded past it is marked failed (#182).
   await settleStrandedNaming(supabase, existing.conversation.id);
+  await settleStrandedLaterNaming(supabase, existing.conversation.id);
   return NextResponse.json(await conversationView(supabase, existing.conversation));
 }
 
@@ -82,7 +98,10 @@ type PostBody =
   | { action: 'message'; conversation_id: string; text: string }
   | { action: 'choice'; conversation_id: string; message_id: string; choice_ids?: string[]; note?: string; risk_text?: string }
   | { action: 'options_retry'; conversation_id: string }
-  | { action: 'redo'; conversation_id: string };
+  | { action: 'redo'; conversation_id: string }
+  // #182: the project name from "Your path": start a fresh name set, or save a name (null removes it).
+  | { action: 'name_path_names'; conversation_id: string }
+  | { action: 'name_path_save'; conversation_id: string; name: string | null };
 
 export async function POST(req: NextRequest) {
   let body: PostBody;
@@ -96,6 +115,7 @@ export async function POST(req: NextRequest) {
     if (body.action === 'start') return await start();
     if (body.action === 'options_retry') return await retryOptions();
     if (body.action === 'redo') return await redo();
+    if (body.action === 'name_path_names' || body.action === 'name_path_save') return await nameLater(body);
 
     if (body.action === 'message' || body.action === 'choice') {
       if (typeof body.conversation_id !== 'string' || !body.conversation_id) {
@@ -125,6 +145,33 @@ async function turnResponse(result: TurnResult, conversationId: string) {
     ...pathState(row),
     options,
   });
+}
+
+// #182: the project name from "Your path", for the signed-in user's own
+// conversation only (the id sent must be theirs). A fresh name set runs in
+// the background (3 per user per rolling 24 hours); a save writes only
+// path_choice.project_name, never the Plan. Answers with the read-back.
+async function nameLater(body: Extract<PostBody, { action: 'name_path_names' | 'name_path_save' }>) {
+  const auth = await requireEntitledUser(PATH_ENTITLEMENT);
+  if (!auth.ok) return failure(auth);
+  const supabase = createServiceClient();
+  const existing = await getPathConversation(supabase, auth.userId);
+  if (!existing || body.conversation_id !== existing.conversation.id) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+  const id = existing.conversation.id;
+  if (body.action === 'name_path_names') {
+    const started = await startLaterNaming(supabase, id);
+    if (!started.ok) {
+      return NextResponse.json(
+        { error: started.error, ...(started.retry_in_minutes !== undefined && { retry_in_minutes: started.retry_in_minutes }) },
+        { status: started.error === 'names_limited' ? 429 : 409 },
+      );
+    }
+  } else {
+    if (body.name !== null && typeof body.name !== 'string') return NextResponse.json({ error: 'invalid_name' }, { status: 400 });
+    const saved = await saveLaterProjectName(supabase, id, body.name);
+    if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.error === 'invalid_name' ? 400 : 409 });
+  }
+  return NextResponse.json(await conversationView(supabase, existing.conversation));
 }
 
 // After a failed options generation: starts that round again. Refused while

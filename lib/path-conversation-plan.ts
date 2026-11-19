@@ -62,9 +62,10 @@ export function planInput(choice: PathChoiceContent, profile: PathProfile, card:
   const v = profile.risk_time.value;
   const p = profile.pushing_now.value;
   return {
+    // #182 (option D): the path's descriptive name only, never the project
+    // name, so renaming the project can't leave the Plan text stale.
     chosen_path: {
-      name: choice.project_name || o.name,
-      option_name: o.name,
+      name: o.name,
       what_it_is: o.what_it_is ?? null,
       what_it_looks_like: o.what_it_looks_like,
       why_it_fits: o.why_it_fits,

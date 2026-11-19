@@ -189,10 +189,47 @@ export type PathChoiceContent = {
   // #181: the background naming after the choice. Absent on choices made
   // before it (named inside the choose turn, or ended without names).
   naming?: NamingState;
+  // #182: naming later from "Your path": the latest fresh set and when each
+  // fresh set was started (the rate limit counts those).
+  later_naming?: LaterNaming;
+  // #182: bumped by every write to this content (writeChoiceContent), so two
+  // writers can't overwrite each other's change. Absent until the first one.
+  version?: number;
 };
 
 export type NamingStatus = 'generating' | 'ready' | 'failed';
 type NamingState = { status: NamingStatus; started_at: string };
+export type LaterNaming = { status: NamingStatus; started_at: string; names: NameSuggestion[]; generated_at: string[] };
+
+/**
+ * The one way to change a path_choice's content (#182): reads it, applies
+ * `change` and writes it only if nobody wrote in between (content.version),
+ * retrying on a clash. `change` returns null to write nothing. Returns the
+ * content written, or null when nothing was.
+ */
+async function writeChoiceContent(
+  supabase: SupabaseClient,
+  choiceId: string,
+  change: (current: PathChoiceContent) => PathChoiceContent | null,
+): Promise<PathChoiceContent | null> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: row, error } = await supabase.from('artifacts').select('content').eq('id', choiceId).single();
+    if (error || !row) throw error ?? new Error('path_choice row missing');
+    const current = row.content as PathChoiceContent;
+    const next = change(current);
+    if (!next) return null;
+    const version = current.version ?? 0;
+    const written: PathChoiceContent = { ...next, version: version + 1 };
+    const query = supabase.from('artifacts').update({ content: written }).eq('id', choiceId);
+    const { data, error: upError } = await (current.version === undefined
+      ? query.is('content->>version', null)
+      : query.eq('content->>version', String(version))
+    ).select('id');
+    if (upError) throw upError;
+    if ((data ?? []).length) return written;
+  }
+  throw new Error(`path_choice ${choiceId}: content kept changing; write gave up`);
+}
 
 type OptionsRow = { id: string; status: string; content: OptionsContent; created_at: string };
 
@@ -940,9 +977,13 @@ function endMessage(option: StoredOption, projectName: string | null | undefined
 // message posted) or failed (ended without naming, as when no names are
 // available, and the Plan started). Every change from generating is
 // status-guarded, so the run and the read-back's stranded flip settle it once.
+//
+// #182: the name is the project's, built on the path (the chosen option keeps
+// its descriptive name), and it can be given, changed or removed later from
+// "Your path" (runLaterNaming, below). Saved messages keep their old wording.
 
-const NAMING_INTRO = 'Here are names you could give this path. Pick one, write your own, or skip and keep its descriptive name.';
-const NAMING_WAIT_REPLY = 'I’m putting together some names you could give it.';
+const NAMING_INTRO = 'Want to give this a project name? Here are some ideas. Pick one, write your own, or skip for now.';
+const NAMING_WAIT_REPLY = 'I’m putting together some ideas for a project name.';
 
 type ChoiceRow = { id: string; user_id: string; conversation_id: string; content: PathChoiceContent };
 
@@ -958,10 +999,10 @@ function namingMessage(names: NameSuggestion[]): AssistantMessage {
       // (one of them; the typed name is checked in the naming turn).
       groups: [{
         id: 'name',
-        label: 'Which name do you want for this path?',
+        label: 'Which project name do you want?',
         mode: 'single',
         required: false,
-        options: [...names.map(n => ({ id: n.id, label: n.name })), { id: 'skip', label: 'Skip, keep the descriptive name' }],
+        options: [...names.map(n => ({ id: n.id, label: n.name })), { id: 'skip', label: 'Skip for now' }],
       }],
       note: { placeholder: 'Or write your own', required_unless_picked: true },
     } satisfies ChatChoiceSet,
@@ -970,13 +1011,24 @@ function namingMessage(names: NameSuggestion[]): AssistantMessage {
 
 /** Moves path_choice.naming on from generating; true when this call made the change. */
 async function settleNaming(supabase: SupabaseClient, row: ChoiceRow, status: Exclude<NamingStatus, 'generating'>): Promise<boolean> {
-  const { data, error } = await supabase.from('artifacts')
-    .update({ content: { ...row.content, naming: { ...row.content.naming!, status } } satisfies PathChoiceContent })
-    .eq('id', row.id)
-    .eq('content->naming->>status', 'generating')
-    .select('id');
-  if (error) throw error;
-  return (data ?? []).length > 0;
+  const written = await writeChoiceContent(supabase, row.id, c =>
+    c.naming?.status === 'generating' ? { ...c, naming: { ...c.naming, status } } : null);
+  return !!written;
+}
+
+/**
+ * The shared core of both namings (#182): one name set for a chosen path,
+ * its tokens counted as naming always has been, outside the Path token
+ * limits. Null names: fewer than a page survived, or a call failed twice.
+ */
+async function nameSetFor(supabase: SupabaseClient, row: ChoiceRow): Promise<{ names: NameSuggestion[] | null; tokens: number }> {
+  const { names, tokens } = await generateProjectNames(row.content.option, row.content.note ?? null, row.conversation_id);
+  try {
+    await addTokens(supabase, row.conversation_id, tokens);
+  } catch (err) {
+    console.error(`[path names] conversation ${row.conversation_id}: token count failed:`, err);
+  }
+  return { names, tokens };
 }
 
 /** Ends without naming, as when no names are available: the end message, then the Plan. Once. */
@@ -998,13 +1050,7 @@ export async function runNamingGeneration(choiceId: string): Promise<void> {
     row = data as ChoiceRow;
     if (row.content.naming?.status !== 'generating') return;
     const started = Date.now();
-    const { names, tokens } = await generateProjectNames(row.content.option, row.content.note ?? null, row.conversation_id);
-    // Counted as before, outside the Path token limits.
-    try {
-      await addTokens(supabase, row.conversation_id, tokens);
-    } catch (err) {
-      console.error(`[path names] conversation ${row.conversation_id}: token count failed:`, err);
-    }
+    const { names, tokens } = await nameSetFor(supabase, row);
     if (!names) return await endWithoutNaming(supabase, row);
     // The message first: naming marked ready always has its message.
     await insertAssistantMessage(supabase, { id: row.conversation_id, user_id: row.user_id }, namingMessage(names));
@@ -1032,6 +1078,175 @@ export async function settleStrandedNaming(supabase: SupabaseClient, conversatio
   if (Date.now() - new Date(naming.started_at).getTime() <= GENERATION_BUDGET_MS + FLIP_GUARD_MS) return;
   console.warn(`[path names] conversation ${conversationId}: stranded naming; ending without it`);
   await endWithoutNaming(supabase, row);
+}
+
+// ── Naming later, from "Your path" (#182, brief 182-name-path-later) ────────
+//
+// The project name can be given, changed or removed at any time after the
+// conversation's own naming step is done. The names offered are the choice's
+// saved set when it's the #181 kind (no rationales), else a fresh set made in
+// the background by the same core as the choice's naming, stored on
+// path_choice.later_naming. Nothing is posted into the conversation and the
+// Plan is never touched. Fresh sets are rate limited per user.
+
+export const LATER_NAMES_LIMIT = 3;
+const LATER_NAMES_WINDOW_MS = 24 * 60 * 60_000;
+
+// What "Your path" needs to offer names: the set to show (empty when a fresh
+// one is needed) and the state of a fresh set, if one was ever asked for.
+export type LaterNamesView = { status: NamingStatus | null; names: NameSuggestion[] };
+
+export type LaterNamingRefusal = 'names_not_available' | 'names_limited' | 'invalid_name';
+
+async function latestChoiceRow(supabase: SupabaseClient, conversationId: string): Promise<(ChoiceRow & { created_at: string }) | null> {
+  const { data, error } = await supabase.from('artifacts')
+    .select('id, user_id, conversation_id, content, created_at')
+    .eq('conversation_id', conversationId)
+    .eq('type', CHOICE_TYPE)
+    .eq('status', 'ready')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0] as (ChoiceRow & { created_at: string }) | undefined) ?? null;
+}
+
+/** The names the conversation offered for this choice, when they're the #181 kind (names only); else none. */
+async function choiceNameSet(supabase: SupabaseClient, conversationId: string, choiceCreatedAt: string): Promise<NameSuggestion[]> {
+  const { data, error } = await supabase.from('messages')
+    .select('choices')
+    .eq('conversation_id', conversationId)
+    .eq('role', 'assistant')
+    .gte('created_at', choiceCreatedAt)
+    .not('choices', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const names = (data ?? []).map(m => m.choices as ChatChoiceSet).find(c => c?.purpose === 'naming')?.names ?? [];
+  return names.length && names.every(n => !n.rationale) ? names : [];
+}
+
+/** The names to offer on "Your path": the latest fresh set, else the choice's own set. */
+export async function laterNamesView(supabase: SupabaseClient, conversationId: string): Promise<LaterNamesView | null> {
+  const row = await latestChoiceRow(supabase, conversationId);
+  if (!row) return null;
+  const later = row.content.later_naming;
+  if (later?.names.length) return { status: later.status, names: later.names };
+  return { status: later?.status ?? null, names: await choiceNameSet(supabase, conversationId, row.created_at) };
+}
+
+/**
+ * Whether the project name can be changed from "Your path" now: a path is
+ * chosen, the conversation's own naming step is over and no fresh start is
+ * in progress. The choice row when it can, else null.
+ */
+async function laterNamingChoice(supabase: SupabaseClient, conversationId: string): Promise<ChoiceRow | null> {
+  const [profile, row, latest] = await Promise.all([
+    getProfileRow(supabase, conversationId),
+    latestChoiceRow(supabase, conversationId),
+    listConversationMessages(supabase, conversationId, 1),
+  ]);
+  // A fresh start in progress has moved the phase back (summary or options).
+  if (!row || profile?.phase !== 'chosen') return null;
+  if (row.content.naming?.status === 'generating') return null;
+  if ((latest[0]?.choices as ChatChoiceSet | null | undefined)?.purpose === 'naming') return null;
+  return row;
+}
+
+/** Minutes until a fresh name set is allowed again, or null when it is allowed now (3 per rolling 24 hours, per user). */
+async function laterNamesWait(supabase: SupabaseClient, conversationId: string): Promise<number | null> {
+  const { data, error } = await supabase.from('artifacts').select('content')
+    .eq('conversation_id', conversationId).eq('type', CHOICE_TYPE);
+  if (error) throw error;
+  const since = Date.now() - LATER_NAMES_WINDOW_MS;
+  const starts = (data ?? [])
+    .flatMap(r => (r.content as PathChoiceContent).later_naming?.generated_at ?? [])
+    .map(t => new Date(t).getTime())
+    .filter(t => t > since)
+    .sort((a, b) => a - b);
+  if (starts.length < LATER_NAMES_LIMIT) return null;
+  const freeAt = starts[starts.length - LATER_NAMES_LIMIT] + LATER_NAMES_WINDOW_MS;
+  return Math.max(1, Math.ceil((freeAt - Date.now()) / 60_000));
+}
+
+/**
+ * Starts a fresh name set for "Your path", in the background (must run inside
+ * a route handler). A set already being made is left to finish.
+ */
+export async function startLaterNaming(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<{ ok: true } | { ok: false; error: LaterNamingRefusal; retry_in_minutes?: number }> {
+  const row = await laterNamingChoice(supabase, conversationId);
+  if (!row) return { ok: false, error: 'names_not_available' };
+  if (row.content.later_naming?.status === 'generating') return { ok: true };
+  const wait = await laterNamesWait(supabase, conversationId);
+  if (wait !== null) return { ok: false, error: 'names_limited', retry_in_minutes: wait };
+  const now = new Date().toISOString();
+  const written = await writeChoiceContent(supabase, row.id, c => {
+    if (c.later_naming?.status === 'generating') return null;
+    // The last set stays until the new one arrives (shown again if it fails).
+    const names = c.later_naming?.names ?? [];
+    return { ...c, later_naming: { status: 'generating', started_at: now, names, generated_at: [...(c.later_naming?.generated_at ?? []), now] } };
+  });
+  if (written) {
+    console.info(`[path names] conversation ${conversationId}: fresh name set started from "Your path"`);
+    after(() => withPipelineDeadline(() => runLaterNaming(row.id)));
+  }
+  return { ok: true };
+}
+
+/** Moves path_choice.later_naming on from generating, keeping the last set if this one failed. */
+async function settleLaterNaming(supabase: SupabaseClient, choiceId: string, names: NameSuggestion[] | null): Promise<boolean> {
+  const written = await writeChoiceContent(supabase, choiceId, c => {
+    const later = c.later_naming;
+    if (later?.status !== 'generating') return null;
+    return { ...c, later_naming: names ? { ...later, status: 'ready', names } : { ...later, status: 'failed' } };
+  });
+  return !!written;
+}
+
+/** Makes a fresh name set for "Your path". Posts nothing into the conversation. Never throws. */
+export async function runLaterNaming(choiceId: string): Promise<void> {
+  const supabase = createServiceClient();
+  try {
+    const { data, error } = await supabase.from('artifacts').select('id, user_id, conversation_id, content').eq('id', choiceId).single();
+    if (error || !data) throw error ?? new Error('path_choice row missing');
+    const row = data as ChoiceRow;
+    if (row.content.later_naming?.status !== 'generating') return;
+    const { names, tokens } = await nameSetFor(supabase, row);
+    await settleLaterNaming(supabase, choiceId, names);
+    console.info(`[path names] conversation ${row.conversation_id}: fresh name set ${names ? `ready (${names.length} names)` : 'failed'} (${tokens} tokens)`);
+  } catch (err) {
+    console.error(`[path names] choice ${choiceId}: fresh name set failed:`, err);
+    await settleLaterNaming(supabase, choiceId, null).catch(e => console.error(`[path names] choice ${choiceId}: marking the fresh set failed failed:`, e));
+  }
+}
+
+/** Read-back: a fresh name set stranded past the generation budget is marked failed. */
+export async function settleStrandedLaterNaming(supabase: SupabaseClient, conversationId: string): Promise<void> {
+  const row = await latestChoiceRow(supabase, conversationId);
+  const later = row?.content.later_naming;
+  if (!row || later?.status !== 'generating') return;
+  if (Date.now() - new Date(later.started_at).getTime() <= GENERATION_BUDGET_MS + FLIP_GUARD_MS) return;
+  console.warn(`[path names] conversation ${conversationId}: stranded fresh name set marked failed`);
+  await settleLaterNaming(supabase, row.id, null);
+}
+
+/** Saves the project name from "Your path": a name, or null to remove it. The Plan is not touched. */
+export async function saveLaterProjectName(
+  supabase: SupabaseClient,
+  conversationId: string,
+  raw: string | null,
+): Promise<{ ok: true } | { ok: false; error: LaterNamingRefusal }> {
+  const row = await laterNamingChoice(supabase, conversationId);
+  if (!row) return { ok: false, error: 'names_not_available' };
+  let name: string | null = null;
+  if (raw !== null) {
+    if (typeof raw !== 'string' || typedNameProblem(raw)) return { ok: false, error: 'invalid_name' };
+    name = raw.replace(/\s+/g, ' ').trim();
+  }
+  await writeChoiceContent(supabase, row.id, c => ({ ...c, project_name: name }));
+  console.info(`[path names] conversation ${conversationId}: project name ${name === null ? 'removed' : 'saved'} from "Your path"`);
+  return { ok: true };
 }
 
 // ── The turns in the options and chosen phases ─────────────────────────────
@@ -1119,10 +1334,11 @@ async function runOptionsPhaseTurn(ctx: TurnContext, row: PathProfileRow): Promi
         assistant: endMessage(current.content.option, projectName),
         tokens: 0,
         commit: async () => {
-          const { error } = await supabase.from('artifacts')
-            .update({ content: { ...current.content, project_name: projectName } satisfies PathChoiceContent })
-            .eq('id', current.id);
-          if (error) console.error('[path options] project name save failed:', error);
+          try {
+            await writeChoiceContent(supabase, current.id, c => ({ ...c, project_name: projectName }));
+          } catch (error) {
+            console.error('[path options] project name save failed:', error);
+          }
           // The path is chosen and named (or naming skipped): the Plan
           // generation starts by itself (brief 169-plan-page, decision 1).
           await startPlan(supabase, conversation);
@@ -1174,8 +1390,11 @@ export type OptionsStateView = {
 
 // The "Your path" view on /path (Miroslav, 2026-11-09): the chosen option in
 // full, and the other two options of the round it was chosen from.
+// #182: name is the path's descriptive name (the heading); project_name is the
+// user's project name on it, shown under the heading when set.
 export type ChosenPathView = {
   name: string;
+  project_name: string | null;
   option: PathOptionView;
   was_strongest_fit: boolean;
   why_strongest: string | null;
@@ -1194,7 +1413,8 @@ export async function chosenPathView(supabase: SupabaseClient, conversationId: s
   const content = round?.content as OptionsContent | undefined;
   const c = choice.content;
   return {
-    name: c.project_name || c.option.name,
+    name: c.option.name,
+    project_name: c.project_name || null,
     option: toView(c.option),
     was_strongest_fit: c.was_strongest_fit,
     why_strongest: c.why_strongest,

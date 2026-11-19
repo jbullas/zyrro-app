@@ -98,7 +98,10 @@ async function namesRound(sources: string[], seen: Set<string>, conversationId: 
 
   const generated: Candidate[] = (gen.parsed.names as unknown[]).map(x => {
     const o = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
-    return { name: str(o.name), source: str(o.source_word).toLowerCase() };
+    const name = str(o.name);
+    // The source words go in lower case and the model sometimes answers in
+    // lower case too: a name always starts with a capital (#182 verification).
+    return { name: name.charAt(0).toUpperCase() + name.slice(1), source: str(o.source_word).toLowerCase() };
   }).filter(c => c.name);
   const passed: Candidate[] = [];
   const codeDrops: string[] = [];

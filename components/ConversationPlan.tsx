@@ -91,6 +91,8 @@ export default function ConversationPlan({ initial }: { initial: PlanView }) {
         <div className="section cover">
           <p className="eyebrow">YOUR PLAN</p>
           <h1 className="section-title">{path.name}</h1>
+          {/* #182: the project name under the path's descriptive name, when set. */}
+          {path.project_name && <p className="project-name-card-title mb-8">{path.project_name}</p>}
           {path.what_it_is && <p className="cover-context-line">{path.what_it_is}</p>}
         </div>
 
